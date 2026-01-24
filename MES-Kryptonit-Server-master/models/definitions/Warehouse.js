@@ -67,8 +67,8 @@ const WarehouseMovement = sequelize.define("warehouse_movement", {
   statusAfter: { type: DataTypes.STRING, allowNull: true },
 
   deltaQty: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
-  goodQty: { type: DataTypes.INTEGER, allowNull: true },
-  scrapQty: { type: DataTypes.INTEGER, allowNull: true },
+  goodQty: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  scrapQty: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
 
   performedById: { type: DataTypes.INTEGER, allowNull: false },
   performedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
