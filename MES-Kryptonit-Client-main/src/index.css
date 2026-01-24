@@ -1,0 +1,33 @@
+/* --- Подключение шрифтов ГОСТ --- */
+@font-face {
+  font-family: 'GOST type A';
+  src: url('/fonts/GOST-type-A.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GOST type B';
+  src: url('/fonts/GOST-type-B.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Tailwind --- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- Стили для печати --- */
+@media print {
+  .print-area {
+    page-break-inside: avoid;
+  }
+
+  /* скрыть интерфейс при печати, если потребуется */
+  .no-print {
+    display: none !important;
+  }
+}

@@ -1,0 +1,169 @@
+const { WarehouseMovement, User, Team, Section } = require("../models/index");
+const { Op } = require("sequelize");
+const sequelize = require("../db");
+const ApiError = require("../error/ApiError");
+
+class RankingsController {
+    async getStats(req, res, next) {
+        try {
+            const { period } = req.query; // 'day', 'week', 'month'
+
+            // --- 1. Определение периода времени ---
+            let startDate = new Date();
+            startDate.setHours(0, 0, 0, 0); // Начало текущего дня
+
+            if (period === 'week') {
+                // Начало недели (понедельник)
+                const day = startDate.getDay() || 7;
+                if (day !== 1) {
+                    startDate.setHours(-24 * (day - 1));
+                }
+            } else if (period === 'month') {
+                startDate.setDate(1);
+            }
+
+
+            console.log(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
+
+            // --- 2. Запрос к БД (Агрегация по сотрудникам) ---
+            const userStats = await WarehouseMovement.findAll({
+                attributes: [
+                    "performedById",
+                    [sequelize.fn("SUM", sequelize.col("goodQty")), "totalGood"],
+                    [sequelize.fn("SUM", sequelize.col("scrapQty")), "totalScrap"],
+                    [sequelize.fn("COUNT", sequelize.col("warehouse_movement.id")), "operationsCount"],
+                ],
+                where: {
+                    performedAt: { [Op.gte]: startDate },
+                    performedById: { [Op.ne]: null }
+                },
+                include: [
+                    {
+                        model: User,
+                        as: "performedBy",
+                        attributes: ["id", "name", "surname", "img"],
+                        include: [
+                            {
+                                model: Team,
+                                attributes: ["id", "title"],
+                                include: [
+                                    { 
+                                        model: Section, 
+
+                                        attributes: ["title"] 
+                                    },
+                                    {
+                                        model: User,
+                                        as: "teamLead", 
+                                        attributes: ["name", "surname"]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+
+                group: [
+                    "performedById", 
+                    "performedBy.id", 
+                    "performedBy.production_team.id",
+                    "performedBy.production_team.production_section.id",
+                    "performedBy.production_team.teamLead.id" 
+                ],
+                order: [[sequelize.literal('"totalGood"'), "DESC"]],
+            });
+
+            // --- 3. Формирование списка сотрудников для ответа (Mapping) ---
+            const usersRank = userStats.map((item, index) => {
+                const plainItem = item.get({ plain: true });
+
+                const good = Number(plainItem.totalGood) || 0;
+                const scrap = Number(plainItem.totalScrap) || 0;
+                const total = good + scrap;
+                
+                // Расчет эффективности (%)
+                const efficiency = total > 0 ? ((good / total) * 100).toFixed(1) : 0;
+
+                const user = plainItem.performedBy;
+                
+                const team = user ? (user.production_team || user.team) : null;
+                const section = team ? (team.production_section || team.section) : null;
+                const lead = team ? team.teamLead : null;
+
+                return {
+                    id: user ? user.id : 0,
+                    name: user ? user.name : "Неизвестный",
+                    surname: user ? user.surname : "",
+                    avatar: user ? user.img : null,
+                    
+                    teamName: team ? team.title : "Без бригады",
+                    teamId: team ? team.id : null,
+                    
+                    sectionName: section ? section.title : "Не распределен",
+                    teamLeadName: lead ? `${lead.surname} ${lead.name[0]}.` : "—",
+                    
+                    output: good,
+                    defects: scrap,
+                    efficiency: Number(efficiency),
+                    place: index + 1
+                };
+            });
+
+            // --- 4. Агрегация данных по Бригадам (на основе статистики сотрудников) ---
+            const teamsMap = {};
+
+            usersRank.forEach(u => {
+                if (!u.teamId) return;
+
+                if (!teamsMap[u.teamId]) {
+                    teamsMap[u.teamId] = {
+                        id: u.teamId,
+                        title: u.teamName,
+                        section: u.sectionName,
+                        teamLead: u.teamLeadName,
+                        totalOutput: 0,
+                        totalDefects: 0,
+                        membersCount: 0,
+                        efficiencies: []
+                    };
+                }
+                
+                const t = teamsMap[u.teamId];
+                t.totalOutput += u.output;
+                t.totalDefects += u.defects;
+                t.membersCount += 1;
+                t.efficiencies.push(u.efficiency);
+            });
+
+            const teamsRank = Object.values(teamsMap).map((t) => {
+                const avgEff = t.efficiencies.length > 0 
+                    ? t.efficiencies.reduce((a, b) => a + b, 0) / t.efficiencies.length 
+                    : 0;
+
+                // Условный план выработки на человека (для прогресс-бара)
+                const PLAN_PER_PERSON = period === 'day' ? 100 : period === 'week' ? 500 : 2000;
+                const totalPlan = t.membersCount * PLAN_PER_PERSON;
+                const progress = totalPlan > 0 ? Math.min(100, Math.round((t.totalOutput / totalPlan) * 100)) : 0;
+
+                return {
+                    id: t.id,
+                    title: t.title,
+                    section: t.section,
+                    teamLead: t.teamLead,
+                    totalOutput: t.totalOutput,
+                    avgEfficiency: Number(avgEff.toFixed(1)),
+                    membersCount: t.membersCount,
+                    progress: progress
+                };
+            }).sort((a, b) => b.totalOutput - a.totalOutput);
+
+            return res.json({ users: usersRank, teams: teamsRank });
+
+        } catch (e) {
+            console.error("Rankings Error:", e);
+            next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
+        }
+    }
+}
+
+module.exports = new RankingsController();
