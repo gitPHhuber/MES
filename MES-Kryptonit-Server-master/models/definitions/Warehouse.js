@@ -31,6 +31,18 @@ const WarehouseBox = sequelize.define("warehouse_box", {
   // Количественный учет
   quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
   unit: { type: DataTypes.STRING, allowNull: false, defaultValue: "шт" },
+  reservedQty: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "reserved_qty" },
+  reservedById: { type: DataTypes.INTEGER, allowNull: true, field: "reserved_by_id" },
+  reservedAt: { type: DataTypes.DATE, allowNull: true, field: "reserved_at" },
+  reservationExpiresAt: { type: DataTypes.DATE, allowNull: true, field: "reservation_expires_at" },
+  availableQty: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      const quantity = this.getDataValue("quantity") || 0;
+      const reservedQty = this.getDataValue("reservedQty") || 0;
+      return quantity - reservedQty;
+    },
+  },
 
   // Иерархия
   parentBoxId: { type: DataTypes.INTEGER, allowNull: true },

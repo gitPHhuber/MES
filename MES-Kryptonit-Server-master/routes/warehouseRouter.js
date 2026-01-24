@@ -34,6 +34,9 @@ router.put("/boxes/batch", ...protect, checkAbility("warehouse.manage"), BoxCont
 router.get("/boxes", ...protect, checkAbility("warehouse.view"), BoxController.getBoxes);
 router.get("/boxes/:id", ...protect, checkAbility("warehouse.view"), BoxController.getBoxById);
 router.get("/boxes/by-qr/:qr", ...protect, checkAbility("warehouse.view"), BoxController.getBoxByQr);
+router.post("/boxes/:id/reserve", ...protect, checkAbility("warehouse.manage"), BoxController.reserveBox);
+router.post("/boxes/:id/release", ...protect, checkAbility("warehouse.manage"), BoxController.releaseBox);
+router.post("/boxes/:id/confirm", ...protect, checkAbility("warehouse.manage"), BoxController.confirmBox);
 
 // Экспорт и печать
 router.post("/boxes/export", ...protect, checkAbility("warehouse.view"), BoxController.exportCsv);

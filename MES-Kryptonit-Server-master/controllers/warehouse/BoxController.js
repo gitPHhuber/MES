@@ -13,6 +13,7 @@ const {
 const { logAudit } = require("../../utils/auditLogger");
 const sequelize = require("../../db");
 const PdfService = require("../../services/PdfService");
+const ReservationService = require("../../services/warehouse/ReservationService");
 
 const generateShortCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -525,6 +526,66 @@ class BoxController {
     } catch (e) {
       console.error("Print Special Error:", e);
       next(ApiError.internal(e.message));
+    }
+  }
+
+  // === Резервирование коробки ===
+  async reserveBox(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { qty, expiresAt } = req.body;
+
+      if (!req.user || !req.user.id) {
+        return next(ApiError.unauthorized("Нет информации о пользователе"));
+      }
+
+      const box = await ReservationService.reserve({
+        boxId: id,
+        qty,
+        userId: req.user.id,
+        expiresAt,
+      });
+
+      return res.json(box);
+    } catch (e) {
+      console.error(e);
+      if (e.message === "Коробка не найдена") {
+        return next(ApiError.notFound(e.message));
+      }
+      next(ApiError.badRequest(e.message));
+    }
+  }
+
+  // === Снятие резерва ===
+  async releaseBox(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const box = await ReservationService.release({ boxId: id });
+      return res.json(box);
+    } catch (e) {
+      console.error(e);
+      if (e.message === "Коробка не найдена") {
+        return next(ApiError.notFound(e.message));
+      }
+      next(ApiError.badRequest(e.message));
+    }
+  }
+
+  // === Подтверждение резерва ===
+  async confirmBox(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { qty } = req.body;
+
+      const box = await ReservationService.confirm({ boxId: id, qty });
+      return res.json(box);
+    } catch (e) {
+      console.error(e);
+      if (e.message === "Коробка не найдена") {
+        return next(ApiError.notFound(e.message));
+      }
+      next(ApiError.badRequest(e.message));
     }
   }
 }

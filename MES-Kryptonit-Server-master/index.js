@@ -12,6 +12,7 @@ const path = require("path");
 const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
 
 const { initChecklistTemplates } = require("./controllers/beryll");
+const { scheduleReleaseExpiredReservations } = require("./jobs/releaseExpiredReservations");
 
 const PORT = process.env.PORT || 5000;
 const app = express();
@@ -166,6 +167,9 @@ const start = async () => {
     console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
     await initChecklistTemplates();
     console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
+
+    // Запуск джоба для очистки просроченных резервов
+    scheduleReleaseExpiredReservations();
 
     app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
   } catch (e) {
