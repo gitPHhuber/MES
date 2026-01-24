@@ -156,8 +156,8 @@ const initInitialData = async () => {
 
 const start = async () => {
   try {
+    // Подключаемся к базе, миграции выполняются отдельно (deploy/CI или вручную)
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true }); 
     
     // Инициализация прав доступа
     await initInitialData();
