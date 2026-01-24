@@ -1,6 +1,7 @@
 const { Session, PC } = require("../models/index");
 const ApiError = require("../error/ApiError");
 const { logAudit } = require("../utils/auditLogger");
+const logger = require("../services/logger");
 
 class SessionController {
   async getSessions(req, res, next) {
@@ -105,7 +106,7 @@ class SessionController {
             pcIp = pc.ip;
           }
         } catch (err) {
-          console.error("Ошибка при чтении ПК для аудита:", err);
+          logger.error("Ошибка при чтении ПК для аудита:", { error: err });
         }
       }
 

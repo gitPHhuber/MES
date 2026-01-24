@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const ApiError = require("../../error/ApiError");
 const { WarehouseDocument, User } = require("../../models/index");
+const logger = require("../../services/logger");
 
 class DocumentController {
   async createDocument(req, res, next) {
@@ -23,7 +24,7 @@ class DocumentController {
 
       return res.json(doc);
     } catch (e) {
-      console.error(e);
+      logger.error("DocumentController.createDocument error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -61,7 +62,7 @@ class DocumentController {
         limit,
       });
     } catch (e) {
-      console.error(e);
+      logger.error("DocumentController.getDocuments error", { error: e });
       next(ApiError.internal(e.message));
     }
   }

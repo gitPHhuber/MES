@@ -11,6 +11,7 @@ const {
 } = require("../../models/index");
 const { logAudit } = require("../../utils/auditLogger");
 const sequelize = require("../../db");
+const logger = require("../../services/logger");
 
 class MovementController {
   // Одна операция (move/consume) по одной коробке
@@ -109,7 +110,7 @@ class MovementController {
       return res.json({ box: reloadedBox, movement });
     } catch (e) {
       await t.rollback();
-      console.error(e);
+      logger.error("MovementController error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -235,7 +236,7 @@ class MovementController {
       });
     } catch (e) {
       await t.rollback();
-      console.error(e);
+      logger.error("MovementController error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -278,7 +279,7 @@ class MovementController {
 
       return res.json({ rows, count, page, limit });
     } catch (e) {
-      console.error(e);
+      logger.error("MovementController error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -306,7 +307,7 @@ class MovementController {
 
       return res.json(balances);
     } catch (e) {
-      console.error(e);
+      logger.error("MovementController error", { error: e });
       next(ApiError.internal(e.message));
     }
   }

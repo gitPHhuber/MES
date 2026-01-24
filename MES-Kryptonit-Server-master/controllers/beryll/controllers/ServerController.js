@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const ServerService = require("../services/ServerService");
+const logger = require("../../../services/logger");
 
 class ServerController {
   async getServers(req, res, next) {
@@ -7,7 +8,7 @@ class ServerController {
       const servers = await ServerService.getServers(req.query);
       return res.json(servers);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -23,7 +24,7 @@ class ServerController {
       
       return res.json(server);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -40,7 +41,7 @@ class ServerController {
       const updated = await ServerService.takeServer(id, userId);
       return res.json(updated);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -60,7 +61,7 @@ class ServerController {
       const server = await ServerService.releaseServer(id, userId, userRole);
       return res.json(server);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -86,7 +87,7 @@ class ServerController {
       const updated = await ServerService.updateStatus(id, status, notes, userId);
       return res.json(updated);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -103,7 +104,7 @@ class ServerController {
       const server = await ServerService.updateNotes(id, notes, userId);
       return res.json(server);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -119,7 +120,7 @@ class ServerController {
       const result = await ServerService.deleteServer(id, userId);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }

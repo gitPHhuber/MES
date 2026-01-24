@@ -6,6 +6,7 @@
 
 const ApiError = require("../../../error/ApiError");
 const DefectMonitoringService = require("../services/DefectMonitoringService");
+const logger = require("../../../services/logger");
 
 class DefectMonitoringController {
   
@@ -20,7 +21,7 @@ class DefectMonitoringController {
       const result = await DefectMonitoringService.getCommentsByServer(serverId, { status, category, limit, offset });
       return res.json(result);
     } catch (e) {
-      console.error("getServerDefects:", e);
+      logger.error("getServerDefects:", e);
       return next(ApiError.internal(e.message));
     }
   }

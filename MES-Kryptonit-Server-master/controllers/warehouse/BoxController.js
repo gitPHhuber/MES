@@ -13,6 +13,7 @@ const {
 const { logAudit } = require("../../utils/auditLogger");
 const sequelize = require("../../db");
 const PdfService = require("../../services/PdfService");
+const logger = require("../../services/logger");
 
 const generateShortCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -61,7 +62,7 @@ class BoxController {
 
       return res.json(box);
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.createSingleBox error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -146,7 +147,7 @@ class BoxController {
 
       return res.json({ boxes: created });
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.createBoxesBatch error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -202,7 +203,7 @@ class BoxController {
 
       res.json({ rows, count, page: pageNum, limit: limitNum });
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.getBoxes error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -251,7 +252,7 @@ class BoxController {
 
       return res.json({ box, movements, documents });
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.getBoxById error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -291,7 +292,7 @@ class BoxController {
 
       return res.json({ box, movements, documents });
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.getBoxByQr error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -339,7 +340,7 @@ class BoxController {
       res.attachment("labels.csv");
       return res.send(csv);
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.exportCsv error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -372,7 +373,7 @@ class BoxController {
 
       return res.send(pdfBuffer);
     } catch (e) {
-      console.error("PDF Gen Error:", e);
+      logger.error("PDF Gen Error", { error: e });
       next(ApiError.internal("Ошибка генерации PDF: " + e.message));
     }
   }
@@ -413,7 +414,7 @@ class BoxController {
 
       return res.json({ message: "Успешно обновлено" });
     } catch (e) {
-      console.error(e);
+      logger.error("BoxController.updateBatch error", { error: e });
       next(ApiError.internal(e.message));
     }
   }
@@ -523,7 +524,7 @@ class BoxController {
 
       return res.send(pdfBuffer);
     } catch (e) {
-      console.error("Print Special Error:", e);
+      logger.error("Print Special Error", { error: e });
       next(ApiError.internal(e.message));
     }
   }

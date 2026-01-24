@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const PassportService = require("../services/PassportService");
+const logger = require("../../../services/logger");
 
 class PassportController {
   async generatePassport(req, res, next) {
@@ -13,7 +14,7 @@ class PassportController {
       
       return res.send(buffer);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }

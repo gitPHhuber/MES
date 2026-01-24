@@ -9,6 +9,7 @@
 const { BeryllServer, BeryllServerComponent, BeryllHistory } = require("../../../models/index");
 const OpenBMCService = require("../services/OpenBMCService");
 const ApiError = require("../../../error/ApiError");
+const logger = require("../../../services/logger");
 
 /**
  * Сформировать имя компонента из данных BMC
@@ -62,7 +63,7 @@ class ComponentsController {
         ...result
       });
     } catch (error) {
-      console.error("[ComponentsController] checkBMC error:", error);
+      logger.error("[ComponentsController] checkBMC error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -167,7 +168,7 @@ class ComponentsController {
         components: savedComponents
       });
     } catch (error) {
-      console.error("[ComponentsController] fetchComponents error:", error);
+      logger.error("[ComponentsController] fetchComponents error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -239,7 +240,7 @@ class ComponentsController {
         components
       });
     } catch (error) {
-      console.error("[ComponentsController] getComponents error:", error);
+      logger.error("[ComponentsController] getComponents error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -264,7 +265,7 @@ class ComponentsController {
       
       res.json(component);
     } catch (error) {
-      console.error("[ComponentsController] getComponentById error:", error);
+      logger.error("[ComponentsController] getComponentById error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -289,7 +290,7 @@ class ComponentsController {
         message: `Удалено ${deleted} компонентов`
       });
     } catch (error) {
-      console.error("[ComponentsController] deleteComponents error:", error);
+      logger.error("[ComponentsController] deleteComponents error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -315,7 +316,7 @@ class ComponentsController {
         bmcAddress: server.bmcAddress
       });
     } catch (error) {
-      console.error("[ComponentsController] updateBMCAddress error:", error);
+      logger.error("[ComponentsController] updateBMCAddress error:", error);
       next(ApiError.internal(error.message));
     }
   }

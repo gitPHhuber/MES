@@ -1,5 +1,6 @@
 const { PC } = require("../models/index");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class PCController {
   // Получить список ПК
@@ -42,7 +43,7 @@ class PCController {
 
       return res.json(pcAll);
     } catch (e) {
-      console.error("🔥 Ошибка при получении списка ПК:", e);
+      logger.error("🔥 Ошибка при получении списка ПК:", { error: e });
       next(ApiError.internal("Ошибка сервера при загрузке ПК: " + e.message));
     }
   }

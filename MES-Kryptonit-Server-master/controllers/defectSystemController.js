@@ -11,6 +11,7 @@ const {
 const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
 const sequelize = require("../db");
+const logger = require("../services/logger");
 
 class DefectSystemController {
   
@@ -284,7 +285,7 @@ class DefectSystemController {
       try {
         boardInfo = await this._getBoardInfo(defect.boardType, defect.boardId);
       } catch (e) {
-        console.log("Не удалось получить информацию о плате:", e.message);
+        logger.warn("Не удалось получить информацию о плате:", { error: e.message });
       }
       
       return res.json({

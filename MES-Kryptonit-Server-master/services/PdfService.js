@@ -1,6 +1,7 @@
 const PdfPrinter = require("pdfmake");
 const fs = require("fs");
 const path = require("path");
+const logger = require("./logger");
 
 // Поиск шрифтов Roboto
 const possibleFontPaths = [
@@ -14,7 +15,7 @@ function findFontDir() {
         const testFile = path.join(dir, 'Roboto-Regular.ttf');
         if (fs.existsSync(testFile)) return dir;
     }
-    console.error("❌ [PdfService] Шрифты Roboto не найдены! Используются стандартные.");
+    logger.error("❌ [PdfService] Шрифты Roboto не найдены! Используются стандартные.");
     return null;
 }
 
@@ -42,7 +43,7 @@ class PdfService {
                 pdfDoc.on('data', (chunk) => chunks.push(chunk));
                 pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
                 pdfDoc.on('error', (err) => {
-                    console.error("PDFMake Stream Error:", err);
+                    logger.error("PDFMake Stream Error", { error: err });
                     reject(err);
                 });
                 pdfDoc.end();
@@ -61,7 +62,7 @@ class PdfService {
 
     // === ШАБЛОН: ВИДЕОПЕРЕДАТЧИКИ (VIDEO_KIT) ===
     async generateVideoTransmitterLabelBatch(labelsArray, options = {}) {
-        if (!fontDir) console.warn("Внимание: Шрифты Roboto не найдены, PDF может выглядеть иначе.");
+        if (!fontDir) logger.warn("Внимание: Шрифты Roboto не найдены, PDF может выглядеть иначе.");
 
         const pageWidthMm = options.widthMm || 140;
         const pageHeightMm = options.heightMm || 90;
@@ -186,7 +187,7 @@ class PdfService {
 
     // === ШАБЛОН: УНИВЕРСАЛЬНЫЙ (SIMPLE) ===
     async generateSimpleZebraBatch(labelsArray, options = {}) {
-        if (!fontDir && !options.suppressWarning) console.warn("Шрифты Roboto не найдены для Simple шаблона.");
+        if (!fontDir && !options.suppressWarning) logger.warn("Шрифты Roboto не найдены для Simple шаблона.");
 
         const pageWidthMm = options.widthMm || 140;
         const pageHeightMm = options.heightMm || 90;
@@ -399,7 +400,7 @@ class PdfService {
                             absolutePosition: { x: xPt, y: yPt }
                         });
                     } catch (imgErr) {
-                        console.warn('Ошибка загрузки изображения:', imgErr.message);
+                        logger.warn("Ошибка загрузки изображения", { error: imgErr.message });
                     }
                 }
 
@@ -415,7 +416,7 @@ class PdfService {
                                 absolutePosition: { x: xPt, y: yPt }
                             });
                         } catch (imgErr) {
-                            console.warn('Ошибка загрузки пользовательской иконки:', imgErr.message);
+                            logger.warn("Ошибка загрузки пользовательской иконки", { error: imgErr.message });
                         }
                     } else if (el.iconType && STANDARD_ICONS[el.iconType]) {
                         // Стандартная иконка

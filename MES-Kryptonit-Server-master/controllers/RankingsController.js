@@ -13,6 +13,7 @@ const { ProductionOutput, OUTPUT_STATUSES } = require("../models/ProductionOutpu
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class RankingsController {
     
@@ -39,7 +40,7 @@ class RankingsController {
 
             const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD для ProductionOutput
 
-            console.log(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
+            logger.info(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
 
             // --- 2. Статистика со СКЛАДА (WarehouseMovement) ---
             const warehouseStats = await WarehouseMovement.findAll({
@@ -297,7 +298,7 @@ class RankingsController {
             });
 
         } catch (e) {
-            console.error("Rankings Error:", e);
+            logger.error("Rankings Error", { error: e });
             next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
         }
     }
@@ -448,7 +449,7 @@ class RankingsController {
             });
 
         } catch (e) {
-            console.error("User Details Error:", e);
+            logger.error("User Details Error", { error: e });
             next(ApiError.badRequest(e.message));
         }
     }
