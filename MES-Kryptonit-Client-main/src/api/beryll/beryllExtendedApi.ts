@@ -173,17 +173,23 @@ export type DefectRecordStatus =
 
 export type RepairPartType = 
   | "RAM" 
+  | "RAM_ECC" 
   | "MOTHERBOARD" 
   | "CPU" 
+  | "CPU_SOCKET" 
   | "HDD" 
   | "SSD" 
   | "PSU" 
   | "FAN" 
+  | "THERMAL" 
   | "RAID" 
   | "NIC" 
   | "BACKPLANE" 
   | "BMC" 
   | "CABLE" 
+  | "PCIE_SLOT" 
+  | "RAM_SOCKET" 
+  | "CHASSIS" 
   | "OTHER";
 
 export interface BeryllDefectRecord {
