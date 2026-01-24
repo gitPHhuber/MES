@@ -20,6 +20,7 @@ const pcRouter = require("./pcRouter");
 const rbacRouter = require("./rbacRouter");
 const structureRouter = require("./structureRouter");
 const auditRouter = require("./auditRouter");
+const rolesRouter = require("./rolesRouter");
 
 // --- Склад ---
 const warehouseRouter = require("./warehouseRouter");
@@ -69,6 +70,7 @@ router.use("/pcs", pcRouter);
 router.use("/rbac", rbacRouter);
 router.use("/structure", structureRouter);
 router.use("/audit", auditRouter);
+router.use("/roles", rolesRouter);
 
 // --- Склад ---
 router.use("/warehouse", warehouseRouter);

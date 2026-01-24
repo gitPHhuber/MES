@@ -38,6 +38,12 @@ const Role = sequelize.define("role", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING, unique: true, allowNull: false },
   description: { type: DataTypes.STRING },
+  priority: { type: DataTypes.INTEGER, defaultValue: 100, allowNull: false },
+  keycloakId: { type: DataTypes.STRING, field: "keycloak_id", unique: true },
+  keycloakName: { type: DataTypes.STRING, field: "keycloak_name" },
+  isActive: { type: DataTypes.BOOLEAN, field: "is_active", defaultValue: true },
+  isSystem: { type: DataTypes.BOOLEAN, field: "is_system", defaultValue: false },
+  syncedAt: { type: DataTypes.DATE, field: "synced_at" },
 });
 
 const Ability = sequelize.define("ability", {

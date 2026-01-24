@@ -1,4 +1,5 @@
 const { User, Role, Ability } = require('../models/index');
+const KeycloakSyncService = require("../services/KeycloakSyncService");
 
 module.exports = async function (req, res, next) {
     // console.log("--- [SyncUserMiddleware] START ---");
@@ -37,20 +38,8 @@ module.exports = async function (req, res, next) {
         // Получаем массив ролей из токена
         const kcRoles = payload.realm_access?.roles || [];
         
-        // Список ролей, которые существуют в нашей системе (в порядке приоритета)
-        const priorityRoles = [
-            "SUPER_ADMIN", 
-            "PRODUCTION_CHIEF", 
-            "TECHNOLOGIST", 
-            "WAREHOUSE_MASTER", 
-            "QC_ENGINEER", 
-            "FIRMWARE_OPERATOR", 
-            "ASSEMBLER"
-        ];
-
-        // Ищем первую роль из списка priorityRoles, которая есть у пользователя в Keycloak.
-        // Если ничего не нашли — выдаем базовую роль "ASSEMBLER" (или "USER")
-        const mainRole = priorityRoles.find(r => kcRoles.includes(r)) || "ASSEMBLER";
+        // Определяем основную роль через синхронизированный приоритет в БД
+        const mainRole = await KeycloakSyncService.getMainRole(kcRoles);
 
         // ---------------------------------------------------------------------
         // 4. Синхронизация с БД (Поиск / Создание / Обновление)

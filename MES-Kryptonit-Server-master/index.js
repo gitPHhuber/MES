@@ -7,6 +7,7 @@ const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
 const path = require("path");
+const KeycloakSyncService = require("./services/KeycloakSyncService");
 
 // Импорт роутера для Beryll Extended
 const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
@@ -72,6 +73,10 @@ const initInitialData = async () => {
       { code: "beryll.view", description: "Просмотр серверов АПК Берилл" },
       { code: "beryll.work", description: "Взятие в работу и настройка серверов" },
       { code: "beryll.manage", description: "Управление модулем (Синхронизация DHCP)" },
+
+      // --- ДОБАВЛЕНО: Управление ролями ---
+      { code: "roles.view", description: "Просмотр списка ролей" },
+      { code: "roles.manage", description: "Создание, изменение и удаление ролей" },
     ];
 
     // Upsert прав
@@ -148,6 +153,7 @@ const initInitialData = async () => {
       "beryll.view", "beryll.work" // Инженеры работают с серверами
     ]);
 
+
     console.log(">>> [RBAC] Инициализация завершена успешно.");
   } catch (e) {
     console.error(">>> [RBAC] Ошибка инициализации:", e);
@@ -166,6 +172,15 @@ const start = async () => {
     console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
     await initChecklistTemplates();
     console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
+
+    if (process.env.KEYCLOAK_AUTO_SYNC !== "false") {
+      console.log("🔄 Auto-syncing roles from Keycloak...");
+      try {
+        await KeycloakSyncService.syncRolesFromKeycloak();
+      } catch (error) {
+        console.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
+      }
+    }
 
     app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
   } catch (e) {
