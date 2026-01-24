@@ -161,6 +161,15 @@ export interface BeryllClusterServer {
 // ============================================
 
 export type DefectRecordStatus = 
+  | "PENDING_DIAGNOSIS"
+  | "DIAGNOSED"
+  | "WAITING_APPROVAL"
+  | "PARTS_RESERVED"
+  | "REPAIRED_LOCALLY"
+  | "IN_YADRO_REPAIR"
+  | "SUBSTITUTE_ISSUED"
+  | "SCRAPPED"
+  | "CANCELLED"
   | "NEW" 
   | "DIAGNOSING" 
   | "WAITING_PARTS" 
@@ -173,17 +182,23 @@ export type DefectRecordStatus =
 
 export type RepairPartType = 
   | "RAM" 
+  | "RAM_ECC" 
   | "MOTHERBOARD" 
   | "CPU" 
+  | "CPU_SOCKET" 
   | "HDD" 
   | "SSD" 
   | "PSU" 
   | "FAN" 
+  | "THERMAL" 
   | "RAID" 
   | "NIC" 
   | "BACKPLANE" 
   | "BMC" 
   | "CABLE" 
+  | "PCIE_SLOT" 
+  | "RAM_SOCKET" 
+  | "CHASSIS" 
   | "OTHER";
 
 export interface BeryllDefectRecord {

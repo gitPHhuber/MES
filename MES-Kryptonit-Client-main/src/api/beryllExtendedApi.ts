@@ -165,7 +165,25 @@ export interface UserAlias {
 // Enums
 export type InventoryStatus = "AVAILABLE" | "RESERVED" | "IN_USE" | "IN_REPAIR" | "DEFECTIVE" | "SCRAPPED" | "RETURNED";
 export type ComponentCondition = "NEW" | "REFURBISHED" | "USED" | "DAMAGED";
-export type DefectRecordStatus = "NEW" | "DIAGNOSING" | "WAITING_PARTS" | "REPAIRING" | "SENT_TO_YADRO" | "RETURNED" | "RESOLVED" | "REPEATED" | "CLOSED";
+export type DefectRecordStatus =
+  | "PENDING_DIAGNOSIS"
+  | "DIAGNOSED"
+  | "WAITING_APPROVAL"
+  | "PARTS_RESERVED"
+  | "REPAIRED_LOCALLY"
+  | "IN_YADRO_REPAIR"
+  | "SUBSTITUTE_ISSUED"
+  | "SCRAPPED"
+  | "CANCELLED"
+  | "NEW"
+  | "DIAGNOSING"
+  | "WAITING_PARTS"
+  | "REPAIRING"
+  | "SENT_TO_YADRO"
+  | "RETURNED"
+  | "RESOLVED"
+  | "REPEATED"
+  | "CLOSED";
 export type YadroRequestType = "COMPONENT_REPAIR" | "COMPONENT_EXCHANGE" | "WARRANTY_CLAIM" | "CONSULTATION";
 export type YadroLogStatus = "SENT" | "IN_PROGRESS" | "COMPLETED" | "RECEIVED" | "CLOSED";
 export type SubstituteStatus = "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED";

@@ -21,6 +21,16 @@ const YadroController = require("../controllers/YadroController");
 // Middleware
 const authMiddleware = require("../../../middleware/authMiddleware");
 const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
+const validateRequest = require("../../../middleware/validateRequest");
+const {
+    defectFiltersSchema,
+    defectCreateSchema,
+    defectCompleteDiagnosisSchema,
+    defectNotesSchema,
+    defectInventorySchema,
+    defectSubstituteSchema,
+    defectIdParamSchema,
+} = require("../../../schemas/beryll/defect.schema");
 
 // ============================================
 // ИНВЕНТАРЬ КОМПОНЕНТОВ
@@ -151,28 +161,42 @@ router.get("/defects/stats",
 
 // CRUD
 router.get("/defects", 
-    authMiddleware, 
+    authMiddleware,
+    validateRequest({ query: defectFiltersSchema }),
     DefectRecordController.getAll
 );
 router.get("/defects/:id", 
-    authMiddleware, 
+    authMiddleware,
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.getById
+);
+router.get("/defects/:id/available-actions", 
+    authMiddleware, 
+    DefectRecordController.getAvailableActions
 );
 router.post("/defects", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_create"),
+    validateRequest({ body: defectCreateSchema }),
     DefectRecordController.create
+);
+router.put("/defects/:id/status", 
+    authMiddleware, 
+    checkAbilityMiddleware("beryll_defect_manage"),
+    DefectRecordController.updateStatus
 );
 
 // Workflow: Диагностика
 router.post("/defects/:id/start-diagnosis", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.startDiagnosis
 );
 router.post("/defects/:id/complete-diagnosis", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectCompleteDiagnosisSchema }),
     DefectRecordController.completeDiagnosis
 );
 
@@ -180,11 +204,13 @@ router.post("/defects/:id/complete-diagnosis",
 router.post("/defects/:id/waiting-parts", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.setWaitingParts
 );
 router.post("/defects/:id/reserve-component", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectInventorySchema }),
     DefectRecordController.reserveComponent
 );
 
@@ -192,11 +218,13 @@ router.post("/defects/:id/reserve-component",
 router.post("/defects/:id/start-repair", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.startRepair
 );
 router.post("/defects/:id/perform-replacement", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.performReplacement
 );
 
@@ -204,11 +232,13 @@ router.post("/defects/:id/perform-replacement",
 router.post("/defects/:id/send-to-yadro", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.sendToYadro
 );
 router.post("/defects/:id/return-from-yadro", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.returnFromYadro
 );
 
@@ -216,11 +246,13 @@ router.post("/defects/:id/return-from-yadro",
 router.post("/defects/:id/issue-substitute", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectSubstituteSchema }),
     DefectRecordController.issueSubstitute
 );
 router.post("/defects/:id/return-substitute", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.returnSubstitute
 );
 
@@ -228,6 +260,7 @@ router.post("/defects/:id/return-substitute",
 router.post("/defects/:id/resolve", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_manage"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.resolve
 );
 

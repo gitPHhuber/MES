@@ -7,6 +7,7 @@ const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
 const path = require("path");
+const KeycloakSyncService = require("./services/KeycloakSyncService");
 
 // Импорт роутера для Beryll Extended
 const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
@@ -73,6 +74,10 @@ const initInitialData = async () => {
       { code: "beryll.view", description: "Просмотр серверов АПК Берилл" },
       { code: "beryll.work", description: "Взятие в работу и настройка серверов" },
       { code: "beryll.manage", description: "Управление модулем (Синхронизация DHCP)" },
+
+      // --- ДОБАВЛЕНО: Управление ролями ---
+      { code: "roles.view", description: "Просмотр списка ролей" },
+      { code: "roles.manage", description: "Создание, изменение и удаление ролей" },
     ];
 
     // Upsert прав
@@ -123,13 +128,13 @@ const initInitialData = async () => {
     await assign("PRODUCTION_CHIEF", [
       "analytics.view", "users.manage", "defect.manage", 
       "warehouse.view", "devices.view", "recipe.manage",
-      "beryll.view" // Начальник производства может видеть сервера
+      "beryll.view"
     ]);
 
     await assign("TECHNOLOGIST", [
       "recipe.manage", "firmware.flash", "devices.view",
       "defect.manage",
-      "beryll.view", "beryll.work", "beryll.manage" // Технолог управляет Бериллом
+      "beryll.view", "beryll.work", "beryll.manage"
     ]);
 
     await assign("WAREHOUSE_MASTER", [
@@ -146,7 +151,7 @@ const initInitialData = async () => {
 
     await assign("FIRMWARE_OPERATOR", [
       "firmware.flash", "devices.view",
-      "beryll.view", "beryll.work" // Инженеры работают с серверами
+      "beryll.view", "beryll.work"
     ]);
 
     console.log(">>> [RBAC] Инициализация завершена успешно.");
@@ -168,8 +173,18 @@ const start = async () => {
     await initChecklistTemplates();
     console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
 
-    // Запуск джоба для очистки просроченных резервов
+    // Запуск джоба для очистки просроченных резервов (MOD-005)
     scheduleReleaseExpiredReservations();
+
+    // Auto-sync ролей с Keycloak (MOD-008)
+    if (process.env.KEYCLOAK_AUTO_SYNC !== "false") {
+      console.log("🔄 Auto-syncing roles from Keycloak...");
+      try {
+        await KeycloakSyncService.syncRolesFromKeycloak();
+      } catch (error) {
+        console.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
+      }
+    }
 
     app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
   } catch (e) {

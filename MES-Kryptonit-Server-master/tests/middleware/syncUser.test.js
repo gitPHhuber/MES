@@ -1,5 +1,6 @@
 const syncUserMiddleware = require('../../middleware/syncUserMiddleware');
 const { User, Role } = require('../../models/index');
+const KeycloakSyncService = require('../../services/KeycloakSyncService');
 
 // Мокаем модели
 jest.mock('../../models/index', () => ({
@@ -12,6 +13,10 @@ jest.mock('../../models/index', () => ({
         findOne: jest.fn()
     },
     Ability: {}
+}));
+
+jest.mock('../../services/KeycloakSyncService', () => ({
+    getMainRole: jest.fn()
 }));
 
 describe('syncUserMiddleware', () => {
@@ -46,6 +51,7 @@ describe('syncUserMiddleware', () => {
             save: jest.fn() // На всякий случай добавим save
         };
         User.create.mockResolvedValue(createdUser);
+        KeycloakSyncService.getMainRole.mockResolvedValue("WAREHOUSE_MASTER");
 
         // 3. Role.findOne вернет права
         Role.findOne.mockResolvedValue({ abilities: [{ code: 'warehouse.view' }] });
@@ -75,6 +81,7 @@ describe('syncUserMiddleware', () => {
         
         // Важно: findOne должен возвращать именно этот объект, чтобы мы могли проверить его изменение по ссылке
         User.findOne.mockResolvedValue(existingUser);
+        KeycloakSyncService.getMainRole.mockResolvedValue("WAREHOUSE_MASTER");
         Role.findOne.mockResolvedValue({ abilities: [] });
 
         await syncUserMiddleware(req, res, next);
@@ -88,6 +95,7 @@ describe('syncUserMiddleware', () => {
 
     test('Должен вернуть 500 при ошибке БД', async () => {
         User.findOne.mockRejectedValue(new Error('DB Connection failed'));
+        KeycloakSyncService.getMainRole.mockResolvedValue("WAREHOUSE_MASTER");
 
         await syncUserMiddleware(req, res, next);
 
