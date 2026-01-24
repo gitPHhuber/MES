@@ -170,11 +170,20 @@ router.get("/defects/:id",
     validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.getById
 );
+router.get("/defects/:id/available-actions", 
+    authMiddleware, 
+    DefectRecordController.getAvailableActions
+);
 router.post("/defects", 
     authMiddleware, 
     checkAbilityMiddleware("beryll_defect_create"),
     validateRequest({ body: defectCreateSchema }),
     DefectRecordController.create
+);
+router.put("/defects/:id/status", 
+    authMiddleware, 
+    checkAbilityMiddleware("beryll_defect_manage"),
+    DefectRecordController.updateStatus
 );
 
 // Workflow: Диагностика

@@ -161,6 +161,15 @@ export interface BeryllClusterServer {
 // ============================================
 
 export type DefectRecordStatus = 
+  | "PENDING_DIAGNOSIS"
+  | "DIAGNOSED"
+  | "WAITING_APPROVAL"
+  | "PARTS_RESERVED"
+  | "REPAIRED_LOCALLY"
+  | "IN_YADRO_REPAIR"
+  | "SUBSTITUTE_ISSUED"
+  | "SCRAPPED"
+  | "CANCELLED"
   | "NEW" 
   | "DIAGNOSING" 
   | "WAITING_PARTS" 

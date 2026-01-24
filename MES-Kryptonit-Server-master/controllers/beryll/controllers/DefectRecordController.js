@@ -222,6 +222,23 @@ class DefectRecordController {
             next(ApiError.badRequest(error.message));
         }
     }
+
+    async updateStatus(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { status, comment } = req.body;
+            const userId = req.user?.id;
+
+            if (!status) {
+                return next(ApiError.badRequest("status обязателен"));
+            }
+
+            const defect = await DefectRecordService.updateStatus(id, userId, status, comment);
+            return res.json(defect);
+        } catch (error) {
+            next(ApiError.badRequest(error.message));
+        }
+    }
     
     // =========================================
     // СПРАВОЧНИКИ
@@ -240,6 +257,16 @@ class DefectRecordController {
         try {
             const statuses = DefectRecordService.getStatuses();
             return res.json(statuses);
+        } catch (error) {
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    async getAvailableActions(req, res, next) {
+        try {
+            const { id } = req.params;
+            const actions = await DefectRecordService.getAvailableActions(id);
+            return res.json(actions);
         } catch (error) {
             next(ApiError.internal(error.message));
         }
