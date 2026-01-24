@@ -1,0 +1,42 @@
+# dependencies
+**/node_modules/
+
+# builds
+**/dist/
+**/build/
+**/.next/
+**/.expo/
+**/.vite/
+
+# env/secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# logs
+**/*.log
+
+# uploads / generated
+uploads/
+**/uploads/
+
+# archives / dumps / backups
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.sql
+*.dump
+project_dump_core.txt
+dump_project_full.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# sensitive
+*логины*.csv
+*login*.csv
+*.pem
+*.key
