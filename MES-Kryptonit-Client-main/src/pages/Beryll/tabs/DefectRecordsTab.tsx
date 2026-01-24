@@ -42,17 +42,23 @@ const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; 
 // Названия типов деталей
 const PART_TYPE_LABELS: Record<RepairPartType, string> = {
   RAM: "ОЗУ",
+  RAM_ECC: "ОЗУ ECC",
   MOTHERBOARD: "Материнская плата",
   CPU: "Процессор",
+  CPU_SOCKET: "Сокет процессора",
   HDD: "HDD диск",
   SSD: "SSD диск",
   PSU: "Блок питания",
   FAN: "Вентилятор",
+  THERMAL: "Термомодуль",
   RAID: "RAID контроллер",
   NIC: "Сетевая карта",
   BACKPLANE: "Backplane",
   BMC: "BMC модуль",
   CABLE: "Кабель",
+  PCIE_SLOT: "PCIe слот",
+  RAM_SOCKET: "Слот ОЗУ",
+  CHASSIS: "Шасси",
   OTHER: "Другое"
 };
 

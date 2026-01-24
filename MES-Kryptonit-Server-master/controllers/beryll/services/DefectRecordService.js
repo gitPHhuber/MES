@@ -917,17 +917,23 @@ class DefectRecordService {
     getPartTypeLabel(type) {
         const labels = {
             RAM: "Оперативная память",
+            RAM_ECC: "ECC память",
             MOTHERBOARD: "Материнская плата",
             CPU: "Процессор",
+            CPU_SOCKET: "Сокет процессора",
             HDD: "Жёсткий диск",
             SSD: "SSD накопитель",
             PSU: "Блок питания",
             FAN: "Вентилятор",
+            THERMAL: "Термомодуль",
             RAID: "RAID контроллер",
             NIC: "Сетевая карта",
             BACKPLANE: "Backplane",
             BMC: "BMC модуль",
             CABLE: "Кабель",
+            PCIE_SLOT: "PCIe слот",
+            RAM_SOCKET: "Слот оперативной памяти",
+            CHASSIS: "Шасси",
             OTHER: "Другое"
         };
         return labels[type] || type;
