@@ -2,6 +2,7 @@ const { WarehouseMovement, User, Team, Section } = require("../models/index");
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class RankingsController {
     async getStats(req, res, next) {
@@ -23,7 +24,7 @@ class RankingsController {
             }
 
 
-            console.log(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
+            logger.info(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
 
             // --- 2. Запрос к БД (Агрегация по сотрудникам) ---
             const userStats = await WarehouseMovement.findAll({
@@ -160,7 +161,7 @@ class RankingsController {
             return res.json({ users: usersRank, teams: teamsRank });
 
         } catch (e) {
-            console.error("Rankings Error:", e);
+            logger.error("Rankings Error:", e);
             next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
         }
     }

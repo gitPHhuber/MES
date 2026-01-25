@@ -1,6 +1,7 @@
 const ApiError = require("../../error/ApiError");
 const { Supply, WarehouseBox, Section } = require("../../models/index");
 const { logAudit } = require("../../utils/auditLogger");
+const logger = require("../../services/logger");
 
 class SupplyController {
   async createSupply(req, res, next) {
@@ -25,7 +26,7 @@ class SupplyController {
 
       return res.json(supply);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -37,7 +38,7 @@ class SupplyController {
       });
       return res.json(supplies);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -81,7 +82,7 @@ class SupplyController {
       res.attachment(`supply_${id}_labels.csv`);
       return res.send(csvContent);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }

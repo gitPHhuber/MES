@@ -1,6 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const ApiError = require("../../error/ApiError");
+const logger = require("../../services/logger");
 
 const storePath = path.resolve(__dirname, "../../static/label-templates.json");
 
@@ -28,7 +29,7 @@ class LabelTemplatesController {
       const templates = await readTemplates();
       return res.json(templates);
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       return next(ApiError.internal("Не удалось загрузить шаблоны"));
     }
   }
@@ -56,7 +57,7 @@ class LabelTemplatesController {
 
       return res.json(newTemplate);
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       return next(ApiError.internal("Не удалось сохранить шаблон"));
     }
   }
@@ -78,7 +79,7 @@ class LabelTemplatesController {
       await writeTemplates(filtered);
       return res.json({ message: "Шаблон удалён" });
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       return next(ApiError.internal("Не удалось удалить шаблон"));
     }
   }

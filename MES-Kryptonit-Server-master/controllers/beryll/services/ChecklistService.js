@@ -6,6 +6,7 @@ const {
   CHECKLIST_GROUPS
 } = require("../../../models/definitions/Beryll");
 const HistoryService = require("./HistoryService");
+const logger = require("../../../services/logger");
 
 class ChecklistService {
   /**
@@ -25,7 +26,7 @@ class ChecklistService {
         });
       }
     } catch (e) {
-      console.error("Error initializing checklist:", e);
+      logger.error("Error initializing checklist:", e);
       throw e;
     }
   }
@@ -155,7 +156,7 @@ async function initChecklistTemplates() {
   try {
     const count = await BeryllChecklistTemplate.count();
     if (count > 0) {
-      console.log(`✅ Чек-лист шаблоны уже существуют (${count} шт.)`);
+      logger.info(`✅ Чек-лист шаблоны уже существуют (${count} шт.)`);
       return;
     }
 
@@ -186,9 +187,9 @@ async function initChecklistTemplates() {
     ];
 
     await BeryllChecklistTemplate.bulkCreate(templates);
-    console.log(`✅ Создано ${templates.length} шаблонов чек-листа`);
+    logger.info(`✅ Создано ${templates.length} шаблонов чек-листа`);
   } catch (e) {
-    console.error('❌ Ошибка инициализации шаблонов:', e);
+    logger.error('❌ Ошибка инициализации шаблонов:', e);
   }
 }
 

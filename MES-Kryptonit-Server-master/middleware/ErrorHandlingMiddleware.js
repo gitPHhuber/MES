@@ -1,16 +1,17 @@
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 module.exports = function (err, req, res, next) {
-    // 1. Логирование в консоль
-    const time = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    console.error(`\x1b[31m[${time}] ERROR:\x1b[0m ${req.method} ${req.url}`);
-    
-    // Если это не наша кастомная ошибка, выводим полный стек (где именно упало)
-    if (!(err instanceof ApiError)) {
-        console.error(err); 
-    } else {
-        console.error(`ApiError: ${err.message}`);
-    }
+    logger.error("Request error", {
+        method: req.method,
+        url: req.originalUrl || req.url,
+        status: err.status,
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+        isApiError: err instanceof ApiError,
+        errors: err.errors,
+    });
 
     // 2. Обработка кастомных ошибок
     if (err instanceof ApiError) {

@@ -5,6 +5,7 @@ const {
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class AssemblyRecipeController {
     
@@ -53,7 +54,7 @@ class AssemblyRecipeController {
 
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error(e);
             next(ApiError.badRequest(e.message));
         }
     }
@@ -121,7 +122,7 @@ class AssemblyRecipeController {
                     acceptedAt: new Date()
                 }, { transaction: t });
                 
-                console.log(`[Assembly] Создано новое изделие: ${qrCode} (User: ${req.user.id})`);
+                logger.info(`[Assembly] Создано новое изделие: ${qrCode} (User: ${req.user.id})`);
             } else {
                 // Если изделие уже было, обновляем статус, если оно не "Завершено"
                 if (box.status !== 'ASSEMBLY' && box.status !== 'DONE') {
@@ -157,7 +158,7 @@ class AssemblyRecipeController {
 
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error(e);
             next(ApiError.badRequest(e.message));
         }
     }
