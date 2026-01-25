@@ -66,7 +66,7 @@ class RankingsController {
                                 model: Team,
                                 attributes: ["id", "title"],
                                 include: [
-                                    { model: Section, attributes: ["title"] },
+                                    { model: Section, as: "production_section", attributes: ["title"] },
                                     { model: User, as: "teamLead", attributes: ["name", "surname"] }
                                 ]
                             }
@@ -135,7 +135,7 @@ class RankingsController {
                             model: Team,
                             attributes: ["id", "title"],
                             include: [
-                                { model: Section, attributes: ["title"] },
+                                { model: Section, as: "production_section", attributes: ["title"] },
                                 { model: User, as: "teamLead", attributes: ["name", "surname"] }
                             ]
                         }

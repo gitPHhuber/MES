@@ -16,6 +16,7 @@ class StructureController {
           },
           {
             model: Team,
+            as: "teams",
             include: [
               {
                 model: User,
