@@ -111,6 +111,9 @@ class MovementController {
     } catch (e) {
       await t.rollback();
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -237,6 +240,9 @@ class MovementController {
     } catch (e) {
       await t.rollback();
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -280,6 +286,9 @@ class MovementController {
       return res.json({ rows, count, page, limit });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -308,6 +317,9 @@ class MovementController {
       return res.json(balances);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
