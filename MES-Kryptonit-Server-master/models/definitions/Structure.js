@@ -20,7 +20,7 @@ const Team = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
-    sectionId: {
+    productionSectionId: {
       type: DataTypes.INTEGER,
       allowNull: true,
       field: "productionSectionId",
