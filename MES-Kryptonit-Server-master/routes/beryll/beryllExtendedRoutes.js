@@ -14,9 +14,9 @@ const Router = require("express");
 const router = new Router();
 
 // Контроллеры
-const ComponentInventoryController = require("../controllers/ComponentInventoryController");
-const DefectRecordController = require("../controllers/DefectRecordController");
-const YadroController = require("../controllers/YadroController");
+const ComponentInventoryController = require("../../controllers/beryll/controllers/ComponentInventoryController");
+const DefectRecordController = require("../../controllers/beryll/controllers/DefectRecordController");
+const YadroController = require("../../controllers/beryll/controllers/YadroController");
 
 // Middleware
 const authMiddleware = require("../../../middleware/authMiddleware");
