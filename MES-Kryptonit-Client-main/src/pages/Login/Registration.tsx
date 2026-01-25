@@ -2,6 +2,7 @@ import { observer } from "mobx-react-lite";
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registration } from "src/api/userApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 import { SELECT_PC_ROUTE } from "src/utils/consts";
 
@@ -15,6 +16,7 @@ export const Registration: React.FC = observer(() => {
 
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -31,6 +33,7 @@ export const Registration: React.FC = observer(() => {
       user.setIsAuth(true);
       setSuccessMessage("Регистрация прошла успешно!");
       setErrorMessage("");
+      setRequestId(null);
       localStorage.removeItem("pcID"); 
       localStorage.removeItem("sessionID"); 
       setTimeout(() => {
@@ -40,8 +43,10 @@ export const Registration: React.FC = observer(() => {
       }, 2000);
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при регистрации. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при регистрации. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
       console.error("Ошибка при регистрации:", error);
     }
@@ -115,7 +120,10 @@ export const Registration: React.FC = observer(() => {
           </div>
         )}
         {errorMessage && (
-          <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+          <div className="mt-4 text-red-500 font-medium">
+            {errorMessage}
+            <RequestIdNotice requestId={requestId} />
+          </div>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import {
   createCoral_B_Board,
   fetchCategoryDefectCoral_B,
 } from "src/api/coralBApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 
 export const CreateCoralB: React.FC = observer(() => {
@@ -28,6 +29,7 @@ export const CreateCoralB: React.FC = observer(() => {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -48,10 +50,13 @@ export const CreateCoralB: React.FC = observer(() => {
 
       setSuccessMessage(" успешно добавлен");
       setErrorMessage("");
+      setRequestId(null);
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при добавлении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при добавлении. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
     }
     coralBStore.resetSelectedDefect();
@@ -179,7 +184,10 @@ export const CreateCoralB: React.FC = observer(() => {
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
       {confirm && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">

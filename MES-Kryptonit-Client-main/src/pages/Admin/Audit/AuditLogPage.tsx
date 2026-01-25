@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAuditLogs } from "api/auditApi";
 import { Preloader } from "src/components/common/Preloader";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { History, Search } from "lucide-react";
 import { AuditLogModel } from "types/AuditLogModel";
 import { fetchUsers } from "src/api/fcApi";
@@ -34,6 +35,7 @@ export const AuditLogPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -52,6 +54,7 @@ export const AuditLogPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setRequestId(null);
       try {
         const userIdParam =
           selectedUserId && selectedUserId !== "ALL"
@@ -71,7 +74,8 @@ export const AuditLogPage: React.FC = () => {
         setTotalCount(count);
       } catch (e: any) {
         console.error(e);
-        setError(e?.response?.data?.message || "Ошибка загрузки журнала");
+        setError(e.userMessage ?? e?.response?.data?.message ?? "Ошибка загрузки журнала");
+        setRequestId(e.requestId ?? null);
       } finally {
         setLoading(false);
       }
@@ -286,6 +290,7 @@ export const AuditLogPage: React.FC = () => {
           Не удалось загрузить журнал.
           <br />
           <span className="font-mono text-xs">{error}</span>
+          <RequestIdNotice requestId={requestId} />
         </div>
       )}
 
