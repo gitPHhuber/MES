@@ -14,6 +14,7 @@ const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
 const logger = require("../services/logger");
+const { buildRequestLogContext } = require("../utils/logging");
 
 class RankingsController {
     
@@ -23,6 +24,7 @@ class RankingsController {
      */
     async getStats(req, res, next) {
         try {
+            const logContext = buildRequestLogContext(req, { includeInput: true });
             const { period } = req.query; // 'day', 'week', 'month', 'all'
 
             // --- 1. Определение периода времени ---
@@ -42,9 +44,19 @@ class RankingsController {
 
             const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD для ProductionOutput
 
-            logger.info(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
+            logger.info("Rankings stats start", {
+                ...logContext,
+                step: "start",
+                period,
+                startDate: startDate.toISOString()
+            });
 
             // --- 2. Статистика со СКЛАДА (WarehouseMovement) ---
+            logger.info("Rankings warehouse stats db start", {
+                ...logContext,
+                step: "db_start",
+                source: "warehouse"
+            });
             const warehouseStats = await WarehouseMovement.findAll({
                 attributes: [
                     "performedById",
@@ -82,8 +94,19 @@ class RankingsController {
                 ],
                 raw: false
             });
+            logger.info("Rankings warehouse stats db ok", {
+                ...logContext,
+                step: "db_ok",
+                source: "warehouse",
+                rowsCount: warehouseStats.length
+            });
 
             // --- 3. Статистика из ПРОИЗВОДСТВА (ProductionOutput) ---
+            logger.info("Rankings production stats db start", {
+                ...logContext,
+                step: "db_start",
+                source: "production"
+            });
             const productionStats = await ProductionOutput.findAll({
                 attributes: [
                     "userId",
@@ -96,6 +119,12 @@ class RankingsController {
                 },
                 group: ["userId"],
                 raw: true
+            });
+            logger.info("Rankings production stats db ok", {
+                ...logContext,
+                step: "db_ok",
+                source: "production",
+                rowsCount: productionStats.length
             });
 
             // Преобразуем в Map для быстрого доступа
@@ -127,6 +156,11 @@ class RankingsController {
             
             let additionalUsers = [];
             if (missingUserIds.length > 0) {
+                logger.info("Rankings additional users db start", {
+                    ...logContext,
+                    step: "db_start",
+                    missingUserIdsCount: missingUserIds.length
+                });
                 additionalUsers = await User.findAll({
                     where: { id: missingUserIds },
                     attributes: ["id", "name", "surname", "img"],
@@ -140,6 +174,11 @@ class RankingsController {
                             ]
                         }
                     ]
+                });
+                logger.info("Rankings additional users db ok", {
+                    ...logContext,
+                    step: "db_ok",
+                    additionalUsersCount: additionalUsers.length
                 });
             }
 
@@ -301,7 +340,11 @@ class RankingsController {
             });
 
         } catch (e) {
-            logger.error("Rankings Error:", e);
+            logger.error("Rankings stats db error", {
+                ...buildRequestLogContext(req, { includeInput: true }),
+                step: "db_error",
+                error: e.message
+            });
             next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
         }
     }
@@ -312,6 +355,7 @@ class RankingsController {
      */
     async getUserDetails(req, res, next) {
         try {
+            const logContext = buildRequestLogContext(req, { includeInput: true });
             const { userId } = req.params;
             const { period = 'week' } = req.query;
 
@@ -330,6 +374,11 @@ class RankingsController {
             const startDateStr = startDate.toISOString().split('T')[0];
 
             // Пользователь
+            logger.info("Rankings user details user db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const user = await User.findByPk(userId, {
                 attributes: ["id", "name", "surname", "img"],
                 include: [
@@ -342,12 +391,23 @@ class RankingsController {
                     }
                 ]
             });
+            logger.info("Rankings user details user db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                found: Boolean(user)
+            });
 
             if (!user) {
                 return next(ApiError.notFound("Пользователь не найден"));
             }
 
             // Склад - по дням
+            logger.info("Rankings user details warehouse db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const warehouseByDay = await WarehouseMovement.findAll({
                 attributes: [
                     [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
@@ -362,8 +422,19 @@ class RankingsController {
                 order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
                 raw: true
             });
+            logger.info("Rankings user details warehouse db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                rowsCount: warehouseByDay.length
+            });
 
             // Производство - по дням
+            logger.info("Rankings user details production by day db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const productionByDay = await ProductionOutput.findAll({
                 attributes: [
                     "date",
@@ -378,8 +449,19 @@ class RankingsController {
                 order: [["date", "ASC"]],
                 raw: true
             });
+            logger.info("Rankings user details production by day db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                rowsCount: productionByDay.length
+            });
 
             // Производство - по типам операций
+            logger.info("Rankings user details production by operation db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const productionByOperation = await ProductionOutput.findAll({
                 attributes: [
                     "operationTypeId",
@@ -399,6 +481,12 @@ class RankingsController {
                 ],
                 group: ["operationTypeId", "operationType.id"],
                 raw: false
+            });
+            logger.info("Rankings user details production by operation db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                rowsCount: productionByOperation.length
             });
 
             // Объединяем данные по дням
@@ -454,7 +542,11 @@ class RankingsController {
             });
 
         } catch (e) {
-            logger.error("User Details Error:", e);
+            logger.error("Rankings user details db error", {
+                ...buildRequestLogContext(req, { includeInput: true }),
+                step: "db_error",
+                error: e.message
+            });
             next(ApiError.badRequest(e.message));
         }
     }
@@ -465,6 +557,7 @@ class RankingsController {
      */
     async getUserHistory(req, res, next) {
         try {
+            const logContext = buildRequestLogContext(req, { includeInput: true });
             const { userId } = req.params;
             const periods = Number(req.query.periods) || 7;
             const days = periods > 0 ? periods : 7;
@@ -475,6 +568,11 @@ class RankingsController {
 
             const startDateStr = startDate.toISOString().split('T')[0];
 
+            logger.info("Rankings user history warehouse db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const warehouseByDay = await WarehouseMovement.findAll({
                 attributes: [
                     [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
@@ -488,7 +586,18 @@ class RankingsController {
                 order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
                 raw: true,
             });
+            logger.info("Rankings user history warehouse db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                rowsCount: warehouseByDay.length
+            });
 
+            logger.info("Rankings user history production db start", {
+                ...logContext,
+                step: "db_start",
+                userId
+            });
             const productionByDay = await ProductionOutput.findAll({
                 attributes: [
                     "date",
@@ -502,6 +611,12 @@ class RankingsController {
                 group: ["date"],
                 order: [["date", "ASC"]],
                 raw: true,
+            });
+            logger.info("Rankings user history production db ok", {
+                ...logContext,
+                step: "db_ok",
+                userId,
+                rowsCount: productionByDay.length
             });
 
             const daysMap = new Map();
@@ -527,7 +642,11 @@ class RankingsController {
             const history = [...daysMap.values()].sort((a, b) => a.date.localeCompare(b.date));
             return res.json(history);
         } catch (e) {
-            logger.error("User History Error:", e);
+            logger.error("Rankings user history db error", {
+                ...buildRequestLogContext(req, { includeInput: true }),
+                step: "db_error",
+                error: e.message
+            });
             next(ApiError.badRequest(e.message));
         }
     }

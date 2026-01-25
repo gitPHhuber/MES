@@ -1,10 +1,13 @@
 const { AuditLog, User } = require("../models/index");
 const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
+const logger = require("../services/logger");
+const { buildRequestLogContext } = require("../utils/logging");
 
 class AuditController {
   async getLogs(req, res, next) {
     try {
+      const logContext = buildRequestLogContext(req, { includeInput: true });
       let { page, limit, action, entity, userId, dateFrom, dateTo } = req.query;
 
       page = Number(page) || 1;
@@ -38,6 +41,7 @@ class AuditController {
         }
       }
 
+      logger.info("Audit logs db start", { ...logContext, step: "db_start" });
       const logs = await AuditLog.findAndCountAll({
         where,
         include: [
@@ -53,8 +57,18 @@ class AuditController {
         offset,
       });
 
+      logger.info("Audit logs db ok", {
+        ...logContext,
+        step: "db_ok",
+        logsCount: logs?.rows?.length || 0,
+      });
       return res.json(logs);
     } catch (e) {
+      logger.error("Audit logs db error", {
+        ...buildRequestLogContext(req, { includeInput: true }),
+        step: "db_error",
+        error: e.message,
+      });
       next(ApiError.badRequest(e.message));
     }
   }

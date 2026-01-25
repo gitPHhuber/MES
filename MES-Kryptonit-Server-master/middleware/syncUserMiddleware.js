@@ -1,6 +1,7 @@
 const { User, Role, Ability } = require('../models/index');
 const KeycloakSyncService = require("../services/KeycloakSyncService");
 const logger = require("../services/logger");
+const { buildRequestLogContext } = require("../utils/logging");
 
 module.exports = async function (req, res, next) {
     // logger.info("--- [SyncUserMiddleware] START ---");
@@ -9,9 +10,14 @@ module.exports = async function (req, res, next) {
     if (req.method === "OPTIONS") return next();
 
     try {
+        const logContext = buildRequestLogContext(req);
+
         // 1. Проверка: есть ли данные от authMiddleware
         if (!req.auth || !req.auth.payload) {
-            logger.error("❌ ОШИБКА: authMiddleware не передал payload. Токен невалиден или не проверен.");
+            logger.error("SyncUserMiddleware auth payload missing", {
+                ...logContext,
+                step: "auth_payload_missing"
+            });
             return res.status(401).json({ message: "Invalid token payload" });
         }
 
@@ -25,7 +31,12 @@ module.exports = async function (req, res, next) {
         const login = payload.preferred_username || payload.nickname || payload.email;
 
         if (!login) {
-            logger.error("❌ ОШИБКА: В токене нет поля login (preferred_username/nickname/email).");
+            logger.error("SyncUserMiddleware login claim missing", {
+                ...logContext,
+                step: "login_claim_missing",
+                keycloakId: payload?.sub,
+                claimKeys: Object.keys(payload || {})
+            });
             return res.status(500).json({ message: "Token structure error: missing username" });
         }
 
@@ -46,10 +57,26 @@ module.exports = async function (req, res, next) {
         // 4. Синхронизация с БД (Поиск / Создание / Обновление)
         // ---------------------------------------------------------------------
         
+        logger.info("SyncUserMiddleware user lookup db start", {
+            ...logContext,
+            step: "db_start",
+            login
+        });
         let user = await User.findOne({ where: { login } });
+        logger.info("SyncUserMiddleware user lookup db ok", {
+            ...logContext,
+            step: "db_ok",
+            userId: user?.id,
+            login
+        });
 
         if (!user) {
-            logger.info(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
+            logger.info("SyncUserMiddleware user create db start", {
+                ...logContext,
+                step: "db_start",
+                login,
+                role: mainRole
+            });
             try {
                 user = await User.create({
                     login,
@@ -59,17 +86,40 @@ module.exports = async function (req, res, next) {
                     password: 'sso_managed_account', // Пароль не используется при SSO
                     img: null
                 });
-                logger.info(`✅ Пользователь создан. ID: ${user.id}`);
+                logger.info("SyncUserMiddleware user create db ok", {
+                    ...logContext,
+                    step: "db_ok",
+                    userId: user.id,
+                    login
+                });
             } catch (dbError) {
-                logger.error("❌ ОШИБКА БАЗЫ ДАННЫХ при создании:", dbError);
+                logger.error("SyncUserMiddleware user create db error", {
+                    ...logContext,
+                    step: "db_error",
+                    login,
+                    error: dbError.message
+                });
                 return res.status(500).json({ message: "DB Error during user creation" });
             }
         } else {
             // Если пользователь есть, но его роль в Keycloak изменилась — обновляем БД
             if (user.role !== mainRole) {
-                logger.info(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
+                logger.info("SyncUserMiddleware user role update db start", {
+                    ...logContext,
+                    step: "db_start",
+                    login,
+                    fromRole: user.role,
+                    toRole: mainRole
+                });
                 user.role = mainRole;
                 await user.save();
+                logger.info("SyncUserMiddleware user role update db ok", {
+                    ...logContext,
+                    step: "db_ok",
+                    userId: user.id,
+                    login,
+                    role: mainRole
+                });
             }
         }
 
@@ -79,6 +129,11 @@ module.exports = async function (req, res, next) {
         
         let abilities = [];
         try {
+            logger.info("SyncUserMiddleware abilities load db start", {
+                ...logContext,
+                step: "db_start",
+                role: mainRole
+            });
             const roleEntity = await Role.findOne({
                 where: { name: mainRole },
                 include: [{
@@ -90,8 +145,19 @@ module.exports = async function (req, res, next) {
             if (roleEntity && roleEntity.abilities) {
                 abilities = roleEntity.abilities.map(ab => ab.code);
             }
+            logger.info("SyncUserMiddleware abilities load db ok", {
+                ...logContext,
+                step: "db_ok",
+                role: mainRole,
+                abilitiesCount: abilities.length
+            });
         } catch (e) {
-            logger.error("⚠️ Ошибка при загрузке прав (abilities):", e.message);
+            logger.error("SyncUserMiddleware abilities load db error", {
+                ...logContext,
+                step: "db_error",
+                role: mainRole,
+                error: e.message
+            });
         }
 
         // ---------------------------------------------------------------------
@@ -112,7 +178,11 @@ module.exports = async function (req, res, next) {
         next();
 
     } catch (e) {
-        logger.error("🔥 КРИТИЧЕСКАЯ ОШИБКА в syncUserMiddleware:", e);
+        logger.error("SyncUserMiddleware crash", {
+            ...buildRequestLogContext(req),
+            step: "middleware_error",
+            error: e.message
+        });
         return res.status(500).json({ message: "Sync Middleware Crash", error: e.message });
     }
 };
