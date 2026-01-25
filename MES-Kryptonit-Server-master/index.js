@@ -161,8 +161,10 @@ const initInitialData = async () => {
 
 const start = async () => {
   try {
+    logger.info(">>> [DB] Подключение к базе данных...");
     // Подключаемся к базе, миграции выполняются отдельно (deploy/CI или вручную)
     await sequelize.authenticate();
+    logger.info(">>> [DB] Подключение успешно.");
     
     // Инициализация прав доступа
     await initInitialData();

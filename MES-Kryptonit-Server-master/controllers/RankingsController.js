@@ -337,7 +337,7 @@ class RankingsController {
                         model: Team,
                         attributes: ["id", "title"],
                         include: [
-                            { model: Section, attributes: ["title"] }
+                            { model: Section, as: "production_section", attributes: ["title"] }
                         ]
                     }
                 ]
