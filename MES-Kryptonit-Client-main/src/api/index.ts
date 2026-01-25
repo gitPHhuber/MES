@@ -1,12 +1,21 @@
 import axios from 'axios';
 
+const apiBaseUrl = import.meta.env.VITE_API_URL;
+
+if (import.meta.env.DEV && apiBaseUrl?.includes('/api')) {
+  const message =
+    'VITE_API_URL содержит "/api", но контракт ожидает baseURL без "/api" и пути с префиксом "api/".';
+  console.error(message);
+  throw new Error(message);
+}
+
 // Создаем экземпляры Axios
 const $host = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiBaseUrl,
 });
 
 const $authHost = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiBaseUrl,
 });
 
 const $mqttHost = axios.create({
