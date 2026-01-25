@@ -112,7 +112,7 @@ describe('StructureController', () => {
   });
 
   test('createTeam success', async () => {
-    const req = { body: { title: 'Team', sectionId: 1 } };
+    const req = { body: { title: 'Team', productionSectionId: 1 } };
     const res = createRes();
     const next = jest.fn();
 
@@ -120,9 +120,29 @@ describe('StructureController', () => {
 
     await StructureController.createTeam(req, res, next);
 
-    expect(Team.create).toHaveBeenCalled();
+    expect(Team.create).toHaveBeenCalledWith({
+      title: 'Team',
+      productionSectionId: 1,
+    });
     expect(logAudit).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ id: 2 });
+  });
+
+  test('createTeam legacy sectionId mapping', async () => {
+    const req = { body: { title: 'Team', sectionId: 3 } };
+    const res = createRes();
+    const next = jest.fn();
+
+    Team.create.mockResolvedValue({ id: 3 });
+
+    await StructureController.createTeam(req, res, next);
+
+    expect(Team.create).toHaveBeenCalledWith({
+      title: 'Team',
+      productionSectionId: 3,
+    });
+    expect(logAudit).toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ id: 3 });
   });
 
   runErrorStatusTests({
@@ -131,7 +151,7 @@ describe('StructureController', () => {
     setup: async () => {
       Team.create.mockRejectedValue(new Error('fail'));
     },
-    buildReq: () => ({ body: { title: 'Team', sectionId: 1 } }),
+    buildReq: () => ({ body: { title: 'Team', productionSectionId: 1 } }),
   });
 
   test('assignSectionManager success', async () => {

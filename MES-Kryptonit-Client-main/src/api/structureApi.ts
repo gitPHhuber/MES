@@ -17,8 +17,11 @@ export const createSection = async (title: string) => {
     return data;
 };
 
-export const createTeam = async (title: string, sectionId: number) => {
-    const { data } = await $authHost.post("api/structure/team", { title, sectionId });
+export const createTeam = async (title: string, productionSectionId: number) => {
+    const { data } = await $authHost.post("api/structure/team", {
+        title,
+        productionSectionId,
+    });
     return data;
 };
 
