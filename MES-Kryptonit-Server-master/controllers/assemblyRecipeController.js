@@ -319,13 +319,15 @@ class AssemblyRecipeController {
             const user = await User.findByPk(process.box.acceptedById, {
                 include: [{
                     model: Team,
-                    include: [{ model: Section }]
+                    include: [{ model: Section, as: "production_section" }]
                 }]
             });
 
             let structureInfo = "Вне структуры";
-            if (user && user.team) {
-                structureInfo = `${user.team.section ? user.team.section.title : "Нет участка"} / ${user.team.title}`;
+            const team = user?.production_team || user?.team;
+            if (team) {
+                const section = team.production_section || team.section;
+                structureInfo = `${section ? section.title : "Нет участка"} / ${team.title}`;
             }
 
             return res.json({

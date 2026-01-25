@@ -42,7 +42,7 @@ async function _getUserWithTeam(userId) {
     return await User.findByPk(userId, {
         include: [{
             model: Team,
-            include: [{ model: Section, foreignKey: "sectionId" }]
+            include: [{ model: Section, as: "production_section" }]
         }]
     });
 }
@@ -53,11 +53,12 @@ async function _getUserSection(user) {
     const fullUser = await User.findByPk(user.id, {
         include: [{
             model: Team,
-            include: [{ model: Section, foreignKey: "sectionId" }]
+            include: [{ model: Section, as: "production_section" }]
         }]
     });
     
-    return fullUser?.Team?.Section || null;
+    const team = fullUser?.production_team || fullUser?.Team;
+    return team?.production_section || team?.Section || null;
 }
 
 async function _canSubmitFor(currentUser, targetUser) {
@@ -351,7 +352,7 @@ class ProductionOutputController {
             const targetUser = await User.findByPk(userId, {
                 include: [{
                     model: Team,
-                    include: [{ model: Section, foreignKey: "sectionId" }]
+                    include: [{ model: Section, as: "production_section" }]
                 }]
             });
             
@@ -366,7 +367,8 @@ class ProductionOutputController {
             
             // Берём teamId и sectionId из профиля целевого сотрудника
             const teamId = targetUser.teamId || null;
-            const sectionId = targetUser.Team?.Section?.id || null;
+            const team = targetUser.production_team || targetUser.Team;
+            const sectionId = team?.production_section?.id || team?.Section?.id || null;
             
             const shouldAutoApprove = await _shouldAutoApprove(currentUser, targetUser);
             const status = shouldAutoApprove ? OUTPUT_STATUSES.APPROVED : OUTPUT_STATUSES.PENDING;
