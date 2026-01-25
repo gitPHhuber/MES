@@ -90,10 +90,10 @@ router.use("/ELRS2-4", ELRS2_4_Router);
 router.use("/Coral-B", coralB_router);
 
 // --- Legacy: Дефекты плат ---
-router.use("/defectsFC", defectRouter);
-router.use("/defects915", defectRouter915);
-router.use("/defects2-4", defectRouter2_4);
-router.use("/defects-Coral-B", defectRouter_CoralB);
+router.use("/board-defects/fc", defectRouter);
+router.use("/board-defects/915", defectRouter915);
+router.use("/board-defects/2-4", defectRouter2_4);
+router.use("/board-defects/coral-b", defectRouter_CoralB);
 
 // --- Beryll (АПК серверы) ---
 router.use("/beryll", beryllRouter);

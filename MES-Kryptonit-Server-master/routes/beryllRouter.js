@@ -105,7 +105,7 @@ router.put(
 
 // Обновить примечания
 router.put(
-  "/servers/:id/notes",
+  "/server-notes/:id",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.updateNotes

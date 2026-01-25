@@ -64,7 +64,7 @@ router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"
 
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
-router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
+router.get("/defect-records/stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
 router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
 router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.get("/defect-records/:id/available-actions", ...protect, checkAbility("beryll.view"), DefectRecordController.getAvailableActions);

@@ -691,7 +691,7 @@ export const getDefectRecordStats = async (params?: {
   dateTo?: string;
   serverId?: number;
 }): Promise<DefectRecordStats> => {
-  const { data } = await $authHost.get("/api/beryll/defect-records-stats", { params });
+  const { data } = await $authHost.get("/api/beryll/defect-records/stats", { params });
   return data;
 };
 

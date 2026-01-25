@@ -1,20 +1,20 @@
 import { $host, $authHost } from "./index"
 
-//запросы для defects-Coral-B эндпоинта
+//запросы для board-defects/coral-b эндпоинта
 export const createCategoryDefectCoral_B = async (title: string, description: string) => {
-    const { data } = await $authHost.post('api/defects-Coral-B', { title, description })
+    const { data } = await $authHost.post('api/board-defects/coral-b', { title, description })
     return data
 }
 export const fetchCategoryDefectCoral_B = async () => {
-    const { data } = await $host.get('api/defects-Coral-B',)
+    const { data } = await $host.get('api/board-defects/coral-b',)
     return data
 }
 export const updateCategoryDefectCoral_B = async (id: number, title: string, description: string) => {
-    const { data } = await $authHost.put('api/defects-Coral-B', { id, title, description })
+    const { data } = await $authHost.put('api/board-defects/coral-b', { id, title, description })
     return data
 }
 export const deleteCategoryDefectCoral_B = async (id: number) => {
-    const { data } = await $authHost.delete(`api/defects-Coral-B/${id}`)
+    const { data } = await $authHost.delete(`api/board-defects/coral-b/${id}`)
     return data
 }
 

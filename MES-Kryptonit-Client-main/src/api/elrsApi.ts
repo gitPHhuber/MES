@@ -2,38 +2,38 @@ import { $host, $authHost } from "./index"
 
 //запросы для defectCategory915 эндпоинта
 export const createCategoryDefect915 = async (title: string, description: string) => {
-    const { data } = await $authHost.post('api/defects915', { title, description })
+    const { data } = await $authHost.post('api/board-defects/915', { title, description })
     return data
 }
 export const fetchCategoryDefect915 = async () => {
-    const { data } = await $host.get('api/defects915',)
+    const { data } = await $host.get('api/board-defects/915',)
     return data
 }
 export const updateCategoryDefect915 = async (id: number, title: string, description: string) => {
-    const { data } = await $authHost.put('api/defects915', { id, title, description })
+    const { data } = await $authHost.put('api/board-defects/915', { id, title, description })
     return data
 }
 export const deleteCategoryDefect915 = async (id: number) => {
-    const { data } = await $authHost.delete(`api/defects915/${id}`)
+    const { data } = await $authHost.delete(`api/board-defects/915/${id}`)
     return data
 }
 
 
 //запросы для defectCategory2-4 эндпоинта
 export const createCategoryDefect24 = async (title: string, description: string) => {
-    const { data } = await $authHost.post('api/defects2-4', { title, description })
+    const { data } = await $authHost.post('api/board-defects/2-4', { title, description })
     return data
 }
 export const fetchCategoryDefect24 = async () => {
-    const { data } = await $host.get('api/defects2-4',)
+    const { data } = await $host.get('api/board-defects/2-4',)
     return data
 }
 export const updateCategoryDefect24 = async (id: number, title: string, description: string) => {
-    const { data } = await $authHost.put('api/defects2-4', { id, title, description })
+    const { data } = await $authHost.put('api/board-defects/2-4', { id, title, description })
     return data
 }
 export const deleteCategoryDefect24 = async (id: number) => {
-    const { data } = await $authHost.delete(`api/defects2-4/${id}`)
+    const { data } = await $authHost.delete(`api/board-defects/2-4/${id}`)
     return data
 }
 
