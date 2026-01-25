@@ -53,6 +53,9 @@ const beryllExtendedRoutes = require("./beryll/beryllExtendedRoutes");
 // --- Система дефектов (Учёт брака) ---
 const defectSystemRouter = require("./defectSystemRouter");
 
+// --- Система мониторинга ---
+const healthRouter = require("./healthRouter");
+
 // =========================================================================
 // НОВОЕ: Учёт выработки (Production Output)
 // =========================================================================
@@ -103,6 +106,9 @@ router.use("/beryll/extended", beryllExtendedRoutes);
 
 // --- Система дефектов (Учёт брака) ---
 router.use("/defects", defectSystemRouter);
+
+// --- Мониторинг ---
+router.use("/", healthRouter);
 
 // =========================================================================
 // НОВОЕ: Учёт выработки
