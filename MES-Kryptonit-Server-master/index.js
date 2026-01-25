@@ -6,12 +6,14 @@ const cors = require("cors");
 const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
+const requestLogger = require("./middleware/requestLogger");
 const path = require("path");
 const KeycloakSyncService = require("./services/KeycloakSyncService");
 
 
 const { initChecklistTemplates } = require("./controllers/beryll");
 const { scheduleReleaseExpiredReservations } = require("./jobs/releaseExpiredReservations");
+const logger = require("./services/logger");
 
 const PORT = process.env.PORT || 5000;
 const app = express();
@@ -27,6 +29,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.static(path.resolve(__dirname, "static")));
 app.use(fileUpload({}));
+app.use(requestLogger);
 
 // Основной роутер
 app.use("/api", router);
@@ -36,7 +39,7 @@ app.use(errorHandler);
 
 const initInitialData = async () => {
   try {
-    console.log(">>> [RBAC] Начинаем инициализацию ролей и прав...");
+    logger.info(">>> [RBAC] Начинаем инициализацию ролей и прав...");
 
     // 1. Создаем список прав (Slugs) согласно ТЗ
     const permissions = [
@@ -148,9 +151,9 @@ const initInitialData = async () => {
       "beryll.view", "beryll.work"
     ]);
 
-    console.log(">>> [RBAC] Инициализация завершена успешно.");
+    logger.info(">>> [RBAC] Инициализация завершена успешно.");
   } catch (e) {
-    console.error(">>> [RBAC] Ошибка инициализации:", e);
+    logger.error(">>> [RBAC] Ошибка инициализации:", e);
   }
 };
 
@@ -163,26 +166,26 @@ const start = async () => {
     await initInitialData();
 
     // Инициализация шаблонов чек-листов для Берилл
-    console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
+    logger.info(">>> [Beryll] Инициализация шаблонов чек-листов...");
     await initChecklistTemplates();
-    console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
+    logger.info(">>> [Beryll] Шаблоны чек-листов инициализированы");
 
     // Запуск джоба для очистки просроченных резервов (MOD-005)
     scheduleReleaseExpiredReservations();
 
     // Auto-sync ролей с Keycloak (MOD-008)
     if (process.env.KEYCLOAK_AUTO_SYNC !== "false") {
-      console.log("🔄 Auto-syncing roles from Keycloak...");
+      logger.info("🔄 Auto-syncing roles from Keycloak...");
       try {
         await KeycloakSyncService.syncRolesFromKeycloak();
       } catch (error) {
-        console.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
+        logger.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
       }
     }
 
-    app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+    app.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
   } catch (e) {
-    console.log(e);
+    logger.info(e);
   }
 };
 

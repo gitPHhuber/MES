@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const HistoryService = require("../services/HistoryService");
+const logger = require("../../../services/logger");
 
 class HistoryController {
   async getHistory(req, res, next) {
@@ -7,7 +8,7 @@ class HistoryController {
       const result = await HistoryService.getHistory(req.query);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }

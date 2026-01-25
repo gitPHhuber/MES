@@ -1,6 +1,7 @@
 const axios = require("axios");
 const { Op } = require("sequelize");
 const { Role } = require("../models/index");
+const logger = require("./logger");
 
 const SYSTEM_ROLES = [
   "offline_access",
@@ -52,7 +53,7 @@ class KeycloakSyncService {
     const { clientId, clientSecret } = KeycloakSyncService.getAdminCredentials();
 
     if (!baseUrl || !realm || !clientId || !clientSecret) {
-      console.warn("⚠️ [Keycloak] Missing admin credentials or realm settings.");
+      logger.warn("⚠️ [Keycloak] Missing admin credentials or realm settings.");
       return null;
     }
 
@@ -70,7 +71,7 @@ class KeycloakSyncService {
 
       return response.data?.access_token || null;
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to fetch admin token:", error.message);
+      logger.error("❌ [Keycloak] Failed to fetch admin token:", error.message);
       return null;
     }
   }
@@ -94,7 +95,7 @@ class KeycloakSyncService {
       const roles = response.data || [];
       return roles.filter((role) => !SYSTEM_ROLES.includes(role.name));
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to fetch roles:", error.message);
+      logger.error("❌ [Keycloak] Failed to fetch roles:", error.message);
       return [];
     }
   }
@@ -108,7 +109,7 @@ class KeycloakSyncService {
     const now = new Date();
 
     if (!roles.length) {
-      console.warn("⚠️ [Keycloak] No roles received for sync.");
+      logger.warn("⚠️ [Keycloak] No roles received for sync.");
       return { created: 0, updated: 0, deactivated: 0 };
     }
 
@@ -202,7 +203,7 @@ class KeycloakSyncService {
 
       return roleResponse.data || null;
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to create role:", error.message);
+      logger.error("❌ [Keycloak] Failed to create role:", error.message);
       return null;
     }
   }
@@ -235,7 +236,7 @@ class KeycloakSyncService {
       });
       return true;
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to update role:", error.message);
+      logger.error("❌ [Keycloak] Failed to update role:", error.message);
       return false;
     }
   }
@@ -258,7 +259,7 @@ class KeycloakSyncService {
       });
       return true;
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to delete role:", error.message);
+      logger.error("❌ [Keycloak] Failed to delete role:", error.message);
       return false;
     }
   }
@@ -293,7 +294,7 @@ class KeycloakSyncService {
 
       return true;
     } catch (error) {
-      console.error("❌ [Keycloak] Failed to assign role:", error.message);
+      logger.error("❌ [Keycloak] Failed to assign role:", error.message);
       return false;
     }
   }

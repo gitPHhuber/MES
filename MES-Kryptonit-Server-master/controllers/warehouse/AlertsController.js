@@ -2,6 +2,7 @@ const { Op } = require("sequelize");
 const { WarehouseBox, InventoryLimit } = require("../../models/index");
 const sequelize = require("../../db");
 const ApiError = require("../../error/ApiError");
+const logger = require("../../services/logger");
 
 class AlertsController {
   async getAlerts(req, res, next) {
@@ -52,7 +53,7 @@ class AlertsController {
 
       res.json(alerts);
     } catch (e) {
-      console.error("Alerts Error:", e);
+      logger.error("Alerts Error:", e);
       next(ApiError.internal(e.message));
     }
   }
@@ -64,7 +65,7 @@ class AlertsController {
       });
       res.json(limits);
     } catch (e) {
-      console.error("Get Limits Error:", e);
+      logger.error("Get Limits Error:", e);
       next(ApiError.internal(e.message));
     }
   }

@@ -14,6 +14,7 @@ const { logAudit } = require("../../utils/auditLogger");
 const sequelize = require("../../db");
 const PdfService = require("../../services/PdfService");
 const ReservationService = require("../../services/warehouse/ReservationService");
+const logger = require("../../services/logger");
 
 const generateShortCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -62,7 +63,7 @@ class BoxController {
 
       return res.json(box);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -147,7 +148,7 @@ class BoxController {
 
       return res.json({ boxes: created });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -203,7 +204,7 @@ class BoxController {
 
       res.json({ rows, count, page: pageNum, limit: limitNum });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -252,7 +253,7 @@ class BoxController {
 
       return res.json({ box, movements, documents });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -292,7 +293,7 @@ class BoxController {
 
       return res.json({ box, movements, documents });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -340,7 +341,7 @@ class BoxController {
       res.attachment("labels.csv");
       return res.send(csv);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -373,7 +374,7 @@ class BoxController {
 
       return res.send(pdfBuffer);
     } catch (e) {
-      console.error("PDF Gen Error:", e);
+      logger.error("PDF Gen Error:", e);
       next(ApiError.internal("Ошибка генерации PDF: " + e.message));
     }
   }
@@ -414,7 +415,7 @@ class BoxController {
 
       return res.json({ message: "Успешно обновлено" });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -524,7 +525,7 @@ class BoxController {
 
       return res.send(pdfBuffer);
     } catch (e) {
-      console.error("Print Special Error:", e);
+      logger.error("Print Special Error:", e);
       next(ApiError.internal(e.message));
     }
   }
@@ -548,7 +549,7 @@ class BoxController {
 
       return res.json(box);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -564,7 +565,7 @@ class BoxController {
       const box = await ReservationService.release({ boxId: id });
       return res.json(box);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -581,7 +582,7 @@ class BoxController {
       const box = await ReservationService.confirm({ boxId: id, qty });
       return res.json(box);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }

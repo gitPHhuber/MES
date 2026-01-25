@@ -1,6 +1,7 @@
 const { BeryllHistory, BeryllServer, User } = require("../../../models/index");
 const { HISTORY_ACTIONS } = require("../../../models/definitions/Beryll");
 const { Op, fn, col } = require("sequelize");
+const logger = require("../../../services/logger");
 
 class HistoryService {
   /**
@@ -24,7 +25,7 @@ class HistoryService {
         durationMinutes: options.durationMinutes
       });
     } catch (e) {
-      console.error("Error logging history:", e);
+      logger.error("Error logging history:", e);
     }
   }
   

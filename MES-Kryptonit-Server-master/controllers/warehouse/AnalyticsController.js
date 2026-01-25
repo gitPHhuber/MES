@@ -2,6 +2,7 @@ const { Op } = require("sequelize");
 const { WarehouseBox, WarehouseMovement } = require("../../models/index");
 const sequelize = require("../../db");
 const ApiError = require("../../error/ApiError");
+const logger = require("../../services/logger");
 
 class AnalyticsController {
   async getDashboardStats(req, res, next) {
@@ -51,7 +52,7 @@ class AnalyticsController {
         chart: activityChart,
       });
     } catch (e) {
-      console.error("Analytics Error:", e);
+      logger.error("Analytics Error:", e);
       next(ApiError.internal(e.message));
     }
   }

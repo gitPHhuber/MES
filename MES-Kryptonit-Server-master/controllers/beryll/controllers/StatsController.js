@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const StatsService = require("../services/StatsService");
+const logger = require("../../../services/logger");
 
 class StatsController {
   async getStats(req, res, next) {
@@ -7,7 +8,7 @@ class StatsController {
       const stats = await StatsService.getStats();
       return res.json(stats);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -17,7 +18,7 @@ class StatsController {
       const analytics = await StatsService.getAnalytics(req.query);
       return res.json(analytics);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
