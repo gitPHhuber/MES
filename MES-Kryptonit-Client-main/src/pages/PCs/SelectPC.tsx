@@ -10,7 +10,7 @@ import {
 import { pcModelFull } from "src/types/PCModel";
 import { SessionModelFull } from "src/types/SessionModel";
 import { useNavigate } from "react-router-dom";
-import { START_ROUTE } from "src/utils/consts";
+import { LOGIN_ROUTE, START_ROUTE } from "src/utils/consts";
 import { userGetModel } from "src/types/UserModel";
 import { Monitor, Search, MapPin, User, Lock, Wifi, Laptop } from "lucide-react";
 
@@ -21,6 +21,21 @@ export const SelectPC: React.FC = observer(() => {
 
   if (!context) throw new Error("Context required");
   const { flightController, user } = context;
+
+  const resolveUserId = () => {
+    const contextUserId = user.user?.id;
+    if (typeof contextUserId === "number" && !Number.isNaN(contextUserId)) {
+      return contextUserId;
+    }
+
+    const storedUserId = localStorage.getItem("userID");
+    if (!storedUserId) return null;
+
+    const parsedUserId = Number(storedUserId);
+    if (Number.isNaN(parsedUserId)) return null;
+
+    return parsedUserId;
+  };
 
   useEffect(() => {
     // 🛑 БЛОКИРОВКА: Не делаем запросы, пока не подтверждена авторизация
@@ -49,6 +64,16 @@ export const SelectPC: React.FC = observer(() => {
     loadData();
   }, [user.isAuth]); // Перезапустится, когда user.isAuth станет true
 
+  useEffect(() => {
+    if (!user.isAuth) return;
+
+    const userId = resolveUserId();
+    if (!userId) {
+      alert("ID пользователя не найден. Пожалуйста, войдите снова.");
+      navigate(LOGIN_ROUTE);
+    }
+  }, [navigate, user.isAuth, user.user]);
+
   // --- ЛОГИКА ЗАНЯТОСТИ ---
   const getActiveSessionInfo = (pcId: number) => {
     const session = flightController.sessions.find(
@@ -69,12 +94,12 @@ export const SelectPC: React.FC = observer(() => {
 
   // --- ВЫБОР ПК ---
   const handleSelectPC = async (pcId: number | null) => {
-    const userIdStr = localStorage.getItem("userID");
-    if (!userIdStr) {
-        alert("Ошибка: ID пользователя не найден. Попробуйте перезайти (F5).");
-        return;
+    const userId = resolveUserId();
+    if (!userId) {
+      alert("Ошибка: ID пользователя не найден. Пожалуйста, войдите снова.");
+      navigate(LOGIN_ROUTE);
+      return;
     }
-    const userId = Number(userIdStr);
 
     try {
         await setSessionOnline(true, userId, pcId);
