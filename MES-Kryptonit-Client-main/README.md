@@ -17,6 +17,23 @@ VITE_API_URL=/api
 VITE_MQTT_API_URL=/socket.io
 VITE_PRODUCT_COMPONENT_API_URL=/api
 VITE_FIRMWARE_CONTROL=/api
+VITE_FIRMWARE_API_URL=/firmware-api
+VITE_MINI_BETAFLY_API_URL=/mini-betafly
+VITE_CORALB_API_URL=/coral-b
+VITE_BETAFLY_WS_URL=ws://localhost:8090
+VITE_NODE_RED_URL=http://localhost:1880
+```
+
+## Dev proxy (Vite)
+
+Для локальной разработки можно проксировать сервисы через Vite, оставляя
+фронтенд с относительными путями (`/firmware-api`, `/mini-betafly`, `/coral-b`).
+Переопределяется через `.env.*`:
+
+```dotenv
+VITE_FIRMWARE_API_TARGET=http://0.0.0.0:8000
+VITE_MINI_BETAFLY_API_TARGET=http://localhost:3003
+VITE_CORALB_API_TARGET=http://localhost:3333
 ```
 
 ## React + TypeScript + Vite
