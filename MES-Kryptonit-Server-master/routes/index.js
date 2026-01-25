@@ -48,6 +48,7 @@ const defectRouter_CoralB = require("./defectRouterCoralB");
 // --- Beryll (АПК серверы) ---
 const beryllRouter = require("./beryllRouter");
 const beryllExtendedRouter = require("./beryllExtendedRouter");
+const beryllExtendedRoutes = require("./beryll/beryllExtendedRoutes");
 
 // --- Система дефектов (Учёт брака) ---
 const defectSystemRouter = require("./defectSystemRouter");
@@ -98,6 +99,7 @@ router.use("/board-defects/coral-b", defectRouter_CoralB);
 // --- Beryll (АПК серверы) ---
 router.use("/beryll", beryllRouter);
 router.use("/beryll", beryllExtendedRouter);
+router.use("/beryll/extended", beryllExtendedRoutes);
 
 // --- Система дефектов (Учёт брака) ---
 router.use("/defects", defectSystemRouter);

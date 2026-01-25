@@ -239,6 +239,119 @@ class DefectRecordController {
             next(ApiError.badRequest(error.message));
         }
     }
+
+    // =========================================
+    // CRUD: ДОПОЛНИТЕЛЬНЫЕ ОПЕРАЦИИ
+    // =========================================
+
+    async update(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            const defect = await DefectRecordService.update(id, req.body, userId);
+            return res.json(defect);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.badRequest(error.message));
+        }
+    }
+
+    async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            const result = await DefectRecordService.delete(id, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.badRequest(error.message));
+        }
+    }
+
+    async markRepeated(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { reason } = req.body;
+            const userId = req.user?.id;
+            const defect = await DefectRecordService.markRepeated(id, userId, reason);
+            return res.json(defect);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.badRequest(error.message));
+        }
+    }
+
+    async getHistory(req, res, next) {
+        try {
+            const { id } = req.params;
+            const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+            const offset = req.query.offset ? parseInt(req.query.offset) : undefined;
+            const history = await DefectRecordService.getHistory(id, { limit, offset });
+            return res.json(history);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    // =========================================
+    // ФАЙЛЫ
+    // =========================================
+
+    async uploadFile(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+
+            if (!req.files || !req.files.file) {
+                return next(ApiError.badRequest("Файл не загружен"));
+            }
+
+            const file = req.files.file;
+            const result = await DefectRecordService.uploadFile(id, file, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.badRequest(error.message));
+        }
+    }
+
+    async downloadFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const file = await DefectRecordService.getFileForDownload(fileId);
+            return res.download(file.fullPath, file.originalName);
+        } catch (error) {
+            if (error.message.includes("не найден")) {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    async deleteFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user?.id;
+            const result = await DefectRecordService.deleteFile(fileId, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message.includes("не найден")) {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.badRequest(error.message));
+        }
+    }
     
     // =========================================
     // СПРАВОЧНИКИ

@@ -12,14 +12,14 @@ const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddlewa
 // Импорт компонентов серверов
 router.post("/server-components",
     authMiddleware,
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     ImportController.importServerComponents
 );
 
 // Импорт записей о браке
 router.post("/defect-records",
     authMiddleware,
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     ImportController.importDefectRecords
 );
 
