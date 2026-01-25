@@ -4,7 +4,7 @@ import { userGetModel } from "src/types/UserModel";
 export interface TeamModel {
     id: number;
     title: string;
-    sectionId: number;
+    productionSectionId: number;
     teamLead: userGetModel | null;
     users: userGetModel[]; // Сотрудники
 }

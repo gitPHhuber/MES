@@ -7,10 +7,13 @@ const Section = sequelize.define(
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false, unique: true },
     description: { type: DataTypes.STRING },
+    managerId: { type: DataTypes.INTEGER, allowNull: true },
   },
   {
     tableName: "production_sections",
+
     underscored: false,
+
     freezeTableName: true,
   }
 );
@@ -20,7 +23,7 @@ const Team = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
-    sectionId: {
+    productionSectionId: {
       type: DataTypes.INTEGER,
       allowNull: true,
       field: "productionSectionId",
@@ -28,7 +31,9 @@ const Team = sequelize.define(
   },
   {
     tableName: "production_teams",
+
     underscored: false,
+
     freezeTableName: true,
   }
 );

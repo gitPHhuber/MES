@@ -8,7 +8,7 @@ class FCController {
     let {
       unique_device_id,
       firmware,
-      PCId,
+      pcId,
       userId,
       categoryDefectId,
       stand_test,
@@ -24,11 +24,11 @@ class FCController {
     try {
       let sessionIds = null;
 
-      if (PCId || userId) {
-        const sessionPCIds = PCId
+      if (pcId || userId) {
+        const sessionPCIds = pcId
           ? await Session.findAll({
             attributes: ["id"],
-            where: { PCId },
+            where: { pcId },
             raw: true,
           })
           : [];
@@ -44,15 +44,15 @@ class FCController {
         const pcIdList = new Set(sessionPCIds.map((s) => s.id));
         const userIdList = new Set(sessionUserIds.map((s) => s.id));
 
-        if (PCId && userId) {
+        if (pcId && userId) {
           sessionIds = [...pcIdList].filter((id) => userIdList.has(id));
-        } else if (PCId) {
+        } else if (pcId) {
           sessionIds = [...pcIdList];
         } else if (userId) {
           sessionIds = [...userIdList];
         }
 
-        if (PCId && userId && sessionIds.length === 0) {
+        if (pcId && userId && sessionIds.length === 0) {
           return res.json({ count: 0, rows: [] });
         }
       }

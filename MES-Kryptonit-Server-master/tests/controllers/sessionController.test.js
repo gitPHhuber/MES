@@ -73,7 +73,7 @@ describe('SessionController', () => {
   });
 
   test('postSession success', async () => {
-    const req = { body: { online: true, userId: 1, PCId: 2 } };
+    const req = { body: { online: true, userId: 1, pcId: 2 } };
     const res = createRes();
     const next = jest.fn();
 
@@ -97,7 +97,7 @@ describe('SessionController', () => {
 
   test('setOnlineSession success', async () => {
     const req = {
-      body: { online: true, userId: 1, PCId: 2 },
+      body: { online: true, userId: 1, pcId: 2 },
       user: { id: 1 },
     };
     const res = createRes();
@@ -127,7 +127,7 @@ describe('SessionController', () => {
     const res = createRes();
     const next = jest.fn();
 
-    Session.findByPk.mockResolvedValue({ id: 1, userId: 2, PCId: 3 });
+    Session.findByPk.mockResolvedValue({ id: 1, userId: 2, pcId: 3 });
     Session.destroy.mockResolvedValue(1);
 
     await SessionController.deleteSession(req, res, next);
