@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "predev": "node scripts/check-deps.js",
     "dev": "nodemon index.js",
+    "prestart": "node scripts/check-deps.js",
     "start": "node index.js",
     "db:migrate": "npx sequelize-cli db:migrate",
     "db:migrate:undo": "npx sequelize-cli db:migrate:undo",
