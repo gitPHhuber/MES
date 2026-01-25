@@ -81,7 +81,7 @@ module.exports = async function (req, res, next) {
             const roleEntity = await Role.findOne({
                 where: { name: mainRole },
                 include: [{
-                    model: Ability,
+                    model: Ability, as: "abilities",
                     through: { attributes: [] }
                 }]
             });

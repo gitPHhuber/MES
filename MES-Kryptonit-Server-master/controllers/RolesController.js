@@ -15,7 +15,7 @@ class RolesController {
   async listRoles(req, res, next) {
     try {
       const roles = await Role.findAll({
-        include: [{ model: Ability, through: { attributes: [] } }],
+        include: [{ model: Ability, as: "abilities", through: { attributes: [] } }],
         order: [
           ["priority", "ASC"],
           ["name", "ASC"],
