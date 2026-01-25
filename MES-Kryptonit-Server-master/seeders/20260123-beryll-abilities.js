@@ -1,7 +1,7 @@
 /**
  * Сидер: Права доступа для новых функций
  * 
- * Добавляет ability для управления компонентами, дефектами, интеграции с Ядро
+ * Добавляет ability для базового доступа к модулю Beryll
  */
 
 "use strict";
@@ -12,72 +12,21 @@ module.exports = {
     
     // Новые права
     const abilities = [
-      // Компоненты
       {
-        name: "beryll_component_view",
-        description: "Просмотр инвентаря компонентов",
+        code: "beryll.view",
+        description: "Просмотр данных модуля Beryll",
         createdAt: now,
         updatedAt: now
       },
       {
-        name: "beryll_component_manage",
-        description: "Управление инвентарём компонентов (добавление, перемещение, списание)",
-        createdAt: now,
-        updatedAt: now
-      },
-      
-      // Дефекты
-      {
-        name: "beryll_defect_view",
-        description: "Просмотр записей о браке",
+        code: "beryll.work",
+        description: "Рабочие операции в модуле Beryll",
         createdAt: now,
         updatedAt: now
       },
       {
-        name: "beryll_defect_create",
-        description: "Создание записей о браке",
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        name: "beryll_defect_manage",
-        description: "Полное управление записями о браке (workflow, ремонт)",
-        createdAt: now,
-        updatedAt: now
-      },
-      
-      // Ядро интеграция
-      {
-        name: "beryll_yadro_view",
-        description: "Просмотр заявок в Ядро",
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        name: "beryll_yadro_manage",
-        description: "Управление заявками в Ядро",
-        createdAt: now,
-        updatedAt: now
-      },
-      
-      // Подменные серверы
-      {
-        name: "beryll_substitute_view",
-        description: "Просмотр пула подменных серверов",
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        name: "beryll_substitute_manage",
-        description: "Управление подменными серверами",
-        createdAt: now,
-        updatedAt: now
-      },
-      
-      // Администрирование
-      {
-        name: "beryll_admin",
-        description: "Администрирование Beryll (SLA, справочники, настройки)",
+        code: "beryll.manage",
+        description: "Администрирование и управление модулем Beryll",
         createdAt: now,
         updatedAt: now
       }
@@ -85,12 +34,12 @@ module.exports = {
     
     // Проверяем существующие abilities
     const existingAbilities = await queryInterface.sequelize.query(
-      `SELECT name FROM abilities WHERE name LIKE 'beryll_%'`,
+      `SELECT code FROM abilities WHERE code LIKE 'beryll.%'`,
       { type: Sequelize.QueryTypes.SELECT }
     );
     
-    const existingNames = new Set(existingAbilities.map(a => a.name));
-    const newAbilities = abilities.filter(a => !existingNames.has(a.name));
+    const existingCodes = new Set(existingAbilities.map(a => a.code));
+    const newAbilities = abilities.filter(a => !existingCodes.has(a.code));
     
     if (newAbilities.length > 0) {
       await queryInterface.bulkInsert("abilities", newAbilities);
@@ -109,7 +58,7 @@ module.exports = {
       const adminRoleId = adminRole[0].id;
       
       const insertedAbilities = await queryInterface.sequelize.query(
-        `SELECT id, name FROM abilities WHERE name LIKE 'beryll_%'`,
+        `SELECT id, code FROM abilities WHERE code LIKE 'beryll.%'`,
         { type: Sequelize.QueryTypes.SELECT }
       );
       
@@ -145,13 +94,10 @@ module.exports = {
       const techRoleId = techRole[0].id;
       
       const techAbilities = await queryInterface.sequelize.query(
-        `SELECT id FROM abilities WHERE name IN (
-          'beryll_component_view', 
-          'beryll_defect_view', 
-          'beryll_defect_create',
-          'beryll_defect_manage',
-          'beryll_yadro_view',
-          'beryll_substitute_view'
+        `SELECT id FROM abilities WHERE code IN (
+          'beryll.view',
+          'beryll.work',
+          'beryll.manage'
         )`,
         { type: Sequelize.QueryTypes.SELECT }
       );
@@ -184,14 +130,14 @@ module.exports = {
     await queryInterface.sequelize.query(`
       DELETE FROM role_abilities 
       WHERE "abilityId" IN (
-        SELECT id FROM abilities WHERE name LIKE 'beryll_%'
+        SELECT id FROM abilities WHERE code LIKE 'beryll.%'
       )
     `);
     
     // Удаляем права
     await queryInterface.bulkDelete("abilities", {
-      name: {
-        [Sequelize.Op.like]: "beryll_%"
+      code: {
+        [Sequelize.Op.like]: "beryll.%"
       }
     });
   }
