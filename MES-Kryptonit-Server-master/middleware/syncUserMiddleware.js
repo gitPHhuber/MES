@@ -18,9 +18,11 @@ module.exports = async function (req, res, next) {
         const payload = req.auth.payload;
         // logger.info("🔑 Данные из токена:", payload.sub);
 
+        const isLocalToken = Boolean(payload.id) && !payload.sub;
+
         // 2. Извлечение данных пользователя
-        const keycloakUUID = payload.sub;
-        
+        const keycloakUUID = isLocalToken ? null : payload.sub;
+
         // Пытаемся найти логин (Keycloak может отдавать его в разных полях)
         const login = payload.preferred_username
             || payload.username
@@ -34,8 +36,8 @@ module.exports = async function (req, res, next) {
             return res.status(401).json({ message: "Invalid token payload" });
         }
 
-        const name = payload.given_name || login;
-        const surname = payload.family_name || '';
+        const name = payload.given_name || payload.name || login;
+        const surname = payload.family_name || payload.surname || '';
 
         // ---------------------------------------------------------------------
         // 3. RBAC: Определение роли на основе Keycloak
@@ -45,15 +47,24 @@ module.exports = async function (req, res, next) {
         const kcRoles = payload.realm_access?.roles || [];
         
         // Определяем основную роль через синхронизированный приоритет в БД
-        const mainRole = await KeycloakSyncService.getMainRole(kcRoles);
+        const mainRole = isLocalToken
+            ? (payload.role || "ASSEMBLER")
+            : await KeycloakSyncService.getMainRole(kcRoles);
 
         // ---------------------------------------------------------------------
         // 4. Синхронизация с БД (Поиск / Создание / Обновление)
         // ---------------------------------------------------------------------
         
-        let user = await User.findOne({ where: { login } });
+        let user = await User.findOne({
+            where: isLocalToken ? { id: payload.id } : { login }
+        });
 
         if (!user) {
+            if (isLocalToken) {
+                logger.error("❌ ОШИБКА: Пользователь из локального токена не найден.");
+                return res.status(401).json({ message: "User not found" });
+            }
+
             logger.info(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
             try {
                 user = await User.create({
@@ -71,7 +82,7 @@ module.exports = async function (req, res, next) {
             }
         } else {
             // Если пользователь есть, но его роль в Keycloak изменилась — обновляем БД
-            if (user.role !== mainRole) {
+            if (!isLocalToken && user.role !== mainRole) {
                 logger.info(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
                 user.role = mainRole;
                 await user.save();
