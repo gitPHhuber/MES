@@ -56,7 +56,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.create(req.body, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -72,7 +72,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.startDiagnosis(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -84,7 +84,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.completeDiagnosis(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -101,7 +101,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.setWaitingParts(id, userId, notes);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -118,7 +118,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.reserveReplacementComponent(id, inventoryId, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -134,7 +134,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.startRepair(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -146,7 +146,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.performComponentReplacement(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -162,7 +162,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.sendToYadro(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -174,7 +174,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.returnFromYadro(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -191,7 +191,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.issueSubstituteServer(id, userId, substituteServerId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -203,7 +203,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.returnSubstituteServer(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -219,7 +219,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.resolve(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -236,7 +236,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.updateStatus(id, userId, status, comment);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -254,7 +254,7 @@ class DefectRecordController {
             if (error.message === "Запись не найдена") {
                 return next(ApiError.notFound(error.message));
             }
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -268,7 +268,7 @@ class DefectRecordController {
             if (error.message === "Запись не найдена") {
                 return next(ApiError.notFound(error.message));
             }
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -283,7 +283,7 @@ class DefectRecordController {
             if (error.message === "Запись не найдена") {
                 return next(ApiError.notFound(error.message));
             }
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -322,7 +322,7 @@ class DefectRecordController {
             if (error.message === "Запись не найдена") {
                 return next(ApiError.notFound(error.message));
             }
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
 
@@ -349,7 +349,7 @@ class DefectRecordController {
             if (error.message.includes("не найден")) {
                 return next(ApiError.notFound(error.message));
             }
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     

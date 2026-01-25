@@ -54,7 +54,7 @@ class PCController {
       const pc = await PC.create({ ip, pc_name, cabinet });
       return res.json(pc);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -65,7 +65,7 @@ class PCController {
       const pc = await PC.findAll({ where: { id } });
       return res.json(pc[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -77,7 +77,7 @@ class PCController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

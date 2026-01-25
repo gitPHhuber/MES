@@ -115,7 +115,7 @@ class FCController {
 
       return res.json(fcAll);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -132,7 +132,7 @@ class FCController {
       });
       return res.json(fc);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -153,7 +153,7 @@ class FCController {
 
       return res.json("добавлены записи");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -180,7 +180,7 @@ class FCController {
 
       return res.json("записи удалены");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -194,7 +194,7 @@ class FCController {
       const fcUpdated = await FC.findAll({ where: { id } });
       return res.json(fcUpdated[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -241,7 +241,7 @@ class FCController {
         return res.json(newFC);
       }
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -253,7 +253,7 @@ class FCController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -265,7 +265,7 @@ class FCController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

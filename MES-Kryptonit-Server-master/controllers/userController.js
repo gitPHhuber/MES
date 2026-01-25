@@ -40,7 +40,7 @@ class UserController {
       });
       return res.json(usersAll);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -59,7 +59,7 @@ class UserController {
     } catch (e) {
       // Если это наша ошибка 403, прокидываем её как есть
       if (e instanceof ApiError) return next(e);
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -84,7 +84,7 @@ class UserController {
       return res.json(user[0]);
     } catch (e) {
       if (e instanceof ApiError) return next(e);
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -106,7 +106,7 @@ class UserController {
       return res.json(user[0]);
     } catch (e) {
       if (e instanceof ApiError) return next(e);
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -135,7 +135,7 @@ class UserController {
       );
       return res.json({ token });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -176,7 +176,7 @@ class UserController {
       );
       return res.json({ token });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -202,7 +202,7 @@ class UserController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

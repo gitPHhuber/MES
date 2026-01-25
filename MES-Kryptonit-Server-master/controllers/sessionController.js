@@ -9,7 +9,7 @@ class SessionController {
       const sessionAll = await Session.findAll();
       return res.json(sessionAll);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -36,7 +36,7 @@ class SessionController {
 
       return res.json(newSession);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -134,7 +134,7 @@ class SessionController {
 
       return res.json(session);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -159,7 +159,7 @@ class SessionController {
 
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -193,7 +193,7 @@ class SessionController {
         return res.json("Сейчас не время для сброса");
       }
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -214,7 +214,7 @@ class SessionController {
 
       return res.json("Все активные сессии сброшены");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }
