@@ -180,14 +180,11 @@ setupBeryllAssociations(User);
 // 8. Система отслеживания дефектов
 setupDefectAssociations({ User });
 
-// 9. Beryll Extended (Стойки, Кластеры, Учёт брака)
-setupExtendedAssociations({ User, BeryllServer });
-
 // ============================================
 // НОВЫЕ СВЯЗИ (исправление бизнес-логики)
 // ============================================
 
-// 10. Компоненты
+// 9. Компоненты
 setupComponentAssociations({
     User,
     BeryllServer,
@@ -195,7 +192,7 @@ setupComponentAssociations({
     BeryllServerComponent
 });
 
-// 11. Ядро (журнал учёта заявок)
+// 10. Ядро (журнал учёта заявок)
 YadroTicketLog.belongsTo(BeryllServer, { foreignKey: "serverId", as: "server" });
 YadroTicketLog.belongsTo(BeryllDefectRecord, { foreignKey: "defectRecordId", as: "defectRecord" });
 YadroTicketLog.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
@@ -203,26 +200,26 @@ YadroTicketLog.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
 BeryllServer.hasMany(YadroTicketLog, { foreignKey: "serverId", as: "yadroLogs" });
 BeryllDefectRecord.hasMany(YadroTicketLog, { foreignKey: "defectRecordId", as: "yadroLogs" });
 
-// 12. Подменные серверы
+// 11. Подменные серверы
 SubstituteServerPool.belongsTo(BeryllServer, { foreignKey: "serverId", as: "server" });
 SubstituteServerPool.belongsTo(BeryllDefectRecord, { foreignKey: "currentDefectId", as: "currentDefect" });
 SubstituteServerPool.belongsTo(User, { foreignKey: "issuedToUserId", as: "issuedTo" });
 
 BeryllServer.hasOne(SubstituteServerPool, { foreignKey: "serverId", as: "substitutePoolEntry" });
 
-// 13. SLA конфигурация (без связей, справочник)
+// 12. SLA конфигурация (без связей, справочник)
 
-// 14. Алиасы пользователей
+// 13. Алиасы пользователей
 UserAlias.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(UserAlias, { foreignKey: "userId", as: "aliases" });
 
-// 15. Связь кластеров со стойками
+// 14. Связь кластеров со стойками
 BeryllClusterRack.belongsTo(BeryllCluster, { foreignKey: "clusterId", as: "cluster" });
 BeryllClusterRack.belongsTo(BeryllRack, { foreignKey: "rackId", as: "rack" });
 BeryllCluster.hasMany(BeryllClusterRack, { foreignKey: "clusterId", as: "rackAssignments" });
 BeryllRack.hasMany(BeryllClusterRack, { foreignKey: "rackId", as: "clusterAssignments" });
 
-// 16. Дополнительные связи для дефектов
+// 15. Дополнительные связи для дефектов
 BeryllDefectRecord.belongsTo(BeryllServerComponent, { 
     foreignKey: "defectComponentId", 
     as: "defectComponent" 
@@ -240,6 +237,9 @@ BeryllDefectRecord.belongsTo(ComponentInventory, {
     foreignKey: "replacementInventoryId", 
     as: "replacementInventoryItem" 
 });
+
+// 16. Beryll Extended (Стойки, Кластеры, Учёт брака)
+setupExtendedAssociations({ User, BeryllServer });
 
 // ============================================
 // ЭКСПОРТ
