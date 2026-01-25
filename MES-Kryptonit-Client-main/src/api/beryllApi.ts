@@ -347,7 +347,7 @@ export const updateServerNotes = async (
   id: number,
   notes: string
 ): Promise<BeryllServer> => {
-  const { data } = await $authHost.put<BeryllServer>(`/api/beryll/servers/${id}/notes`, { notes });
+  const { data } = await $authHost.put<BeryllServer>(`/api/beryll/server-notes/${id}`, { notes });
   return data;
 };
 

@@ -300,10 +300,10 @@ export const inventoryApi = {
 export const defectRecordApi = {
   // Справочники
   getPartTypes: () => 
-    apiClient.get<Array<{ value: string; label: string }>>("/beryll/extended/defects/part-types"),
+    apiClient.get<Array<{ value: string; label: string }>>("/beryll/defect-records/part-types"),
   
   getStatuses: () => 
-    apiClient.get<Array<{ value: string; label: string }>>("/beryll/extended/defects/statuses"),
+    apiClient.get<Array<{ value: string; label: string }>>("/beryll/defect-records/statuses"),
   
   getStats: (params?: { dateFrom?: string; dateTo?: string; serverId?: number }) => 
     apiClient.get<{
@@ -313,7 +313,7 @@ export const defectRecordApi = {
       slaBreachedCount: number;
       avgRepairTimeMinutes: number;
       avgRepairTimeHours: number;
-    }>("/beryll/extended/defects/stats", { params }),
+    }>("/beryll/defect-records/stats", { params }),
   
   // CRUD
   getAll: (params: {
@@ -328,10 +328,10 @@ export const defectRecordApi = {
     slaBreached?: boolean;
     limit?: number;
     offset?: number;
-  }) => apiClient.get<{ rows: DefectRecord[]; count: number }>("/beryll/extended/defects", { params }),
+  }) => apiClient.get<{ rows: DefectRecord[]; count: number }>("/beryll/defect-records", { params }),
   
   getById: (id: number) => 
-    apiClient.get<DefectRecord>(`/beryll/extended/defects/${id}`),
+    apiClient.get<DefectRecord>(`/beryll/defect-records/${id}`),
   
   create: (data: {
     serverId: number;
@@ -344,11 +344,11 @@ export const defectRecordApi = {
     defectPartSerialManuf?: string;
     notes?: string;
     priority?: TicketPriority;
-  }) => apiClient.post<DefectRecord>("/beryll/extended/defects", data),
+  }) => apiClient.post<DefectRecord>("/beryll/defect-records", data),
   
   // Workflow
   startDiagnosis: (id: number) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/start-diagnosis`),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/start-diagnosis`),
   
   completeDiagnosis: (id: number, data: {
     repairPartType?: string;
@@ -356,46 +356,46 @@ export const defectRecordApi = {
     defectPartSerialManuf?: string;
     problemDescription?: string;
     notes?: string;
-  }) => apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/complete-diagnosis`, data),
+  }) => apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/complete-diagnosis`, data),
   
   setWaitingParts: (id: number, notes?: string) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/waiting-parts`, { notes }),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/waiting-parts`, { notes }),
   
   reserveComponent: (id: number, inventoryId: number) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/reserve-component`, { inventoryId }),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/reserve-component`, { inventoryId }),
   
   startRepair: (id: number) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/start-repair`),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/start-repair`),
   
   performReplacement: (id: number, data: {
     replacementPartSerialYadro?: string;
     replacementPartSerialManuf?: string;
     replacementInventoryId?: number;
     repairDetails?: string;
-  }) => apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/perform-replacement`, data),
+  }) => apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/perform-replacement`, data),
   
   sendToYadro: (id: number, data: {
     ticketNumber?: string;
     subject?: string;
     description?: string;
     trackingNumber?: string;
-  }) => apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/send-to-yadro`, data),
+  }) => apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/send-to-yadro`, data),
   
   returnFromYadro: (id: number, data: {
     resolution?: string;
     replacementSerialYadro?: string;
     replacementSerialManuf?: string;
     condition?: ComponentCondition;
-  }) => apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/return-from-yadro`, data),
+  }) => apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/return-from-yadro`, data),
   
   issueSubstitute: (id: number, substituteServerId?: number) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/issue-substitute`, { substituteServerId }),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/issue-substitute`, { substituteServerId }),
   
   returnSubstitute: (id: number) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/return-substitute`),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/return-substitute`),
   
   resolve: (id: number, data: { resolution: string; notes?: string }) => 
-    apiClient.post<DefectRecord>(`/beryll/extended/defects/${id}/resolve`, data),
+    apiClient.post<DefectRecord>(`/beryll/defect-records/${id}/resolve`, data),
 };
 
 // ============================================
