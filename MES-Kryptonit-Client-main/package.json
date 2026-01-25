@@ -9,7 +9,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "generate-pwa-assets": "pwa-assets-generator --preset minimal src/assets/images/logo.svg",
-    "test": "vitest",
+    "check:conflicts": "rg -n \"^(<<<<<<<|=======|>>>>>>>)\" -S . && exit 1 || exit 0",
+    "test": "npm run check:conflicts && vitest",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage"
   },
