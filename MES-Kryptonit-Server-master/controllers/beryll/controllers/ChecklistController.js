@@ -20,7 +20,7 @@ class ChecklistController {
     } catch (e) {
       logger.error(e);
       if (e.message === "Название обязательно") {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }

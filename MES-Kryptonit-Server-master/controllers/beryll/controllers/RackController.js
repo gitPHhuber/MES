@@ -63,7 +63,7 @@ class RackController {
       res.status(201).json(rack);
     } catch (error) {
       logger.error("[RackController] createRack error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -78,7 +78,7 @@ class RackController {
       res.json(rack);
     } catch (error) {
       logger.error("[RackController] updateRack error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -93,7 +93,7 @@ class RackController {
       res.json(result);
     } catch (error) {
       logger.error("[RackController] deleteRack error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -164,7 +164,7 @@ class RackController {
       res.json(unit);
     } catch (error) {
       logger.error("[RackController] installServer error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -185,7 +185,7 @@ class RackController {
       res.json(result);
     } catch (error) {
       logger.error("[RackController] removeServer error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -200,7 +200,7 @@ class RackController {
       res.json(unit);
     } catch (error) {
       logger.error("[RackController] updateUnit error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -220,7 +220,7 @@ class RackController {
       res.json(unit);
     } catch (error) {
       logger.error("[RackController] moveServer error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   

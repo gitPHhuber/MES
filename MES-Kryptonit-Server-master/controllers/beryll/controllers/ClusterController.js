@@ -59,7 +59,7 @@ class ClusterController {
       res.status(201).json(shipment);
     } catch (error) {
       logger.error("[ClusterController] createShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -74,7 +74,7 @@ class ClusterController {
       res.json(shipment);
     } catch (error) {
       logger.error("[ClusterController] updateShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -89,7 +89,7 @@ class ClusterController {
       res.json(result);
     } catch (error) {
       logger.error("[ClusterController] deleteShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -155,7 +155,7 @@ class ClusterController {
       res.status(201).json(cluster);
     } catch (error) {
       logger.error("[ClusterController] createCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -170,7 +170,7 @@ class ClusterController {
       res.json(cluster);
     } catch (error) {
       logger.error("[ClusterController] updateCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -185,7 +185,7 @@ class ClusterController {
       res.json(result);
     } catch (error) {
       logger.error("[ClusterController] deleteCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -225,7 +225,7 @@ class ClusterController {
       res.status(201).json(clusterServer);
     } catch (error) {
       logger.error("[ClusterController] addServerToCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -246,7 +246,7 @@ class ClusterController {
       res.json(result);
     } catch (error) {
       logger.error("[ClusterController] addServersToCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -262,7 +262,7 @@ class ClusterController {
       res.json(result);
     } catch (error) {
       logger.error("[ClusterController] removeServerFromCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   
@@ -277,7 +277,7 @@ class ClusterController {
       res.json(clusterServer);
     } catch (error) {
       logger.error("[ClusterController] updateClusterServer error:", error);
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
   

@@ -38,7 +38,7 @@ class ComponentInventoryController {
             const { catalog, created } = await ComponentInventoryService.getOrCreateCatalogEntry(req.body);
             return res.json({ catalog, created });
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -48,7 +48,7 @@ class ComponentInventoryController {
             const catalog = await ComponentInventoryService.updateCatalogEntry(id, req.body);
             return res.json(catalog);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -116,7 +116,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.addToInventory(req.body, userId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -132,7 +132,7 @@ class ComponentInventoryController {
             const results = await ComponentInventoryService.bulkAddToInventory(items, userId);
             return res.json(results);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -165,7 +165,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.reserve(id, defectId, userId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -178,7 +178,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.release(id, userId, notes);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -195,7 +195,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.installToServer(id, serverId, userId, defectId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -208,7 +208,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.removeFromServer(id, userId, reason, defectId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -225,7 +225,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.sendToYadro(id, ticketNumber, userId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -238,7 +238,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.returnFromYadro(id, userId, condition);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -251,7 +251,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.scrap(id, userId, reason);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -268,7 +268,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.updateLocation(id, location, userId);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -285,7 +285,7 @@ class ComponentInventoryController {
             const component = await ComponentInventoryService.markTested(id, userId, passed, notes);
             return res.json(component);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     

@@ -49,9 +49,9 @@ module.exports = function (err, req, res, next) {
     }
     
     if (err.name === 'SequelizeValidationError') {
-        return res.status(500).json({ 
-            message: "Непредвиденная ошибка сервера",
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        return res.status(400).json({ 
+            message: "Ошибка валидации данных",
+            details: err.errors?.map((error) => error.message)
         });
     }
 
