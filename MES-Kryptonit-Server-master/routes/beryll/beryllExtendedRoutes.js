@@ -10,6 +10,7 @@
  * - Алиасы пользователей
  */
 
+const path = require("path");
 const Router = require("express");
 const router = new Router();
 
@@ -19,9 +20,9 @@ const DefectRecordController = require("../../controllers/beryll/controllers/Def
 const YadroController = require("../../controllers/beryll/controllers/YadroController");
 
 // Middleware
-const authMiddleware = require("../../../middleware/authMiddleware");
-const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
-const validateRequest = require("../../../middleware/validateRequest");
+const authMiddleware = require(path.join(__dirname, "../../middleware/authMiddleware"));
+const checkAbilityMiddleware = require(path.join(__dirname, "../../middleware/checkAbilityMiddleware"));
+const validateRequest = require(path.join(__dirname, "../../middleware/validateRequest"));
 const {
     defectFiltersSchema,
     defectCreateSchema,
@@ -30,7 +31,7 @@ const {
     defectInventorySchema,
     defectSubstituteSchema,
     defectIdParamSchema,
-} = require("../../../schemas/beryll/defect.schema");
+} = require(path.join(__dirname, "../../schemas/beryll/defect.schema"));
 
 // ============================================
 // ИНВЕНТАРЬ КОМПОНЕНТОВ
