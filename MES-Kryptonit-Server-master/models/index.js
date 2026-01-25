@@ -172,11 +172,15 @@ WarehouseMovement.belongsTo(WarehouseBox, { foreignKey: "boxId", as: "box" });
 WarehouseMovement.belongsTo(User, { foreignKey: "performedById", as: "performedBy" });
 WarehouseMovement.belongsTo(Section, { foreignKey: "fromSectionId", as: "fromSection" });
 WarehouseMovement.belongsTo(Section, { foreignKey: "toSectionId", as: "toSection" });
+WarehouseMovement.belongsTo(Team, { foreignKey: "fromTeamId", as: "fromTeam" });
+WarehouseMovement.belongsTo(Team, { foreignKey: "toTeamId", as: "toTeam" });
+WarehouseDocument.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+AuditLog.belongsTo(User, { foreignKey: "userId", as: "User" });
 
 // 5. Задачи производства
 ProductionTask.belongsTo(User, { foreignKey: "responsibleId", as: "responsible" });
 ProductionTask.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
-ProductionTask.belongsTo(Section, { foreignKey: "targetSectionId", as: "targetSection" });
+ProductionTask.belongsTo(Section, { foreignKey: "sectionId", as: "targetSection" });
 ProductionTask.belongsTo(Project, { foreignKey: "projectId", as: "project" });
 
 Project.belongsTo(User, { foreignKey: "createdById", as: "author" });
