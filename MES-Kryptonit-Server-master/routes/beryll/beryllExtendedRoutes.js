@@ -19,9 +19,9 @@ const DefectRecordController = require("../../controllers/beryll/controllers/Def
 const YadroController = require("../../controllers/beryll/controllers/YadroController");
 
 // Middleware
-const authMiddleware = require("../../../middleware/authMiddleware");
-const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
-const validateRequest = require("../../../middleware/validateRequest");
+const authMiddleware = require("../../middleware/authMiddleware");
+const checkAbilityMiddleware = require("../../middleware/checkAbilityMiddleware");
+const validateRequest = require("../../middleware/validateRequest");
 const {
     defectFiltersSchema,
     defectCreateSchema,
@@ -30,7 +30,7 @@ const {
     defectInventorySchema,
     defectSubstituteSchema,
     defectIdParamSchema,
-} = require("../../../schemas/beryll/defect.schema");
+} = require("../../schemas/beryll/defect.schema");
 
 // ============================================
 // ИНВЕНТАРЬ КОМПОНЕНТОВ

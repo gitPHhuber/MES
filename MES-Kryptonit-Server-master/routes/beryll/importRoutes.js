@@ -6,8 +6,8 @@ const Router = require("express");
 const router = new Router();
 
 const ImportController = require("../controllers/ImportController");
-const authMiddleware = require("../../../middleware/authMiddleware");
-const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
+const authMiddleware = require("../../middleware/authMiddleware");
+const checkAbilityMiddleware = require("../../middleware/checkAbilityMiddleware");
 
 // Импорт компонентов серверов
 router.post("/server-components",
