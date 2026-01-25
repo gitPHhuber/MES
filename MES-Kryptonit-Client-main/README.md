@@ -17,6 +17,11 @@ VITE_API_URL=/api
 VITE_MQTT_API_URL=/socket.io
 VITE_PRODUCT_COMPONENT_API_URL=/api
 VITE_FIRMWARE_CONTROL=/api
+
+VITE_KEYCLOAK_URL=http://keycloak.local
+VITE_KEYCLOAK_REALM=MES-Realm
+VITE_KEYCLOAK_CLIENT_ID=mes-client
+
 VITE_FIRMWARE_API_URL=/firmware-api
 VITE_MINI_BETAFLY_API_URL=/mini-betafly
 VITE_CORALB_API_URL=/coral-b
@@ -34,6 +39,7 @@ VITE_NODE_RED_URL=http://localhost:1880
 VITE_FIRMWARE_API_TARGET=http://0.0.0.0:8000
 VITE_MINI_BETAFLY_API_TARGET=http://localhost:3003
 VITE_CORALB_API_TARGET=http://localhost:3333
+
 ```
 
 ## React + TypeScript + Vite
