@@ -27,7 +27,7 @@ export interface AssemblyProcess {
     endTime: string; // Добавили поле
 }
 
-// API Методы (префикс /api/assembly/recipes/... соответствует настройке в routes/index.js)
+// API Методы (префикс api/assembly/recipes/... соответствует настройке в routes/index.js)
 
 // --- Конструктор ---
 export const fetchRecipeByProject = async (projectId: number) => {

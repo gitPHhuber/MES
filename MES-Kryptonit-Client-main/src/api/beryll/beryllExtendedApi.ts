@@ -471,12 +471,12 @@ export const getRacks = async (params?: {
   search?: string;
   includeUnits?: boolean;
 }): Promise<BeryllRack[]> => {
-  const { data } = await $authHost.get("/api/beryll/racks", { params });
+  const { data } = await $authHost.get("api/beryll/racks", { params });
   return data;
 };
 
 export const getRackById = async (id: number): Promise<BeryllRack> => {
-  const { data } = await $authHost.get(`/api/beryll/racks/${id}`);
+  const { data } = await $authHost.get(`api/beryll/racks/${id}`);
   return data;
 };
 
@@ -488,7 +488,7 @@ export const createRack = async (rack: {
   gateway?: string;
   notes?: string;
 }): Promise<BeryllRack> => {
-  const { data } = await $authHost.post("/api/beryll/racks", rack);
+  const { data } = await $authHost.post("api/beryll/racks", rack);
   return data;
 };
 
@@ -496,12 +496,12 @@ export const updateRack = async (
   id: number,
   rack: Partial<BeryllRack>
 ): Promise<BeryllRack> => {
-  const { data } = await $authHost.put(`/api/beryll/racks/${id}`, rack);
+  const { data } = await $authHost.put(`api/beryll/racks/${id}`, rack);
   return data;
 };
 
 export const deleteRack = async (id: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/racks/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/racks/${id}`);
   return data;
 };
 
@@ -509,12 +509,12 @@ export const getRackHistory = async (
   id: number,
   params?: { limit?: number; offset?: number }
 ): Promise<PaginatedResponse<HistoryRecord>> => {
-  const { data } = await $authHost.get(`/api/beryll/racks/${id}/history`, { params });
+  const { data } = await $authHost.get(`api/beryll/racks/${id}/history`, { params });
   return data;
 };
 
 export const getFreeUnits = async (rackId: number): Promise<BeryllRackUnit[]> => {
-  const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/free-units`);
+  const { data } = await $authHost.get(`api/beryll/racks/${rackId}/free-units`);
   return data;
 };
 
@@ -534,7 +534,7 @@ export const installServerInRack = async (
   }
 ): Promise<BeryllRackUnit> => {
   const { data } = await $authHost.post(
-    `/api/beryll/racks/${rackId}/units/${unitNumber}/install`,
+    `api/beryll/racks/${rackId}/units/${unitNumber}/install`,
     params
   );
   return data;
@@ -544,7 +544,7 @@ export const removeServerFromRack = async (
   rackId: number,
   unitNumber: number
 ): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.post(`/api/beryll/racks/${rackId}/units/${unitNumber}/remove`);
+  const { data } = await $authHost.post(`api/beryll/racks/${rackId}/units/${unitNumber}/remove`);
   return data;
 };
 
@@ -552,7 +552,7 @@ export const updateRackUnit = async (
   unitId: number,
   params: Partial<BeryllRackUnit>
 ): Promise<BeryllRackUnit> => {
-  const { data } = await $authHost.put(`/api/beryll/rack-units/${unitId}`, params);
+  const { data } = await $authHost.put(`api/beryll/rack-units/${unitId}`, params);
   return data;
 };
 
@@ -562,14 +562,14 @@ export const moveServerInRack = async (params: {
   toRackId: number;
   toUnit: number;
 }): Promise<BeryllRackUnit> => {
-  const { data } = await $authHost.post("/api/beryll/rack-units/move", params);
+  const { data } = await $authHost.post("api/beryll/rack-units/move", params);
   return data;
 };
 
 export const findServerRackLocation = async (
   serverId: number
 ): Promise<BeryllRackUnit | { found: false }> => {
-  const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/rack-location`);
+  const { data } = await $authHost.get(`api/beryll/servers/${serverId}/rack-location`);
   return data;
 };
 
@@ -582,12 +582,12 @@ export const getShipments = async (params?: {
   search?: string;
   city?: string;
 }): Promise<BeryllShipment[]> => {
-  const { data } = await $authHost.get("/api/beryll/shipments", { params });
+  const { data } = await $authHost.get("api/beryll/shipments", { params });
   return data;
 };
 
 export const getShipmentById = async (id: number): Promise<BeryllShipment> => {
-  const { data } = await $authHost.get(`/api/beryll/shipments/${id}`);
+  const { data } = await $authHost.get(`api/beryll/shipments/${id}`);
   return data;
 };
 
@@ -603,7 +603,7 @@ export const createShipment = async (shipment: {
   carrier?: string;
   notes?: string;
 }): Promise<BeryllShipment> => {
-  const { data } = await $authHost.post("/api/beryll/shipments", shipment);
+  const { data } = await $authHost.post("api/beryll/shipments", shipment);
   return data;
 };
 
@@ -611,12 +611,12 @@ export const updateShipment = async (
   id: number,
   shipment: Partial<BeryllShipment>
 ): Promise<BeryllShipment> => {
-  const { data } = await $authHost.put(`/api/beryll/shipments/${id}`, shipment);
+  const { data } = await $authHost.put(`api/beryll/shipments/${id}`, shipment);
   return data;
 };
 
 export const deleteShipment = async (id: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/shipments/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/shipments/${id}`);
   return data;
 };
 
@@ -624,7 +624,7 @@ export const getShipmentHistory = async (
   id: number,
   params?: { limit?: number; offset?: number }
 ): Promise<PaginatedResponse<HistoryRecord>> => {
-  const { data } = await $authHost.get(`/api/beryll/shipments/${id}/history`, { params });
+  const { data } = await $authHost.get(`api/beryll/shipments/${id}/history`, { params });
   return data;
 };
 
@@ -637,12 +637,12 @@ export const getClusters = async (params?: {
   shipmentId?: number | "null";
   search?: string;
 }): Promise<BeryllCluster[]> => {
-  const { data } = await $authHost.get("/api/beryll/clusters", { params });
+  const { data } = await $authHost.get("api/beryll/clusters", { params });
   return data;
 };
 
 export const getClusterById = async (id: number): Promise<BeryllCluster> => {
-  const { data } = await $authHost.get(`/api/beryll/clusters/${id}`);
+  const { data } = await $authHost.get(`api/beryll/clusters/${id}`);
   return data;
 };
 
@@ -654,7 +654,7 @@ export const createCluster = async (cluster: {
   configVersion?: string;
   notes?: string;
 }): Promise<BeryllCluster> => {
-  const { data } = await $authHost.post("/api/beryll/clusters", cluster);
+  const { data } = await $authHost.post("api/beryll/clusters", cluster);
   return data;
 };
 
@@ -662,12 +662,12 @@ export const updateCluster = async (
   id: number,
   cluster: Partial<BeryllCluster>
 ): Promise<BeryllCluster> => {
-  const { data } = await $authHost.put(`/api/beryll/clusters/${id}`, cluster);
+  const { data } = await $authHost.put(`api/beryll/clusters/${id}`, cluster);
   return data;
 };
 
 export const deleteCluster = async (id: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/clusters/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/clusters/${id}`);
   return data;
 };
 
@@ -675,7 +675,7 @@ export const getClusterHistory = async (
   id: number,
   params?: { limit?: number; offset?: number }
 ): Promise<PaginatedResponse<HistoryRecord>> => {
-  const { data } = await $authHost.get(`/api/beryll/clusters/${id}/history`, { params });
+  const { data } = await $authHost.get(`api/beryll/clusters/${id}/history`, { params });
   return data;
 };
 
@@ -690,7 +690,7 @@ export const addServerToCluster = async (
     notes?: string;
   }
 ): Promise<BeryllClusterServer> => {
-  const { data } = await $authHost.post(`/api/beryll/clusters/${clusterId}/servers`, params);
+  const { data } = await $authHost.post(`api/beryll/clusters/${clusterId}/servers`, params);
   return data;
 };
 
@@ -701,7 +701,7 @@ export const addServersToCluster = async (
     role?: ServerRole;
   }
 ): Promise<{ added: number; results: Array<{ serverId: number; success: boolean; id?: number; error?: string }> }> => {
-  const { data } = await $authHost.post(`/api/beryll/clusters/${clusterId}/servers/bulk`, params);
+  const { data } = await $authHost.post(`api/beryll/clusters/${clusterId}/servers/bulk`, params);
   return data;
 };
 
@@ -709,7 +709,7 @@ export const removeServerFromCluster = async (
   clusterId: number,
   serverId: number
 ): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/clusters/${clusterId}/servers/${serverId}`);
+  const { data } = await $authHost.delete(`api/beryll/clusters/${clusterId}/servers/${serverId}`);
   return data;
 };
 
@@ -717,7 +717,7 @@ export const updateClusterServer = async (
   id: number,
   params: Partial<BeryllClusterServer>
 ): Promise<BeryllClusterServer> => {
-  const { data } = await $authHost.put(`/api/beryll/cluster-servers/${id}`, params);
+  const { data } = await $authHost.put(`api/beryll/cluster-servers/${id}`, params);
   return data;
 };
 
@@ -727,12 +727,12 @@ export const getUnassignedServers = async (params?: {
   search?: string;
   limit?: number;
 }): Promise<Array<{ id: number; apkSerialNumber: string; hostname: string; ipAddress: string; status: string }>> => {
-  const { data } = await $authHost.get("/api/beryll/servers/unassigned", { params });
+  const { data } = await $authHost.get("api/beryll/servers/unassigned", { params });
   return data;
 };
 
 export const getServerClusters = async (serverId: number): Promise<BeryllClusterServer[]> => {
-  const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/clusters`);
+  const { data } = await $authHost.get(`api/beryll/servers/${serverId}/clusters`);
   return data;
 };
 
@@ -752,12 +752,12 @@ export const getDefectRecords = async (params?: {
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResponse<BeryllDefectRecord>> => {
-  const { data } = await $authHost.get("/api/beryll/defect-records", { params });
+  const { data } = await $authHost.get("api/beryll/defect-records", { params });
   return data;
 };
 
 export const getDefectRecordById = async (id: number): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.get(`/api/beryll/defect-records/${id}`);
+  const { data } = await $authHost.get(`api/beryll/defect-records/${id}`);
   return data;
 };
 
@@ -765,7 +765,7 @@ export const getServerDefectRecords = async (
   serverId: number,
   params?: { status?: DefectRecordStatus; limit?: number; offset?: number }
 ): Promise<PaginatedResponse<BeryllDefectRecord>> => {
-  const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/defect-records`, { params });
+  const { data } = await $authHost.get(`api/beryll/servers/${serverId}/defect-records`, { params });
   return data;
 };
 
@@ -785,7 +785,7 @@ export const createDefectRecord = async (record: {
   repairDetails?: string;
   notes?: string;
 }): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.post("/api/beryll/defect-records", record);
+  const { data } = await $authHost.post("api/beryll/defect-records", record);
   return data;
 };
 
@@ -793,12 +793,12 @@ export const updateDefectRecord = async (
   id: number,
   record: Partial<BeryllDefectRecord>
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.put(`/api/beryll/defect-records/${id}`, record);
+  const { data } = await $authHost.put(`api/beryll/defect-records/${id}`, record);
   return data;
 };
 
 export const deleteDefectRecord = async (id: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/defect-records/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/defect-records/${id}`);
   return data;
 };
 
@@ -807,7 +807,7 @@ export const changeDefectRecordStatus = async (
   status: DefectRecordStatus,
   comment?: string
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.put(`/api/beryll/defect-records/${id}/status`, { status, comment });
+  const { data } = await $authHost.put(`api/beryll/defect-records/${id}/status`, { status, comment });
   return data;
 };
 
@@ -815,7 +815,7 @@ export const sendDefectToYadro = async (
   id: number,
   params?: { substituteServerSerial?: string; notes?: string }
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.post(`/api/beryll/defect-records/${id}/send-to-yadro`, params);
+  const { data } = await $authHost.post(`api/beryll/defect-records/${id}/send-to-yadro`, params);
   return data;
 };
 
@@ -823,7 +823,7 @@ export const returnDefectFromYadro = async (
   id: number,
   params?: { notes?: string }
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.post(`/api/beryll/defect-records/${id}/return-from-yadro`, params);
+  const { data } = await $authHost.post(`api/beryll/defect-records/${id}/return-from-yadro`, params);
   return data;
 };
 
@@ -831,7 +831,7 @@ export const resolveDefectRecord = async (
   id: number,
   resolution?: string
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.post(`/api/beryll/defect-records/${id}/resolve`, { resolution });
+  const { data } = await $authHost.post(`api/beryll/defect-records/${id}/resolve`, { resolution });
   return data;
 };
 
@@ -839,7 +839,7 @@ export const markDefectAsRepeated = async (
   id: number,
   reason?: string
 ): Promise<BeryllDefectRecord> => {
-  const { data } = await $authHost.post(`/api/beryll/defect-records/${id}/mark-repeated`, { reason });
+  const { data } = await $authHost.post(`api/beryll/defect-records/${id}/mark-repeated`, { reason });
   return data;
 };
 
@@ -847,7 +847,7 @@ export const getDefectRecordHistory = async (
   id: number,
   params?: { limit?: number; offset?: number }
 ): Promise<PaginatedResponse<HistoryRecord>> => {
-  const { data } = await $authHost.get(`/api/beryll/defect-records/${id}/history`, { params });
+  const { data } = await $authHost.get(`api/beryll/defect-records/${id}/history`, { params });
   return data;
 };
 
@@ -856,18 +856,18 @@ export const getDefectRecordStats = async (params?: {
   dateTo?: string;
   serverId?: number;
 }): Promise<DefectRecordStats> => {
-  const { data } = await $authHost.get("/api/beryll/defect-records/stats", { params });
+  const { data } = await $authHost.get("api/beryll/defect-records/stats", { params });
   return data;
 };
 
 // Справочники
 export const getRepairPartTypes = async (): Promise<Array<{ value: RepairPartType; label: string }>> => {
-  const { data } = await $authHost.get("/api/beryll/defect-records/part-types");
+  const { data } = await $authHost.get("api/beryll/defect-records/part-types");
   return data;
 };
 
 export const getDefectStatuses = async (): Promise<Array<{ value: DefectRecordStatus; label: string }>> => {
-  const { data } = await $authHost.get("/api/beryll/defect-records/statuses");
+  const { data } = await $authHost.get("api/beryll/defect-records/statuses");
   return data;
 };
 
@@ -879,7 +879,7 @@ export const uploadDefectRecordFile = async (
   const formData = new FormData();
   formData.append("file", file);
   const { data } = await $authHost.post(
-    `/api/beryll/defect-records/${defectRecordId}/files`,
+    `api/beryll/defect-records/${defectRecordId}/files`,
     formData,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
@@ -887,14 +887,14 @@ export const uploadDefectRecordFile = async (
 };
 
 export const downloadDefectRecordFile = async (fileId: number): Promise<Blob> => {
-  const { data } = await $authHost.get(`/api/beryll/defect-record-files/${fileId}`, {
+  const { data } = await $authHost.get(`api/beryll/defect-record-files/${fileId}`, {
     responseType: "blob"
   });
   return data;
 };
 
 export const deleteDefectRecordFile = async (fileId: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.delete(`/api/beryll/defect-record-files/${fileId}`);
+  const { data } = await $authHost.delete(`api/beryll/defect-record-files/${fileId}`);
   return data;
 };
 
@@ -905,13 +905,13 @@ export const deleteDefectRecordFile = async (fileId: number): Promise<{ success:
 export const inventoryApi = {
   // Справочник
   getCatalog: (type?: string) =>
-    $authHost.get<ComponentCatalog[]>("/api/beryll/extended/inventory/catalog", { params: { type } }),
+    $authHost.get<ComponentCatalog[]>("api/beryll/extended/inventory/catalog", { params: { type } }),
 
   createCatalogEntry: (data: Partial<ComponentCatalog>) =>
-    $authHost.post<{ catalog: ComponentCatalog; created: boolean }>("/api/beryll/extended/inventory/catalog", data),
+    $authHost.post<{ catalog: ComponentCatalog; created: boolean }>("api/beryll/extended/inventory/catalog", data),
 
   updateCatalogEntry: (id: number, data: Partial<ComponentCatalog>) =>
-    $authHost.put<ComponentCatalog>(`/api/beryll/extended/inventory/catalog/${id}`, data),
+    $authHost.put<ComponentCatalog>(`api/beryll/extended/inventory/catalog/${id}`, data),
 
   // Список
   getAll: (params: {
@@ -926,29 +926,29 @@ export const inventoryApi = {
     warrantyExpired?: boolean;
     limit?: number;
     offset?: number;
-  }) => $authHost.get<{ rows: ComponentInventory[]; count: number }>("/api/beryll/extended/inventory", { params }),
+  }) => $authHost.get<{ rows: ComponentInventory[]; count: number }>("api/beryll/extended/inventory", { params }),
 
   getById: (id: number) =>
-    $authHost.get<ComponentInventory>(`/api/beryll/extended/inventory/${id}`),
+    $authHost.get<ComponentInventory>(`api/beryll/extended/inventory/${id}`),
 
   getBySerial: (serial: string) =>
-    $authHost.get<ComponentInventory>(`/api/beryll/extended/inventory/serial/${serial}`),
+    $authHost.get<ComponentInventory>(`api/beryll/extended/inventory/serial/${serial}`),
 
   getAvailableByType: (type: string, count?: number) =>
-    $authHost.get<ComponentInventory[]>(`/api/beryll/extended/inventory/available/${type}`, { params: { count } }),
+    $authHost.get<ComponentInventory[]>(`api/beryll/extended/inventory/available/${type}`, { params: { count } }),
 
   getStats: () =>
     $authHost.get<{
       byType: Record<string, Record<string, number>>;
       totals: { total: number; available: number; inUse: number; defective: number; inRepair: number };
       warrantyExpiringSoon: number;
-    }>("/api/beryll/extended/inventory/stats"),
+    }>("api/beryll/extended/inventory/stats"),
 
   getWarrantyExpiring: (days?: number) =>
-    $authHost.get<ComponentInventory[]>("/api/beryll/extended/inventory/warranty-expiring", { params: { days } }),
+    $authHost.get<ComponentInventory[]>("api/beryll/extended/inventory/warranty-expiring", { params: { days } }),
 
   getHistory: (id: number) =>
-    $authHost.get<ComponentHistory[]>(`/api/beryll/extended/inventory/${id}/history`),
+    $authHost.get<ComponentHistory[]>(`api/beryll/extended/inventory/${id}/history`),
 
   // Создание
   create: (data: {
@@ -962,7 +962,7 @@ export const inventoryApi = {
     purchaseDate?: string;
     warrantyExpires?: string;
     notes?: string;
-  }) => $authHost.post<ComponentInventory>("/api/beryll/extended/inventory", data),
+  }) => $authHost.post<ComponentInventory>("api/beryll/extended/inventory", data),
 
   bulkCreate: (items: Array<{
     type: string;
@@ -974,37 +974,37 @@ export const inventoryApi = {
     location?: string;
   }>) =>
     $authHost.post<{ success: Array<{ serialNumber: string; id: number }>; errors: Array<{ serialNumber: string; error: string }> }>(
-      "/api/beryll/extended/inventory/bulk",
+      "api/beryll/extended/inventory/bulk",
       { items }
     ),
 
   // Операции
   reserve: (id: number, defectId: number) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/reserve`, { defectId }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/reserve`, { defectId }),
 
   release: (id: number, notes?: string) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/release`, { notes }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/release`, { notes }),
 
   installToServer: (id: number, serverId: number, defectId?: number) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/install`, { serverId, defectId }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/install`, { serverId, defectId }),
 
   removeFromServer: (id: number, reason?: string, defectId?: number) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/remove`, { reason, defectId }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/remove`, { reason, defectId }),
 
   sendToYadro: (id: number, ticketNumber: string) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/send-to-yadro`, { ticketNumber }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/send-to-yadro`, { ticketNumber }),
 
   returnFromYadro: (id: number, condition?: ComponentCondition) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/return-from-yadro`, { condition }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/return-from-yadro`, { condition }),
 
   scrap: (id: number, reason: string) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/scrap`, { reason }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/scrap`, { reason }),
 
   updateLocation: (id: number, location: string) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/location`, { location }),
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/location`, { location }),
 
   markTested: (id: number, passed: boolean, notes?: string) =>
-    $authHost.post<ComponentInventory>(`/api/beryll/extended/inventory/${id}/test`, { passed, notes })
+    $authHost.post<ComponentInventory>(`api/beryll/extended/inventory/${id}/test`, { passed, notes })
 };
 
 // ============================================
@@ -1014,10 +1014,10 @@ export const inventoryApi = {
 export const defectRecordApi = {
   // Справочники
   getPartTypes: () =>
-    $authHost.get<Array<{ value: string; label: string }>>("/api/beryll/defect-records/part-types"),
+    $authHost.get<Array<{ value: string; label: string }>>("api/beryll/defect-records/part-types"),
 
   getStatuses: () =>
-    $authHost.get<Array<{ value: string; label: string }>>("/api/beryll/defect-records/statuses"),
+    $authHost.get<Array<{ value: string; label: string }>>("api/beryll/defect-records/statuses"),
 
   getStats: (params?: { dateFrom?: string; dateTo?: string; serverId?: number }) =>
     $authHost.get<{
@@ -1027,7 +1027,7 @@ export const defectRecordApi = {
       slaBreachedCount: number;
       avgRepairTimeMinutes: number;
       avgRepairTimeHours: number;
-    }>("/api/beryll/defect-records/stats", { params }),
+    }>("api/beryll/defect-records/stats", { params }),
 
   // CRUD
   getAll: (params: {
@@ -1042,10 +1042,10 @@ export const defectRecordApi = {
     slaBreached?: boolean;
     limit?: number;
     offset?: number;
-  }) => $authHost.get<{ rows: DefectRecord[]; count: number }>("/api/beryll/defect-records", { params }),
+  }) => $authHost.get<{ rows: DefectRecord[]; count: number }>("api/beryll/defect-records", { params }),
 
   getById: (id: number) =>
-    $authHost.get<DefectRecord>(`/api/beryll/defect-records/${id}`),
+    $authHost.get<DefectRecord>(`api/beryll/defect-records/${id}`),
 
   create: (data: {
     serverId: number;
@@ -1058,11 +1058,11 @@ export const defectRecordApi = {
     defectPartSerialManuf?: string;
     notes?: string;
     priority?: TicketPriority;
-  }) => $authHost.post<DefectRecord>("/api/beryll/defect-records", data),
+  }) => $authHost.post<DefectRecord>("api/beryll/defect-records", data),
 
   // Workflow
   startDiagnosis: (id: number) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/start-diagnosis`),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/start-diagnosis`),
 
   completeDiagnosis: (id: number, data: {
     repairPartType?: RepairPartType;
@@ -1070,46 +1070,46 @@ export const defectRecordApi = {
     defectPartSerialManuf?: string;
     problemDescription?: string;
     notes?: string;
-  }) => $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/complete-diagnosis`, data),
+  }) => $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/complete-diagnosis`, data),
 
   setWaitingParts: (id: number, notes?: string) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/waiting-parts`, { notes }),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/waiting-parts`, { notes }),
 
   reserveComponent: (id: number, inventoryId: number) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/reserve-component`, { inventoryId }),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/reserve-component`, { inventoryId }),
 
   startRepair: (id: number) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/start-repair`),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/start-repair`),
 
   performReplacement: (id: number, data: {
     replacementPartSerialYadro?: string;
     replacementPartSerialManuf?: string;
     replacementInventoryId?: number;
     repairDetails?: string;
-  }) => $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/perform-replacement`, data),
+  }) => $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/perform-replacement`, data),
 
   sendToYadro: (id: number, data: {
     ticketNumber?: string;
     subject?: string;
     description?: string;
     trackingNumber?: string;
-  }) => $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/send-to-yadro`, data),
+  }) => $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/send-to-yadro`, data),
 
   returnFromYadro: (id: number, data: {
     resolution?: string;
     replacementSerialYadro?: string;
     replacementSerialManuf?: string;
     condition?: ComponentCondition;
-  }) => $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/return-from-yadro`, data),
+  }) => $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/return-from-yadro`, data),
 
   issueSubstitute: (id: number, substituteServerId?: number) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/issue-substitute`, { substituteServerId }),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/issue-substitute`, { substituteServerId }),
 
   returnSubstitute: (id: number) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/return-substitute`),
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/return-substitute`),
 
   resolve: (id: number, data: { resolution: string; notes?: string }) =>
-    $authHost.post<DefectRecord>(`/api/beryll/defect-records/${id}/resolve`, data)
+    $authHost.post<DefectRecord>(`api/beryll/defect-records/${id}/resolve`, data)
 };
 
 // ============================================
@@ -1119,10 +1119,10 @@ export const defectRecordApi = {
 export const yadroApi = {
   // Справочники
   getRequestTypes: () =>
-    $authHost.get<Array<{ value: string; label: string }>>("/api/beryll/extended/yadro/request-types"),
+    $authHost.get<Array<{ value: string; label: string }>>("api/beryll/extended/yadro/request-types"),
 
   getLogStatuses: () =>
-    $authHost.get<Array<{ value: string; label: string }>>("/api/beryll/extended/yadro/log-statuses"),
+    $authHost.get<Array<{ value: string; label: string }>>("api/beryll/extended/yadro/log-statuses"),
 
   // Журнал учёта заявок
   getAllLogs: (params: {
@@ -1135,19 +1135,19 @@ export const yadroApi = {
     search?: string;
     limit?: number;
     offset?: number;
-  }) => $authHost.get<{ rows: YadroTicketLog[]; count: number }>("/api/beryll/extended/yadro/logs", { params }),
+  }) => $authHost.get<{ rows: YadroTicketLog[]; count: number }>("api/beryll/extended/yadro/logs", { params }),
 
   getOpenLogs: () =>
-    $authHost.get<YadroTicketLog[]>("/api/beryll/extended/yadro/logs/open"),
+    $authHost.get<YadroTicketLog[]>("api/beryll/extended/yadro/logs/open"),
 
   getLogStats: (params?: { dateFrom?: string; dateTo?: string }) =>
     $authHost.get<Array<{ status: string; requestType: string; componentType: string; count: string }>>(
-      "/api/beryll/extended/yadro/logs/stats",
+      "api/beryll/extended/yadro/logs/stats",
       { params }
     ),
 
   getLogById: (id: number) =>
-    $authHost.get<YadroTicketLog>(`/api/beryll/extended/yadro/logs/${id}`),
+    $authHost.get<YadroTicketLog>(`api/beryll/extended/yadro/logs/${id}`),
 
   createLog: (data: {
     ticketNumber: string;
@@ -1160,7 +1160,7 @@ export const yadroApi = {
     sentAt?: string;
     problemDescription?: string;
     notes?: string;
-  }) => $authHost.post<YadroTicketLog>("/api/beryll/extended/yadro/logs", data),
+  }) => $authHost.post<YadroTicketLog>("api/beryll/extended/yadro/logs", data),
 
   updateLogStatus: (id: number, data: {
     status: YadroLogStatus;
@@ -1168,7 +1168,7 @@ export const yadroApi = {
     receivedComponentSerialYadro?: string;
     receivedComponentSerialManuf?: string;
     notes?: string;
-  }) => $authHost.put<YadroTicketLog>(`/api/beryll/extended/yadro/logs/${id}/status`, data)
+  }) => $authHost.put<YadroTicketLog>(`api/beryll/extended/yadro/logs/${id}/status`, data)
 };
 
 // ============================================
@@ -1177,10 +1177,10 @@ export const yadroApi = {
 
 export const substituteApi = {
   getAll: (status?: SubstituteStatus) =>
-    $authHost.get<SubstituteServer[]>("/api/beryll/extended/substitutes", { params: { status } }),
+    $authHost.get<SubstituteServer[]>("api/beryll/extended/substitutes", { params: { status } }),
 
   getAvailable: () =>
-    $authHost.get<SubstituteServer[]>("/api/beryll/extended/substitutes/available"),
+    $authHost.get<SubstituteServer[]>("api/beryll/extended/substitutes/available"),
 
   getStats: () =>
     $authHost.get<{
@@ -1189,22 +1189,22 @@ export const substituteApi = {
       inUse: number;
       maintenance: number;
       avgUsageCount: number;
-    }>("/api/beryll/extended/substitutes/stats"),
+    }>("api/beryll/extended/substitutes/stats"),
 
   addToPool: (serverId: number, notes?: string) =>
-    $authHost.post<SubstituteServer>("/api/beryll/extended/substitutes", { serverId, notes }),
+    $authHost.post<SubstituteServer>("api/beryll/extended/substitutes", { serverId, notes }),
 
   removeFromPool: (id: number) =>
-    $authHost.delete(`/api/beryll/extended/substitutes/${id}`),
+    $authHost.delete(`api/beryll/extended/substitutes/${id}`),
 
   issue: (id: number, defectId: number) =>
-    $authHost.post<SubstituteServer>(`/api/beryll/extended/substitutes/${id}/issue`, { defectId }),
+    $authHost.post<SubstituteServer>(`api/beryll/extended/substitutes/${id}/issue`, { defectId }),
 
   return: (id: number) =>
-    $authHost.post<SubstituteServer>(`/api/beryll/extended/substitutes/${id}/return`),
+    $authHost.post<SubstituteServer>(`api/beryll/extended/substitutes/${id}/return`),
 
   setMaintenance: (id: number, notes?: string) =>
-    $authHost.post<SubstituteServer>(`/api/beryll/extended/substitutes/${id}/maintenance`, { notes })
+    $authHost.post<SubstituteServer>(`api/beryll/extended/substitutes/${id}/maintenance`, { notes })
 };
 
 // ============================================
@@ -1213,16 +1213,16 @@ export const substituteApi = {
 
 export const slaApi = {
   getAll: () =>
-    $authHost.get<SlaConfig[]>("/api/beryll/extended/sla"),
+    $authHost.get<SlaConfig[]>("api/beryll/extended/sla"),
 
   create: (data: Partial<SlaConfig>) =>
-    $authHost.post<SlaConfig>("/api/beryll/extended/sla", data),
+    $authHost.post<SlaConfig>("api/beryll/extended/sla", data),
 
   update: (id: number, data: Partial<SlaConfig>) =>
-    $authHost.put<SlaConfig>(`/api/beryll/extended/sla/${id}`, data),
+    $authHost.put<SlaConfig>(`api/beryll/extended/sla/${id}`, data),
 
   delete: (id: number) =>
-    $authHost.delete(`/api/beryll/extended/sla/${id}`)
+    $authHost.delete(`api/beryll/extended/sla/${id}`)
 };
 
 // ============================================
@@ -1231,19 +1231,19 @@ export const slaApi = {
 
 export const aliasApi = {
   getAll: (userId?: number) =>
-    $authHost.get<UserAlias[]>("/api/beryll/extended/aliases", { params: { userId } }),
+    $authHost.get<UserAlias[]>("api/beryll/extended/aliases", { params: { userId } }),
 
   findUserByAlias: (alias: string) =>
     $authHost.get<{ id: number; name: string; surname: string; login: string }>(
-      `/api/beryll/extended/aliases/find/${encodeURIComponent(alias)}`
+      `api/beryll/extended/aliases/find/${encodeURIComponent(alias)}`
     ),
 
   create: (userId: number, alias: string, source?: string) =>
-    $authHost.post<UserAlias>("/api/beryll/extended/aliases", { userId, alias, source }),
+    $authHost.post<UserAlias>("api/beryll/extended/aliases", { userId, alias, source }),
 
   delete: (id: number) =>
-    $authHost.delete(`/api/beryll/extended/aliases/${id}`),
+    $authHost.delete(`api/beryll/extended/aliases/${id}`),
 
   generateForUser: (userId: number) =>
-    $authHost.post<UserAlias[]>(`/api/beryll/extended/aliases/generate/${userId}`)
+    $authHost.post<UserAlias[]>(`api/beryll/extended/aliases/generate/${userId}`)
 };
