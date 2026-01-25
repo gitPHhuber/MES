@@ -33,7 +33,7 @@ class StructureController {
       });
       return res.json(structure);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -50,7 +50,7 @@ class StructureController {
       });
       return res.json(users);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -69,7 +69,7 @@ class StructureController {
 
       return res.json(section);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -89,7 +89,7 @@ class StructureController {
 
       return res.json(team);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -109,7 +109,7 @@ class StructureController {
 
       return res.json({ message: "Manager assigned" });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -129,7 +129,7 @@ class StructureController {
 
       return res.json({ message: "Team Lead assigned" });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -149,7 +149,7 @@ class StructureController {
 
       return res.json({ message: "User added to team" });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 
@@ -169,7 +169,7 @@ class StructureController {
 
       return res.json({ message: "User removed from team" });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 }

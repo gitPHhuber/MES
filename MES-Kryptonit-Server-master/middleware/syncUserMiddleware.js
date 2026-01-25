@@ -22,11 +22,16 @@ module.exports = async function (req, res, next) {
         const keycloakUUID = payload.sub;
         
         // Пытаемся найти логин (Keycloak может отдавать его в разных полях)
-        const login = payload.preferred_username || payload.nickname || payload.email;
+        const login = payload.preferred_username
+            || payload.username
+            || payload.login
+            || payload.nickname
+            || payload.email
+            || payload.upn;
 
         if (!login) {
-            logger.error("❌ ОШИБКА: В токене нет поля login (preferred_username/nickname/email).");
-            return res.status(500).json({ message: "Token structure error: missing username" });
+            logger.error("❌ ОШИБКА: В токене нет поля login/username/email.");
+            return res.status(401).json({ message: "Invalid token payload" });
         }
 
         const name = payload.given_name || login;

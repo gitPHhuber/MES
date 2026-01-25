@@ -55,7 +55,7 @@ class AuditController {
 
       return res.json(logs);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(ApiError.internal(e.message));
     }
   }
 }

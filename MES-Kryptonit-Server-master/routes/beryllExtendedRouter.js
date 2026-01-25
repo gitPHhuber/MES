@@ -4,11 +4,13 @@ const router = new Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const syncUserMiddleware = require("../middleware/syncUserMiddleware");
 const checkAbility = require("../middleware/checkAbilityMiddleware");
+const validateRequest = require("../middleware/validateRequest");
 
 const RackController = require("../controllers/beryll/controllers/RackController");
 const ClusterController = require("../controllers/beryll/controllers/ClusterController");
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
+const { defectFiltersSchema } = require("../schemas/beryll/defect.schema");
 
 const protect = [authMiddleware, syncUserMiddleware];
 
@@ -65,7 +67,13 @@ router.get("/servers/:serverId(\\d+)/clusters", ...protect, checkAbility("beryll
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
 router.get("/defect-records/stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
-router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
+router.get(
+  "/defect-records",
+  ...protect,
+  checkAbility("beryll.view"),
+  validateRequest({ query: defectFiltersSchema }),
+  DefectRecordController.getAll
+);
 router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.get("/defect-records/:id/available-actions", ...protect, checkAbility("beryll.view"), DefectRecordController.getAvailableActions);
 router.get("/defect-records/:id/history", ...protect, checkAbility("beryll.view"), DefectRecordController.getHistory);
