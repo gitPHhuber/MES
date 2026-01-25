@@ -20,9 +20,11 @@ const validateRequest = (schema) => (req, res, next) => {
     return next();
   } catch (error) {
     if (error instanceof ZodError) {
+      const requestId = req.requestId || req.id || req.headers["x-request-id"];
       return res.status(400).json({
         message: "Validation error",
         errors: formatZodErrors(error),
+        requestId,
       });
     }
     return next(error);

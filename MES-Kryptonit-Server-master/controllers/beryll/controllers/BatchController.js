@@ -35,7 +35,7 @@ class BatchController {
     } catch (e) {
       logger.error(e);
       if (e.message === "Название партии обязательно") {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }
@@ -83,7 +83,7 @@ class BatchController {
         return next(ApiError.notFound(e.message));
       }
       if (e.message === "Укажите ID серверов") {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }

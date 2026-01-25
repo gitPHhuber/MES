@@ -583,7 +583,7 @@ class BoxController {
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -602,7 +602,7 @@ class BoxController {
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -622,7 +622,7 @@ class BoxController {
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

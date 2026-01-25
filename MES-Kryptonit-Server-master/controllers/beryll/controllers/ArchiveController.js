@@ -26,7 +26,7 @@ class ArchiveController {
         return next(ApiError.notFound(e.message));
       }
       if (e.message.includes("завершённые") || e.message.includes("серийный номер")) {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }
@@ -45,7 +45,7 @@ class ArchiveController {
         return next(ApiError.notFound(e.message));
       }
       if (e.message === "Сервер не находится в архиве") {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }
@@ -65,7 +65,7 @@ class ArchiveController {
         return next(ApiError.notFound(e.message));
       }
       if (e.message.includes("Укажите") || e.message.includes("присвоен")) {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }

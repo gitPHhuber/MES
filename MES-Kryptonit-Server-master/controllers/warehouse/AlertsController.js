@@ -100,7 +100,7 @@ class AlertsController {
 
       res.json(limit);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

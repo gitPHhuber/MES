@@ -455,7 +455,7 @@ class RankingsController {
 
         } catch (e) {
             logger.error("User Details Error:", e);
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -528,7 +528,7 @@ class RankingsController {
             return res.json(history);
         } catch (e) {
             logger.error("User History Error:", e);
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 }

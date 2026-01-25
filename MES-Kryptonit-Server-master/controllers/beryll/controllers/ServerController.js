@@ -46,7 +46,7 @@ class ServerController {
         return next(ApiError.notFound(e.message));
       }
       if (e.message === "Сервер уже взят в работу") {
-        return next(ApiError.badRequest(e.message));
+        return next(e);
       }
       return next(ApiError.internal(e.message));
     }

@@ -1,5 +1,4 @@
 const { AuditLog, User } = require("../models/index");
-const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
 
 class AuditController {
@@ -55,7 +54,7 @@ class AuditController {
 
       return res.json(logs);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

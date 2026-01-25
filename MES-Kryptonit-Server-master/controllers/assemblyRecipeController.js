@@ -55,7 +55,7 @@ class AssemblyRecipeController {
         } catch (e) {
             await t.rollback();
             logger.error(e);
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -71,7 +71,7 @@ class AssemblyRecipeController {
             
             return res.json(recipe);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -159,7 +159,7 @@ class AssemblyRecipeController {
         } catch (e) {
             await t.rollback();
             logger.error(e);
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -187,7 +187,7 @@ class AssemblyRecipeController {
 
             return res.json(process);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -229,7 +229,7 @@ class AssemblyRecipeController {
             return res.json({ message: "Сборка успешно завершена" });
         } catch (e) {
             await t.rollback();
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -290,7 +290,7 @@ class AssemblyRecipeController {
 
             return res.json(result);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -339,7 +339,7 @@ class AssemblyRecipeController {
                 } : null
             });
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -356,7 +356,7 @@ class AssemblyRecipeController {
             
             return res.json({ message: "Паспорт обновлен" });
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 }
