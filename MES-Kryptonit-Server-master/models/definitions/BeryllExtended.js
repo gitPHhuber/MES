@@ -706,14 +706,17 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
 
 const setupAssociations = (models) => {
   const { User, BeryllServer } = models;
+  const ensureHasMany = (source, target, options) => {
+    if (!source.associations || !source.associations[options.as]) {
+      source.hasMany(target, options);
+    }
+  };
 
   BeryllRack.hasMany(BeryllRackUnit, { as: "units", foreignKey: "rackId", onDelete: "CASCADE" });
   BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
 
   BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
 
   BeryllRackUnit.belongsTo(User, { as: "installedBy", foreignKey: "installedById" });
 
@@ -728,9 +731,7 @@ const setupAssociations = (models) => {
   BeryllClusterServer.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllClusterServer.belongsTo(User, { as: "addedBy", foreignKey: "addedById" });
 
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
 
   BeryllDefectRecord.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllDefectRecord.belongsTo(BeryllServer, { as: "substituteServer", foreignKey: "substituteServerId" });
@@ -741,9 +742,7 @@ const setupAssociations = (models) => {
   BeryllDefectRecord.hasMany(BeryllDefectRecord, { as: "repeatedDefects", foreignKey: "previousDefectId" });
   BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", foreignKey: "defectRecordId", onDelete: "CASCADE" });
 
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
 
   BeryllDefectRecordFile.belongsTo(BeryllDefectRecord, { as: "defectRecord", foreignKey: "defectRecordId" });
   BeryllDefectRecordFile.belongsTo(User, { as: "uploadedBy", foreignKey: "uploadedById" });
