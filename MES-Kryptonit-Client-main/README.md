@@ -1,4 +1,25 @@
-# React + TypeScript + Vite
+# MES-Kryptonit-Client-main
+
+## Единый входной домен
+
+В production используем единый домен фронтенда, а API и socket.io доступны через
+пути `/api` и `/socket.io` на том же домене (ingress/nginx проксирует к backend
+и socket-сервису). Например:
+
+- `https://mes.example.local` — фронтенд
+- `https://mes.example.local/api` — backend
+- `https://mes.example.local/socket.io` — socket.io
+
+## Пример `.env`
+
+```dotenv
+VITE_API_URL=/api
+VITE_MQTT_API_URL=/socket.io
+VITE_PRODUCT_COMPONENT_API_URL=/api
+VITE_FIRMWARE_CONTROL=/api
+```
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
@@ -28,4 +49,3 @@ export default {
 - Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
 - Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
 - Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
-# MES-Kryptonit-Client-main
