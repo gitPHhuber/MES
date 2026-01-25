@@ -12,7 +12,7 @@ import type {
   ServerComponent
 } from "../../types/beryll/components";
 
-const BASE_URL = "/api/beryll";
+const BASE_URL = "api/beryll";
 
 /**
  * Проверить доступность BMC
