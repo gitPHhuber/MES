@@ -1,195 +1,70 @@
-require("dotenv").config();
-const express = require("express");
-const sequelize = require("./db");
-const models = require("./models/index");
-const cors = require("cors");
-const fileUpload = require("express-fileupload");
-const router = require("./routes/index");
-const errorHandler = require("./middleware/ErrorHandlingMiddleware");
-const path = require("path");
-const KeycloakSyncService = require("./services/KeycloakSyncService");
+const Router = require("express");
+const router = new Router();
 
-// Импорт роутера для Beryll Extended
-const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
+const authMiddleware = require("../middleware/authMiddleware");
+const syncUserMiddleware = require("../middleware/syncUserMiddleware");
+const checkAbility = require("../middleware/checkAbilityMiddleware");
 
-const { initChecklistTemplates } = require("./controllers/beryll");
-const { scheduleReleaseExpiredReservations } = require("./jobs/releaseExpiredReservations");
+const BoxController = require("../controllers/warehouse/BoxController");
+const MovementController = require("../controllers/warehouse/MovementController");
+const SupplyController = require("../controllers/warehouse/SupplyController");
+const DocumentController = require("../controllers/warehouse/DocumentController");
+const AnalyticsController = require("../controllers/warehouse/AnalyticsController");
+const AlertsController = require("../controllers/warehouse/AlertsController");
+const HistoryController = require("../controllers/warehouse/HistoryController");
+const LabelTemplatesController = require("../controllers/warehouse/LabelTemplatesController");
+const RankingsController = require("../controllers/RankingsController");
 
-const PORT = process.env.PORT || 5000;
-const app = express();
+const protect = [authMiddleware, syncUserMiddleware];
 
-app.use(express.json());
+// ===== Supplies =====
+router.post("/supplies", ...protect, checkAbility("warehouse.manage"), SupplyController.createSupply);
+router.get("/supplies", ...protect, checkAbility("warehouse.view"), SupplyController.getSupplies);
+router.get("/supplies/:id/export-csv", ...protect, checkAbility("warehouse.view"), SupplyController.exportCsv);
 
-const corsOptions = {
-  origin: "*",
-  credentials: true,
-  optionSuccessStatus: 200,
-};
+// ===== Boxes =====
+router.post("/boxes/single", ...protect, checkAbility("warehouse.manage"), BoxController.createSingleBox);
+router.post("/boxes/batch", ...protect, checkAbility("warehouse.manage"), BoxController.createBoxesBatch);
+router.put("/boxes/batch", ...protect, checkAbility("warehouse.manage"), BoxController.updateBatch);
+router.get("/boxes", ...protect, checkAbility("warehouse.view"), BoxController.getBoxes);
+router.get("/boxes/by-qr/:qr", ...protect, checkAbility("warehouse.view"), BoxController.getBoxByQr);
+router.get("/boxes/:id", ...protect, checkAbility("warehouse.view"), BoxController.getBoxById);
+router.post("/boxes/export", ...protect, checkAbility("warehouse.view"), BoxController.exportCsv);
+router.post("/boxes/print-pdf", ...protect, checkAbility("labels.print"), BoxController.printLabelsPdf);
+router.post("/boxes/print-special", ...protect, checkAbility("labels.print"), BoxController.printSpecialLabel);
+router.post("/boxes/:id/reserve", ...protect, checkAbility("warehouse.manage"), BoxController.reserveBox);
+router.post("/boxes/:id/release", ...protect, checkAbility("warehouse.manage"), BoxController.releaseBox);
+router.post("/boxes/:id/confirm", ...protect, checkAbility("warehouse.manage"), BoxController.confirmBox);
 
-app.use(cors(corsOptions));
-app.use(express.static(path.resolve(__dirname, "static")));
-app.use(fileUpload({}));
+// ===== Movements =====
+router.post("/movements", ...protect, checkAbility("warehouse.manage"), MovementController.moveSingle);
+router.post("/movements/batch", ...protect, checkAbility("warehouse.manage"), MovementController.moveBatch);
+router.get("/movements", ...protect, checkAbility("warehouse.view"), MovementController.getMovements);
 
-// Основной роутер
-app.use("/api", router);
+// ===== Balance & Analytics =====
+router.get("/balance", ...protect, checkAbility("warehouse.view"), MovementController.getBalance);
+router.get("/analytics/dashboard", ...protect, checkAbility("analytics.view"), AnalyticsController.getDashboardStats);
 
-// Роутер для Beryll Extended
-// Примечание: он монтируется также на /api/beryll, дополняя основной роутер
-app.use("/api/beryll", beryllExtendedRouter);
+// ===== Alerts & Limits =====
+router.get("/alerts", ...protect, checkAbility("warehouse.view"), AlertsController.getAlerts);
+router.get("/limits", ...protect, checkAbility("warehouse.view"), AlertsController.getAllLimits);
+router.post("/limits", ...protect, checkAbility("warehouse.manage"), AlertsController.setLimit);
 
-// Обработка ошибок, последний Middleware
-app.use(errorHandler);
+// ===== Documents =====
+router.get("/documents", ...protect, checkAbility("warehouse.view"), DocumentController.getDocuments);
+router.post("/documents", ...protect, checkAbility("warehouse.manage"), DocumentController.createDocument);
 
-const initInitialData = async () => {
-  try {
-    console.log(">>> [RBAC] Начинаем инициализацию ролей и прав...");
+// ===== Print History =====
+router.get("/print-history", ...protect, checkAbility("labels.print"), HistoryController.getPrintHistory);
 
-    // 1. Создаем список прав (Slugs) согласно ТЗ
-    const permissions = [
-      // Система
-      { code: "rbac.manage", description: "Управление ролями и матрицей прав" },
-      { code: "users.manage", description: "Назначение ролей пользователям" },
-      
-      // Склад
-      { code: "warehouse.view", description: "Просмотр остатков" },
-      { code: "warehouse.manage", description: "Приемка, создание коробок, перемещение" },
-      { code: "labels.print", description: "Печать этикеток" },
-      
-      // Сборка
-      { code: "assembly.execute", description: "Работа в сборочном терминале" },
-      { code: "recipe.manage", description: "Создание и редактирование техкарт" },
-      
-      // Устройства (Прошивка)
-      { code: "firmware.flash", description: "Прошивка плат (FC, ELRS, Coral)" },
-      { code: "devices.view", description: "Просмотр списка устройств" },
-      
-      // Качество (ОТК)
-      { code: "defect.manage", description: "Управление справочниками брака" },
-      { code: "defect.report", description: "Фиксация брака" },
-      
-      // Аналитика
-      { code: "analytics.view", description: "Просмотр дашбордов и рейтингов" },
+// ===== Label Templates =====
+router.get("/label-templates", ...protect, checkAbility("labels.print"), LabelTemplatesController.getAll);
+router.post("/label-templates", ...protect, checkAbility("labels.print"), LabelTemplatesController.create);
+router.delete("/label-templates/:id", ...protect, checkAbility("labels.print"), LabelTemplatesController.remove);
 
-      // --- ДОБАВЛЕНО: Права для модуля Берилл ---
-      { code: "beryll.view", description: "Просмотр серверов АПК Берилл" },
-      { code: "beryll.work", description: "Взятие в работу и настройка серверов" },
-      { code: "beryll.manage", description: "Управление модулем (Синхронизация DHCP)" },
+// ===== Rankings =====
+router.get("/rankings", ...protect, checkAbility("analytics.view"), RankingsController.getStats);
+router.get("/rankings/user/:userId", ...protect, checkAbility("analytics.view"), RankingsController.getUserDetails);
+router.get("/rankings/history/:userId", ...protect, checkAbility("analytics.view"), RankingsController.getUserHistory);
 
-      // --- ДОБАВЛЕНО: Управление ролями ---
-      { code: "roles.view", description: "Просмотр списка ролей" },
-      { code: "roles.manage", description: "Создание, изменение и удаление ролей" },
-    ];
-
-    // Upsert прав
-    for (const p of permissions) {
-      await models.Ability.findOrCreate({ where: { code: p.code }, defaults: p });
-    }
-
-    // 2. Создаем Роли
-    const rolesData = {
-      SUPER_ADMIN: "Полный доступ (DevOps/Admin)",
-      PRODUCTION_CHIEF: "Нач. производства",
-      TECHNOLOGIST: "Технолог",
-      WAREHOUSE_MASTER: "Кладовщик",
-      ASSEMBLER: "Сборщик",
-      QC_ENGINEER: "Инженер ОТК",
-      FIRMWARE_OPERATOR: "Прошивальщик"
-    };
-
-    for (const [name, desc] of Object.entries(rolesData)) {
-      await models.Role.findOrCreate({ 
-        where: { name }, 
-        defaults: { description: desc } 
-      });
-    }
-
-    // 3. Матрица доступа (Связываем Роли и Права)
-    const assign = async (roleName, slugs) => {
-      const role = await models.Role.findOne({ where: { name: roleName } });
-      if (!role) return;
-      
-      let abilities;
-      if (slugs === '*') {
-        // Даем все права
-        abilities = await models.Ability.findAll();
-      } else {
-        abilities = await models.Ability.findAll({ where: { code: slugs } });
-      }
-      
-      if (abilities.length) {
-        await role.setAbilities(abilities);
-      }
-    };
-
-    // --- Конфигурация матрицы ---
-    
-    await assign("SUPER_ADMIN", '*');
-
-    await assign("PRODUCTION_CHIEF", [
-      "analytics.view", "users.manage", "defect.manage", 
-      "warehouse.view", "devices.view", "recipe.manage",
-      "beryll.view"
-    ]);
-
-    await assign("TECHNOLOGIST", [
-      "recipe.manage", "firmware.flash", "devices.view",
-      "defect.manage",
-      "beryll.view", "beryll.work", "beryll.manage"
-    ]);
-
-    await assign("WAREHOUSE_MASTER", [
-      "warehouse.view", "warehouse.manage", "labels.print"
-    ]);
-
-    await assign("ASSEMBLER", [
-      "assembly.execute"
-    ]);
-
-    await assign("QC_ENGINEER", [
-      "defect.report", "devices.view", "warehouse.view"
-    ]);
-
-    await assign("FIRMWARE_OPERATOR", [
-      "firmware.flash", "devices.view",
-      "beryll.view", "beryll.work"
-    ]);
-
-    console.log(">>> [RBAC] Инициализация завершена успешно.");
-  } catch (e) {
-    console.error(">>> [RBAC] Ошибка инициализации:", e);
-  }
-};
-
-const start = async () => {
-  try {
-    // Подключаемся к базе, миграции выполняются отдельно (deploy/CI или вручную)
-    await sequelize.authenticate();
-    
-    // Инициализация прав доступа
-    await initInitialData();
-
-    // Инициализация шаблонов чек-листов для Берилл
-    console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
-    await initChecklistTemplates();
-    console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
-
-    // Запуск джоба для очистки просроченных резервов (MOD-005)
-    scheduleReleaseExpiredReservations();
-
-    // Auto-sync ролей с Keycloak (MOD-008)
-    if (process.env.KEYCLOAK_AUTO_SYNC !== "false") {
-      console.log("🔄 Auto-syncing roles from Keycloak...");
-      try {
-        await KeycloakSyncService.syncRolesFromKeycloak();
-      } catch (error) {
-        console.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
-      }
-    }
-
-    app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
-  } catch (e) {
-    console.log(e);
-  }
-};
-
-start();
+module.exports = router;
