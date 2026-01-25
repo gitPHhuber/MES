@@ -10,7 +10,7 @@ const Section = sequelize.define(
   },
   {
     tableName: "production_sections",
-    underscored: true,
+    underscored: false,
     freezeTableName: true,
   }
 );
@@ -28,7 +28,7 @@ const Team = sequelize.define(
   },
   {
     tableName: "production_teams",
-    underscored: true,
+    underscored: false,
     freezeTableName: true,
   }
 );
