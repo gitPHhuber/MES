@@ -28,7 +28,7 @@ router.post("/racks/:rackId/units/:unitNumber/install", ...protect, checkAbility
 router.post("/racks/:rackId/units/:unitNumber/remove", ...protect, checkAbility("beryll.work"), RackController.removeServer);
 router.put("/rack-units/:unitId", ...protect, checkAbility("beryll.work"), RackController.updateUnit);
 router.post("/rack-units/move", ...protect, checkAbility("beryll.work"), RackController.moveServer);
-router.get("/servers/:serverId/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
+router.get("/servers/:serverId(\\d+)/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
 
 // ============================================
 // КОМПЛЕКТЫ / ОТГРУЗКИ (SHIPMENTS)
@@ -53,10 +53,10 @@ router.delete("/clusters/:id", ...protect, checkAbility("beryll.manage"), Cluste
 router.get("/clusters/:id/history", ...protect, checkAbility("beryll.view"), ClusterController.getClusterHistory);
 router.post("/clusters/:clusterId/servers", ...protect, checkAbility("beryll.work"), ClusterController.addServerToCluster);
 router.post("/clusters/:clusterId/servers/bulk", ...protect, checkAbility("beryll.work"), ClusterController.addServersToCluster);
-router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility("beryll.work"), ClusterController.removeServerFromCluster);
+router.delete("/clusters/:clusterId/servers/:serverId(\\d+)", ...protect, checkAbility("beryll.work"), ClusterController.removeServerFromCluster);
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
-router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+router.get("/servers/:serverId(\\d+)/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
 
 // ============================================
 // УЧЁТ БРАКА (DEFECT RECORDS)

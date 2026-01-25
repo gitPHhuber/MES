@@ -73,7 +73,7 @@ router.get(
 
 // Получить один сервер
 router.get(
-  "/servers/:id",
+  "/servers/:id(\\d+)",
   ...protect,
   checkAbility("beryll.view"),
   beryllController.getServerById
@@ -81,7 +81,7 @@ router.get(
 
 // Взять в работу
 router.post(
-  "/servers/:id/take",
+  "/servers/:id(\\d+)/take",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.takeServer
@@ -89,7 +89,7 @@ router.post(
 
 // Освободить (снять с себя)
 router.post(
-  "/servers/:id/release",
+  "/servers/:id(\\d+)/release",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.releaseServer
@@ -97,7 +97,7 @@ router.post(
 
 // Изменить статус
 router.put(
-  "/servers/:id/status",
+  "/servers/:id(\\d+)/status",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.updateStatus
@@ -105,7 +105,7 @@ router.put(
 
 // Обновить примечания
 router.put(
-  "/servers/:id/notes",
+  "/servers/:id(\\d+)/notes",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.updateNotes
@@ -113,7 +113,7 @@ router.put(
 
 // Удалить сервер (только админ)
 router.delete(
-  "/servers/:id",
+  "/servers/:id(\\d+)",
   ...protect,
   checkAbility("beryll.manage"),
   beryllController.deleteServer
@@ -125,7 +125,7 @@ router.delete(
 
 // Переключить пункт чек-листа
 router.put(
-  "/servers/:serverId/checklist/:checklistId",
+  "/servers/:serverId(\\d+)/checklist/:checklistId",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.toggleChecklistItem
@@ -253,7 +253,7 @@ router.get(
 
 // Восстановить сервер из архива
 router.post(
-  "/servers/:id/unarchive",
+  "/servers/:id(\\d+)/unarchive",
   ...protect,
   checkAbility("beryll.manage"),
   beryllController.unarchiveServer
@@ -261,7 +261,7 @@ router.post(
 
 // Перенести сервер в архив
 router.post(
-  "/servers/:id/archive",
+  "/servers/:id(\\d+)/archive",
   ...protect,
   checkAbility("beryll.manage"),
   beryllController.archiveServer
@@ -273,7 +273,7 @@ router.post(
 
 // Присвоить серийный номер АПК
 router.put(
-  "/servers/:id/apk-serial",
+  "/servers/:id(\\d+)/apk-serial",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.updateApkSerialNumber
@@ -285,7 +285,7 @@ router.put(
 
 // Загрузить файл к пункту чек-листа
 router.post(
-  "/servers/:serverId/checklist/:checklistId/file",
+  "/servers/:serverId(\\d+)/checklist/:checklistId/file",
   ...protect,
   checkAbility("beryll.work"),
   beryllController.uploadChecklistFile
@@ -293,7 +293,7 @@ router.post(
 
 // Получить все файлы сервера
 router.get(
-  "/servers/:serverId/files",
+  "/servers/:serverId(\\d+)/files",
   ...protect,
   checkAbility("beryll.view"),
   beryllController.getServerFiles
@@ -313,7 +313,7 @@ router.get(
 
 // Сгенерировать Excel паспорт
 router.get(
-  "/servers/:id/passport",
+  "/servers/:id(\\d+)/passport",
   ...protect,
   checkAbility("beryll.view"),
   beryllController.generatePassport
@@ -336,11 +336,11 @@ router.post("/monitoring/clear-cache", ...protect, checkAbility("beryll.manage")
 // ============================================
 
 // Получить дефекты конкретного сервера
-router.get("/servers/:serverId/defects", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getServerDefects);
+router.get("/servers/:serverId(\\d+)/defects", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getServerDefects);
 // Статистика по дефектам
 router.get("/defects/stats", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getDefectStats);
 // Создать дефект
-router.post("/servers/:serverId/defects", ...protect, checkAbility("beryll.work"), DefectMonitoringController.createDefect);
+router.post("/servers/:serverId(\\d+)/defects", ...protect, checkAbility("beryll.work"), DefectMonitoringController.createDefect);
 // Получить дефект по ID
 router.get("/defects/:id", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getDefectById);
 // Обновить дефект (текст, категорию)
@@ -356,11 +356,11 @@ router.get("/defect-files/:id/download", ...protect, checkAbility("beryll.view")
 // Удалить файл дефекта
 router.delete("/defect-files/:id", ...protect, checkAbility("beryll.work"), DefectMonitoringController.deleteDefectFile); // Исправлено имя метода
 // === КОМПЛЕКТУЮЩИЕ (BMC) ===
-router.get("/servers/:id/bmc/check", ...protect, checkAbility("beryll.view"), ComponentsController.checkBMC);
-router.post("/servers/:id/components/fetch", ...protect, checkAbility("beryll.work"), ComponentsController.fetchComponents);
-router.get("/servers/:id/components", ...protect, checkAbility("beryll.view"), ComponentsController.getComponents);
-router.delete("/servers/:id/components", ...protect, checkAbility("beryll.manage"), ComponentsController.deleteComponents);
+router.get("/servers/:id(\\d+)/bmc/check", ...protect, checkAbility("beryll.view"), ComponentsController.checkBMC);
+router.post("/servers/:id(\\d+)/components/fetch", ...protect, checkAbility("beryll.work"), ComponentsController.fetchComponents);
+router.get("/servers/:id(\\d+)/components", ...protect, checkAbility("beryll.view"), ComponentsController.getComponents);
+router.delete("/servers/:id(\\d+)/components", ...protect, checkAbility("beryll.manage"), ComponentsController.deleteComponents);
 router.get("/components/:id", ...protect, checkAbility("beryll.view"), ComponentsController.getComponentById);
-router.put("/servers/:id/bmc-address", ...protect, checkAbility("beryll.work"), ComponentsController.updateBMCAddress);
+router.put("/servers/:id(\\d+)/bmc-address", ...protect, checkAbility("beryll.work"), ComponentsController.updateBMCAddress);
 
 module.exports = router;

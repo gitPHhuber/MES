@@ -9,8 +9,6 @@ const errorHandler = require("./middleware/ErrorHandlingMiddleware");
 const path = require("path");
 const KeycloakSyncService = require("./services/KeycloakSyncService");
 
-// Импорт роутера для Beryll Extended
-const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
 
 const { initChecklistTemplates } = require("./controllers/beryll");
 const { scheduleReleaseExpiredReservations } = require("./jobs/releaseExpiredReservations");
@@ -32,10 +30,6 @@ app.use(fileUpload({}));
 
 // Основной роутер
 app.use("/api", router);
-
-// Роутер для Beryll Extended
-// Примечание: он монтируется также на /api/beryll, дополняя основной роутер
-app.use("/api/beryll", beryllExtendedRouter);
 
 // Обработка ошибок, последний Middleware
 app.use(errorHandler);
