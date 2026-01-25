@@ -76,16 +76,21 @@ class StructureController {
 
   async createTeam(req, res, next) {
     try {
-      const { title, sectionId } = req.body;
+      const { title, productionSectionId, sectionId } = req.body;
+      const resolvedSectionId =
+        productionSectionId !== undefined ? productionSectionId : sectionId;
 
-      const team = await Team.create({ title, sectionId });
+      const team = await Team.create({
+        title,
+        productionSectionId: resolvedSectionId ?? null,
+      });
 
       await logAudit({
         req,
         action: "TEAM_CREATE",
         entity: "Team",
         entityId: team.id,
-        description: `Создана бригада "${title}" в участке ${sectionId}`,
+        description: `Создана бригада "${title}" в участке ${resolvedSectionId}`,
       });
 
       return res.json(team);

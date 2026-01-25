@@ -118,9 +118,9 @@ Section.hasMany(User, { foreignKey: "sectionId", as: "users" });
 Section.belongsTo(User, { foreignKey: "managerId", as: "manager" });
 User.hasMany(Section, { foreignKey: "managerId", as: "managedSections" });
 
-Team.belongsTo(Section, { foreignKey: "sectionId", as: "section" });
-Team.belongsTo(Section, { foreignKey: "sectionId", as: "production_section" });
-Section.hasMany(Team, { foreignKey: "sectionId", as: "teams" });
+Team.belongsTo(Section, { foreignKey: "productionSectionId", as: "section" });
+Team.belongsTo(Section, { foreignKey: "productionSectionId", as: "production_section" });
+Section.hasMany(Team, { foreignKey: "productionSectionId", as: "teams" });
 
 Team.belongsTo(User, { foreignKey: "teamLeadId", as: "teamLead" });
 

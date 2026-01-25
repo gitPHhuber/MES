@@ -16,12 +16,12 @@ class SessionController {
   // Ручное создание (используется редко, но оставим для совместимости)
   async postSession(req, res, next) {
     try {
-      const { online, userId, PCId } = req.body;
+      const { online, userId, pcId } = req.body;
 
       const newSession = await Session.create({
         online,
         userId,
-        PCId: PCId || null,
+        pcId: pcId || null,
       });
 
       await logAudit({
@@ -30,8 +30,8 @@ class SessionController {
         action: "SESSION_CREATE",
         entity: "SESSION",
         entityId: newSession.id,
-        description: `Создана сессия вручную (userId=${userId}, PCId=${PCId || 'PERSONAL'}, online=${online})`,
-        metadata: { userId, PCId, online },
+        description: `Создана сессия вручную (userId=${userId}, pcId=${pcId || 'PERSONAL'}, online=${online})`,
+        metadata: { userId, pcId, online },
       });
 
       return res.json(newSession);
@@ -43,8 +43,8 @@ class SessionController {
   // Основной метод входа/выхода
   async setOnlineSession(req, res, next) {
     try {
-      // PCId может быть null (личный ноутбук)
-      const { online, PCId, userId: bodyUserId } = req.body;
+      // pcId может быть null (личный ноутбук)
+      const { online, pcId, userId: bodyUserId } = req.body;
 
       const currentUserId = (req.user && req.user.id) || bodyUserId;
 
@@ -72,15 +72,15 @@ class SessionController {
       // 2. Ищем существующую запись сессии или создаем новую
       let session;
       
-      if (PCId) {
+      if (pcId) {
           // Если выбран конкретный ПК из базы
           session = await Session.findOne({
-            where: { userId: currentUserId, PCId },
+            where: { userId: currentUserId, pcId },
           });
       } else {
-          // Если это личный ноутбук (PCId is NULL)
+          // Если это личный ноутбук (pcId is NULL)
           session = await Session.findOne({
-            where: { userId: currentUserId, PCId: null },
+            where: { userId: currentUserId, pcId: null },
           });
       }
 
@@ -90,7 +90,7 @@ class SessionController {
         session = await Session.create({
           online,
           userId: currentUserId,
-          PCId: PCId || null,
+          pcId: pcId || null,
         });
       }
 
@@ -98,9 +98,9 @@ class SessionController {
       let pcName = "Личный ноутбук";
       let pcIp = "Dynamic";
 
-      if (PCId) {
+      if (pcId) {
         try {
-          const pc = await PC.findByPk(PCId);
+          const pc = await PC.findByPk(pcId);
           if (pc) {
             pcName = pc.pc_name;
             pcIp = pc.ip;
@@ -124,7 +124,7 @@ class SessionController {
         entityId: session.id,
         description: descr,
         metadata: {
-          PCId: PCId || "PERSONAL",
+          pcId: pcId || "PERSONAL",
           pcName,
           pcIp,
           online,
@@ -153,7 +153,7 @@ class SessionController {
         entityId: id,
         description: "Сессия удалена администратором",
         metadata: session
-          ? { userId: session.userId, PCId: session.PCId }
+          ? { userId: session.userId, pcId: session.pcId }
           : { sessionId: id },
       });
 
