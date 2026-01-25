@@ -11,12 +11,19 @@ const User = sequelize.define("user", {
   img: { type: DataTypes.STRING },
 });
 
-const PC = sequelize.define("PC", {
-  id: { type: DataTypes.SMALLINT, primaryKey: true, autoIncrement: true },
-  ip: { type: DataTypes.STRING, unique: true, allowNull: false },
-  pc_name: { type: DataTypes.STRING, allowNull: false },
-  cabinet: { type: DataTypes.STRING },
-});
+const PC = sequelize.define(
+  "PC",
+  {
+    id: { type: DataTypes.SMALLINT, primaryKey: true, autoIncrement: true },
+    ip: { type: DataTypes.STRING, unique: true, allowNull: false },
+    pc_name: { type: DataTypes.STRING, allowNull: false },
+    cabinet: { type: DataTypes.STRING },
+  },
+  {
+    tableName: "PCs",
+    freezeTableName: true,
+  }
+);
 
 const Session = sequelize.define("session", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },

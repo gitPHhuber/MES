@@ -8,14 +8,22 @@ const CategoryDefect = sequelize.define("category_defect", {
   description: { type: DataTypes.STRING },
 });
 
-const FC = sequelize.define("FC", {
+const FC = sequelize.define(
+  "FC",
+  {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     unique_device_id: { type: DataTypes.STRING, allowNull: true },
     firmware: { type: DataTypes.BOOLEAN },
     stand_test: { type: DataTypes.BOOLEAN, allowNull: true },
-}, {
-    indexes: [{ unique: true, fields: ["unique_device_id"], where: { unique_device_id: { [Op.ne]: null } } }]
-});
+  },
+  {
+    tableName: "FCs",
+    freezeTableName: true,
+    indexes: [
+      { unique: true, fields: ["unique_device_id"], where: { unique_device_id: { [Op.ne]: null } } },
+    ],
+  }
+);
 
 // --- ELRS 915 ---
 const CategoryDefect915 = sequelize.define("category_defect_915", {
@@ -24,14 +32,22 @@ const CategoryDefect915 = sequelize.define("category_defect_915", {
   description: { type: DataTypes.STRING },
 });
 
-const ELRS915 = sequelize.define("ELRS_915", {
+const ELRS915 = sequelize.define(
+  "ELRS_915",
+  {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     MAC_address: { type: DataTypes.STRING, allowNull: true },
     firmware: { type: DataTypes.BOOLEAN },
     firmwareVersion: { type: DataTypes.STRING, allowNull: true },
-}, {
-    indexes: [{ unique: true, fields: ["MAC_address"], where: { MAC_address: { [Op.ne]: null } } }]
-});
+  },
+  {
+    tableName: "ELRS_915s",
+    freezeTableName: true,
+    indexes: [
+      { unique: true, fields: ["MAC_address"], where: { MAC_address: { [Op.ne]: null } } },
+    ],
+  }
+);
 
 // --- ELRS 2.4 ---
 const CategoryDefect2_4 = sequelize.define("category_defect_2_4", {
@@ -40,30 +56,51 @@ const CategoryDefect2_4 = sequelize.define("category_defect_2_4", {
   description: { type: DataTypes.STRING },
 });
 
-const ELRS2_4 = sequelize.define("ELRS_2_4", {
+const ELRS2_4 = sequelize.define(
+  "ELRS_2_4",
+  {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     MAC_address: { type: DataTypes.STRING, allowNull: true },
     firmware: { type: DataTypes.BOOLEAN },
-}, {
-    indexes: [{ unique: true, fields: ["MAC_address"], where: { MAC_address: { [Op.ne]: null } } }]
-});
+  },
+  {
+    tableName: "ELRS_2_4s",
+    freezeTableName: true,
+    indexes: [
+      { unique: true, fields: ["MAC_address"], where: { MAC_address: { [Op.ne]: null } } },
+    ],
+  }
+);
 
 // --- Coral B ---
-const CategoryDefect_CoralB = sequelize.define("category_defect_CoralB", {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  title: { type: DataTypes.STRING, unique: true, allowNull: false },
-  description: { type: DataTypes.STRING },
-});
+const CategoryDefect_CoralB = sequelize.define(
+  "category_defect_CoralB",
+  {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    title: { type: DataTypes.STRING, unique: true, allowNull: false },
+    description: { type: DataTypes.STRING },
+  },
+  {
+    tableName: "category_defect_CoralBs",
+    freezeTableName: true,
+  }
+);
 
-const CoralB = sequelize.define("CoralB", {
+const CoralB = sequelize.define(
+  "CoralB",
+  {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     serial: { type: DataTypes.STRING, allowNull: true },
     firmware: { type: DataTypes.BOOLEAN },
     SAW_filter: { type: DataTypes.BOOLEAN },
     firmwareVersion: { type: DataTypes.STRING, allowNull: true },
-}, {
-    indexes: [{ unique: true, fields: ["serial"], where: { serial: { [Op.ne]: null } } }]
-});
+  },
+  {
+    tableName: "CoralBs",
+    freezeTableName: true,
+    indexes: [{ unique: true, fields: ["serial"], where: { serial: { [Op.ne]: null } } }],
+  }
+);
 
 // --- Сборка (Assembly) ---
 const AssemblyRoute = sequelize.define("assembly_route", {
