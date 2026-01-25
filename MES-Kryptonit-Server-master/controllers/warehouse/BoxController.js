@@ -64,6 +64,9 @@ class BoxController {
       return res.json(box);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -149,6 +152,9 @@ class BoxController {
       return res.json({ boxes: created });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -205,6 +211,9 @@ class BoxController {
       res.json({ rows, count, page: pageNum, limit: limitNum });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -254,6 +263,9 @@ class BoxController {
       return res.json({ box, movements, documents });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -294,6 +306,9 @@ class BoxController {
       return res.json({ box, movements, documents });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -342,6 +357,9 @@ class BoxController {
       return res.send(csv);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -375,6 +393,9 @@ class BoxController {
       return res.send(pdfBuffer);
     } catch (e) {
       logger.error("PDF Gen Error:", e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal("Ошибка генерации PDF: " + e.message));
     }
   }
@@ -416,6 +437,9 @@ class BoxController {
       return res.json({ message: "Успешно обновлено" });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -526,6 +550,9 @@ class BoxController {
       return res.send(pdfBuffer);
     } catch (e) {
       logger.error("Print Special Error:", e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -550,6 +577,9 @@ class BoxController {
       return res.json(box);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -566,6 +596,9 @@ class BoxController {
       return res.json(box);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -583,6 +616,9 @@ class BoxController {
       return res.json(box);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       if (e.message === "Коробка не найдена") {
         return next(ApiError.notFound(e.message));
       }

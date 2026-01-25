@@ -27,6 +27,9 @@ class SupplyController {
       return res.json(supply);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -39,6 +42,9 @@ class SupplyController {
       return res.json(supplies);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -83,6 +89,9 @@ class SupplyController {
       return res.send(csvContent);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }

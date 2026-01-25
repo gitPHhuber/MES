@@ -25,6 +25,9 @@ class DocumentController {
       return res.json(doc);
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
@@ -63,6 +66,9 @@ class DocumentController {
       });
     } catch (e) {
       logger.error(e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }

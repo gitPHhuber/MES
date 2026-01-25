@@ -53,6 +53,9 @@ class AnalyticsController {
       });
     } catch (e) {
       logger.error("Analytics Error:", e);
+      if (e.status) {
+        return next(e);
+      }
       next(ApiError.internal(e.message));
     }
   }
