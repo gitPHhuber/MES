@@ -12,6 +12,7 @@ const errorHandler = require('../../middleware/ErrorHandlingMiddleware');
 const createRes = () => ({
   status: jest.fn().mockReturnThis(),
   json: jest.fn(),
+  set: jest.fn().mockReturnThis(),
 });
 
 describe('ErrorHandlingMiddleware', () => {
