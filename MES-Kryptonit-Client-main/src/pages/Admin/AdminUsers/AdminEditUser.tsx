@@ -1,6 +1,7 @@
 import { UserIcon } from "lucide-react";
 import { ChangeEvent, useEffect, useState } from "react";
 import { fetchCurrentUser, updateUser, updateUserImg } from "src/api/userApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 
 interface AdminEditUserModel {
   updateUsersList: () => void;
@@ -25,6 +26,7 @@ export const AdminEditUser: React.FC<AdminEditUserModel> = ({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [isAvatarEditVisible, setAvatarEditVisible] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,12 +52,15 @@ export const AdminEditUser: React.FC<AdminEditUserModel> = ({
       setAvatarEditVisible(false);
       setSuccessMessage("успешно изменено");
       setErrorMessage("");
+      setRequestId(null);
       refetchUser();
       updateUsersList()
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при загрузке изображения. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при загрузке изображения. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
       console.error("Ошибка при изменении:", error);
     }
@@ -87,12 +92,15 @@ export const AdminEditUser: React.FC<AdminEditUserModel> = ({
       );
       setSuccessMessage("успешно изменено");
       setErrorMessage("");
+      setRequestId(null);
       refetchUser();
       updateUsersList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
       console.error("Ошибка при изменении:", error);
     }
@@ -217,7 +225,10 @@ export const AdminEditUser: React.FC<AdminEditUserModel> = ({
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
     </div>
   );

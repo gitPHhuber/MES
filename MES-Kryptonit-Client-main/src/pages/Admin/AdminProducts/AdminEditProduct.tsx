@@ -18,6 +18,7 @@ import {
   updateProd_Comp,
   updateProductReference,
 } from "src/api/product_componentApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 import { connectionProduct_ComponentModel } from "src/types/ComponentModel";
 
@@ -46,6 +47,7 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const getIdOfConnectComp = () => {
     return componentsData.map((conection) => conection.Component.id);
@@ -68,12 +70,15 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
 
       setSuccessMessage("Наименование успешно изменено");
       setErrorMessage("");
+      setRequestId(null);
       updateProductsList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -97,9 +102,11 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
       updateComponentsData();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -110,9 +117,11 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
       updateComponentsData();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -127,9 +136,11 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
       updateComponentsData();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -178,7 +189,10 @@ export const AdminEditProduct: React.FC<AdminEditPCProps> = ({
           {errorMessage && (
             <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-200 flex items-center">
               <AlertCircle className="mr-2 text-red-500" size={18} />
-              {errorMessage}
+              <div>
+                {errorMessage}
+                <RequestIdNotice requestId={requestId} />
+              </div>
             </div>
           )}
 

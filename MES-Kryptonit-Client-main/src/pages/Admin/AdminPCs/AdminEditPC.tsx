@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { updatePC } from "src/api/fcApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 
 interface AdminEditPCProps {
   updatePCList: () => void;
@@ -23,6 +24,7 @@ export const AdminEditPC: React.FC<AdminEditPCProps> = ({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -35,11 +37,14 @@ export const AdminEditPC: React.FC<AdminEditPCProps> = ({
       SetCabinet("");
       setSuccessMessage("Компьютер успешно изменен");
       setErrorMessage("");
+      setRequestId(null);
       updatePCList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       console.log(error.response.data.message);
       setSuccessMessage("");
     }
@@ -82,7 +87,10 @@ export const AdminEditPC: React.FC<AdminEditPCProps> = ({
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
 
       {confirm && (

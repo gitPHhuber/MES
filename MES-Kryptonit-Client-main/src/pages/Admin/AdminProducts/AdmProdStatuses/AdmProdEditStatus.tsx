@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { updateStatus } from "src/api/product_componentApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { ConfirmModal } from "src/components/Modal/ConfirmModal";
 import { Modal } from "src/components/Modal/Modal";
 
@@ -19,6 +20,7 @@ export const AdmProdEditStatus: React.FC<AdmProdEditStatusProps> = ({updateStatu
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [modalType, setModalType] = useState<string | null>(null);
 
@@ -35,12 +37,15 @@ export const AdmProdEditStatus: React.FC<AdmProdEditStatusProps> = ({updateStatu
       setSuccessMessage("Статус успешно изменен");
 
       setErrorMessage("");
+      setRequestId(null);
       updateStatusList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -70,7 +75,10 @@ export const AdmProdEditStatus: React.FC<AdmProdEditStatusProps> = ({updateStatu
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
 
       <Modal isOpen={modalType === "statusEdit"} onClose={closeModal}>
