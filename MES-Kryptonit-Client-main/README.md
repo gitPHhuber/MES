@@ -17,6 +17,9 @@ VITE_API_URL=/api
 VITE_MQTT_API_URL=/socket.io
 VITE_PRODUCT_COMPONENT_API_URL=/api
 VITE_FIRMWARE_CONTROL=/api
+VITE_KEYCLOAK_URL=http://keycloak.local
+VITE_KEYCLOAK_REALM=MES-Realm
+VITE_KEYCLOAK_CLIENT_ID=mes-client
 ```
 
 ## React + TypeScript + Vite

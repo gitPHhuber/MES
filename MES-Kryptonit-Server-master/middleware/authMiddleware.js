@@ -3,11 +3,17 @@ const jwt = require("jsonwebtoken");
 
 const authMode = process.env.AUTH_MODE || "auto"; // keycloak | local | auto
 
+const issuerBaseURL = process.env.KEYCLOAK_ISSUER_BASE_URL;
+
+if (!issuerBaseURL) {
+  console.warn(
+    "KEYCLOAK_ISSUER_BASE_URL is not set. Set it to the Keycloak issuer base URL (e.g. https://keycloak.example/realms/YourRealm)."
+  );
+}
+
 const checkJwt = auth({
   audience: process.env.KEYCLOAK_AUDIENCE || "account",
-  issuerBaseURL:
-    process.env.KEYCLOAK_ISSUER_BASE_URL ||
-    "http://keycloak.local/realms/MES-Realm", // Minikube address
+  issuerBaseURL,
   tokenSigningAlg: "RS256",
 });
 
