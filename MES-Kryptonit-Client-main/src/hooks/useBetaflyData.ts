@@ -19,7 +19,9 @@ export function useBetaflyData(socketKey: number) {
 
   
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8090");
+    const ws = new WebSocket(
+      import.meta.env.VITE_BETAFLY_WS_URL || "ws://localhost:8090"
+    );
 
     // Храним "таймауты" по каждому порту, чтобы удалять по истечении 2 сек
 

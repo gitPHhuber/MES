@@ -2,15 +2,15 @@ import axios from 'axios';
 
 // Создаем экземпляр Axios
 const firmwareAxios = axios.create({
-  baseURL: "http://0.0.0.0:8000",
+  baseURL: import.meta.env.VITE_FIRMWARE_API_URL || "/firmware-api",
 });
 const miniBetaflyAxios = axios.create({
-  baseURL: "http://localhost:3003",
+  baseURL: import.meta.env.VITE_MINI_BETAFLY_API_URL || "/mini-betafly",
 });
 
 const firmwareCoralB = axios.create({
-  baseURL: "http://localhost:3333"
-})
+  baseURL: import.meta.env.VITE_CORALB_API_URL || "/coral-b",
+});
 
 
 

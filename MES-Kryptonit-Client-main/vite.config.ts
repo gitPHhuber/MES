@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
   // Можно переопределять через .env.* чтобы не ловить "кривые маршруты" после миграций
   const apiTarget = env.VITE_API_TARGET || "http://10.11.0.16:5001";
   const socketTarget = env.VITE_SOCKET_TARGET || "http://10.11.0.16:5002";
+  const firmwareApiTarget = env.VITE_FIRMWARE_API_TARGET || "http://0.0.0.0:8000";
+  const miniBetaflyTarget = env.VITE_MINI_BETAFLY_API_TARGET || "http://localhost:3003";
+  const coralBTarget = env.VITE_CORALB_API_TARGET || "http://localhost:3333";
 
   return {
     server: {
@@ -30,6 +33,18 @@ export default defineConfig(({ mode }) => {
           target: socketTarget,
           changeOrigin: true,
           ws: true,
+        },
+        "/firmware-api": {
+          target: firmwareApiTarget,
+          changeOrigin: true,
+        },
+        "/mini-betafly": {
+          target: miniBetaflyTarget,
+          changeOrigin: true,
+        },
+        "/coral-b": {
+          target: coralBTarget,
+          changeOrigin: true,
         },
       },
     },
