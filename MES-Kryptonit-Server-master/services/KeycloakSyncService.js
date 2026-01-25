@@ -44,6 +44,14 @@ class KeycloakSyncService {
   }
 
   /**
+   * Timeout for Keycloak API requests (ms).
+   * @returns {number}
+   */
+  static getRequestTimeoutMs() {
+    return Number(process.env.KEYCLOAK_TIMEOUT_MS) || 5000;
+  }
+
+  /**
    * Fetch admin token for Keycloak Admin API.
    * @returns {Promise<string|null>}
    */
@@ -67,6 +75,7 @@ class KeycloakSyncService {
 
       const response = await axios.post(tokenUrl, payload.toString(), {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: KeycloakSyncService.getRequestTimeoutMs(),
       });
 
       return response.data?.access_token || null;
@@ -90,6 +99,7 @@ class KeycloakSyncService {
     try {
       const response = await axios.get(`${baseUrl}/admin/realms/${realm}/roles`, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: KeycloakSyncService.getRequestTimeoutMs(),
       });
 
       const roles = response.data || [];
@@ -192,12 +202,14 @@ class KeycloakSyncService {
     try {
       await axios.post(`${baseUrl}/admin/realms/${realm}/roles`, payload, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: KeycloakSyncService.getRequestTimeoutMs(),
       });
 
       const roleResponse = await axios.get(
         `${baseUrl}/admin/realms/${realm}/roles/${roleData.name}`,
         {
           headers: { Authorization: `Bearer ${token}` },
+          timeout: KeycloakSyncService.getRequestTimeoutMs(),
         }
       );
 
@@ -233,6 +245,7 @@ class KeycloakSyncService {
     try {
       await axios.put(`${baseUrl}/admin/realms/${realm}/roles/${roleName}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: KeycloakSyncService.getRequestTimeoutMs(),
       });
       return true;
     } catch (error) {
@@ -256,6 +269,7 @@ class KeycloakSyncService {
     try {
       await axios.delete(`${baseUrl}/admin/realms/${realm}/roles/${roleName}`, {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: KeycloakSyncService.getRequestTimeoutMs(),
       });
       return true;
     } catch (error) {
@@ -280,7 +294,10 @@ class KeycloakSyncService {
     try {
       const roleResponse = await axios.get(
         `${baseUrl}/admin/realms/${realm}/roles/${roleName}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: KeycloakSyncService.getRequestTimeoutMs(),
+        }
       );
 
       const roleRepresentation = roleResponse.data;
@@ -289,7 +306,10 @@ class KeycloakSyncService {
       await axios.post(
         `${baseUrl}/admin/realms/${realm}/users/${userId}/role-mappings/realm`,
         [roleRepresentation],
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: KeycloakSyncService.getRequestTimeoutMs(),
+        }
       );
 
       return true;
