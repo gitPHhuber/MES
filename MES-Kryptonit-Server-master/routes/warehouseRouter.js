@@ -14,6 +14,8 @@ const AlertsController = require("../controllers/warehouse/AlertsController");
 const HistoryController = require("../controllers/warehouse/HistoryController");
 const LabelTemplatesController = require("../controllers/warehouse/LabelTemplatesController");
 const RankingsController = require("../controllers/RankingsController");
+const validateRequest = require("../middleware/validateRequest");
+const { rankingsQuerySchema } = require("../schemas/warehouse/rankings.schema");
 
 const protect = [authMiddleware, syncUserMiddleware];
 
@@ -63,7 +65,13 @@ router.post("/label-templates", ...protect, checkAbility("labels.print"), LabelT
 router.delete("/label-templates/:id", ...protect, checkAbility("labels.print"), LabelTemplatesController.remove);
 
 // ===== Rankings =====
-router.get("/rankings", ...protect, checkAbility("analytics.view"), RankingsController.getStats);
+router.get(
+  "/rankings",
+  ...protect,
+  checkAbility("analytics.view"),
+  validateRequest({ query: rankingsQuerySchema }),
+  RankingsController.getStats
+);
 router.get("/rankings/user/:userId", ...protect, checkAbility("analytics.view"), RankingsController.getUserDetails);
 router.get("/rankings/history/:userId", ...protect, checkAbility("analytics.view"), RankingsController.getUserHistory);
 

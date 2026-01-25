@@ -302,7 +302,7 @@ class RankingsController {
 
         } catch (e) {
             logger.error("Rankings Error:", e);
-            next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
+            next(ApiError.internal("Ошибка при расчете рейтинга: " + e.message));
         }
     }
 
@@ -455,7 +455,7 @@ class RankingsController {
 
         } catch (e) {
             logger.error("User Details Error:", e);
-            next(ApiError.badRequest(e.message));
+            next(ApiError.internal(e.message));
         }
     }
 
@@ -528,7 +528,7 @@ class RankingsController {
             return res.json(history);
         } catch (e) {
             logger.error("User History Error:", e);
-            next(ApiError.badRequest(e.message));
+            next(ApiError.internal(e.message));
         }
     }
 }
