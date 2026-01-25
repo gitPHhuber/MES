@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: mes_secret
       POSTGRES_DB: mes_kryptonit
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - mes_pgdata:/var/lib/postgresql/data
 

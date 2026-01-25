@@ -8,10 +8,7 @@
 **/.expo/
 **/.vite/
 
-# env/secrets
-**/.env
-**/.env.*
-!**/.env.example
+
 
 # logs
 **/*.log
