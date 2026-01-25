@@ -2,14 +2,17 @@ const fs = require("fs");
 const path = require("path");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
+const { getRequestId } = require("./requestContext");
 
 const logLevel = process.env.LOG_LEVEL || "info";
 const serviceName = process.env.SERVICE_NAME || "mes-backend";
 const envName = process.env.NODE_ENV || "development";
+
 const isContainer =
   process.env.CONTAINER === "true" ||
   process.env.DOCKER === "true" ||
   process.env.RUNNING_IN_CONTAINER === "true";
+
 const enableFileTransports = process.env.LOG_TO_FILE
   ? process.env.LOG_TO_FILE === "true"
   : !isContainer;
@@ -27,6 +30,13 @@ const logFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.splat(),
   winston.format((info) => {
+    // Добавляем requestId из контекста
+    const requestId = getRequestId();
+    if (requestId && !info.requestId) {
+      info.requestId = requestId;
+    }
+
+    // Структурированный вывод
     const errorSource =
       info.error instanceof Error
         ? info.error

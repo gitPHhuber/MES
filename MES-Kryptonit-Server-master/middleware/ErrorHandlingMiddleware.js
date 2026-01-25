@@ -11,6 +11,7 @@ module.exports = function (err, req, res, next) {
         stack: err.stack,
         isApiError: err instanceof ApiError,
         errors: err.errors,
+        requestId: req.requestId,
     });
 
     // 2. Обработка кастомных ошибок
