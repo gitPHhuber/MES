@@ -31,17 +31,32 @@ interface IContext {
 export const Context = React.createContext<IContext | null>(null);
 
 // --- КОНФИГ KEYCLOAK ---
+const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL;
+const keycloakRealm = import.meta.env.VITE_KEYCLOAK_REALM;
+const keycloakClientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID;
+
+if (!keycloakUrl || !keycloakRealm || !keycloakClientId) {
+  console.warn(
+    "Keycloak env vars are missing. Set VITE_KEYCLOAK_URL, VITE_KEYCLOAK_REALM, and VITE_KEYCLOAK_CLIENT_ID."
+  );
+}
+
+const authority =
+  keycloakUrl && keycloakRealm
+    ? `${keycloakUrl.replace(/\\/$/, "")}/realms/${keycloakRealm}`
+    : "";
+
 const oidcConfig = {
-  authority: "http://keycloak.local/realms/MES-Realm", // Адрес Keycloak
-  client_id: "mes-client",                             // Имя клиента в Keycloak
-  redirect_uri: window.location.origin + "/",          // Куда вернуться после входа
+  authority, // Адрес Keycloak
+  client_id: keycloakClientId ?? "", // Имя клиента в Keycloak
+  redirect_uri: window.location.origin + "/", // Куда вернуться после входа
   post_logout_redirect_uri: window.location.origin + "/", // Куда вернуться после выхода
-  response_type: "code",                               // Стандартный Flow
-  
+  response_type: "code", // Стандартный Flow
+
   // чистит URL от мусора после редиректа
   onSigninCallback: () => {
-      window.history.replaceState({}, document.title, window.location.pathname);
-  }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  },
 };
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
