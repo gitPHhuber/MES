@@ -28,7 +28,7 @@ import {
   ComponentCatalog,
   InventoryStatus,
   ComponentCondition
-} from "../../api/beryllExtendedApi";
+} from "../../api/beryll/beryllExtendedApi";
 
 const STATUS_COLORS: Record<InventoryStatus, string> = {
   AVAILABLE: "bg-green-100 text-green-800",
