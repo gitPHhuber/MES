@@ -28,7 +28,7 @@ import {
   DefectRecord, 
   DefectRecordStatus,
   ComponentInventory
-} from "../../api/beryllExtendedApi";
+} from "../../api/beryll/beryllExtendedApi";
 
 interface Props {
   record: DefectRecord;

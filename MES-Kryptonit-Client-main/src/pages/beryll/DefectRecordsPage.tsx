@@ -19,7 +19,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { defectRecordApi, DefectRecord, DefectRecordStatus } from "../../api/beryllExtendedApi";
+import { defectRecordApi, DefectRecord, DefectRecordStatus } from "../../api/beryll/beryllExtendedApi";
 import DefectRecordModal from "./DefectRecordModal";
 import DefectRecordDetails from "./DefectRecordDetails";
 
