@@ -122,6 +122,17 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
+    # Socket.io Proxy
+    location /socket.io {
+        proxy_pass http://10.11.0.16:5002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+
     # SPA fallback
     location / {
         try_files $uri $uri/ /index.html;

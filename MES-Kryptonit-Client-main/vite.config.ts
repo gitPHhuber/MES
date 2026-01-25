@@ -4,6 +4,19 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://10.11.0.16:5001",
+        changeOrigin: true,
+      },
+      "/socket.io": {
+        target: "http://10.11.0.16:5002",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   preview: {
     host: "10.11.0.15",
     port: 4173,
