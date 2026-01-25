@@ -13,6 +13,7 @@ module.exports = function requestLogger(req, res, next) {
       ip: req.ip,
       userAgent: req.get("user-agent"),
       userId: req.user?.id,
+      requestId: req.requestId,
       contentLength: res.get("content-length"),
     });
   });

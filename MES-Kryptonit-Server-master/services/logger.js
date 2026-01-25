@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
+const { getRequestId } = require("./requestContext");
 
 const logDirectory = process.env.LOG_DIR
   ? path.resolve(process.env.LOG_DIR)
@@ -17,6 +18,13 @@ const logFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.splat(),
+  winston.format((info) => {
+    const requestId = getRequestId();
+    if (requestId && !info.requestId) {
+      info.requestId = requestId;
+    }
+    return info;
+  })(),
   winston.format.json()
 );
 

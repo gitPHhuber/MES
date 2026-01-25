@@ -7,6 +7,7 @@ const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
 const requestLogger = require("./middleware/requestLogger");
+const requestId = require("./middleware/requestId");
 const path = require("path");
 const KeycloakSyncService = require("./services/KeycloakSyncService");
 
@@ -29,6 +30,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.static(path.resolve(__dirname, "static")));
 app.use(fileUpload({}));
+app.use(requestId);
 app.use(requestLogger);
 
 // Основной роутер
