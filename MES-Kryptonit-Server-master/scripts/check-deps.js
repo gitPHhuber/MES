@@ -1,4 +1,5 @@
-const requiredPackages = ["zod"];
+const { dependencies = {} } = require("../package.json");
+const requiredPackages = Object.keys(dependencies);
 
 const missingPackages = requiredPackages.filter((packageName) => {
   try {
