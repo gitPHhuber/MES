@@ -19,7 +19,7 @@ const DefectRecordController = require("../../controllers/beryll/controllers/Def
 const YadroController = require("../../controllers/beryll/controllers/YadroController");
 
 // Middleware
-const authMiddleware = require("../../../middleware/authMiddleware");
+const authMiddleware = require("../../middleware/authMiddleware");
 const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
 const validateRequest = require("../../../middleware/validateRequest");
 const {
