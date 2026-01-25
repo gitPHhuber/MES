@@ -68,8 +68,12 @@ router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), Def
 router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
 router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.get("/defect-records/:id/available-actions", ...protect, checkAbility("beryll.view"), DefectRecordController.getAvailableActions);
+router.get("/defect-records/:id/history", ...protect, checkAbility("beryll.view"), DefectRecordController.getHistory);
 router.post("/defect-records", ...protect, checkAbility("beryll.work"), DefectRecordController.create);
+router.put("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.update);
+router.delete("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.delete);
 router.put("/defect-records/:id/status", ...protect, checkAbility("beryll.work"), DefectRecordController.updateStatus);
+router.post("/defect-records/:id/mark-repeated", ...protect, checkAbility("beryll.work"), DefectRecordController.markRepeated);
 router.post("/defect-records/:id/start-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.startDiagnosis);
 router.post("/defect-records/:id/complete-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.completeDiagnosis);
 router.post("/defect-records/:id/waiting-parts", ...protect, checkAbility("beryll.work"), DefectRecordController.setWaitingParts);
@@ -81,6 +85,9 @@ router.post("/defect-records/:id/return-from-yadro", ...protect, checkAbility("b
 router.post("/defect-records/:id/issue-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.issueSubstitute);
 router.post("/defect-records/:id/return-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.returnSubstitute);
 router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
+router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
+router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
+router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
 
 // ============================================
 // ЖУРНАЛ ЗАЯВОК ЯДРО
