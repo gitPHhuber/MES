@@ -6,6 +6,9 @@
  * Агрегирует данные из двух источников:
  * 1. WarehouseMovement.goodQty - готовая продукция (коробки)
  * 2. ProductionOutput.approvedQty - операции до упаковки (калибровка, прошивка и т.д.)
+ * 
+ * ИСПРАВЛЕНИЯ:
+ * - Добавлен alias "production_section" при include Section из Team
  */
 
 const { WarehouseMovement, User, Team, Section } = require("../models/index");
@@ -63,8 +66,17 @@ class RankingsController {
                                 model: Team,
                                 attributes: ["id", "title"],
                                 include: [
-                                    { model: Section, attributes: ["title"] },
-                                    { model: User, as: "teamLead", attributes: ["name", "surname"] }
+                                    // ИСПРАВЛЕНО: добавлен alias "production_section"
+                                    { 
+                                        model: Section, 
+                                        as: "production_section",
+                                        attributes: ["id", "title"] 
+                                    },
+                                    { 
+                                        model: User, 
+                                        as: "teamLead", 
+                                        attributes: ["id", "name", "surname"] 
+                                    }
                                 ]
                             }
                         ]
@@ -132,8 +144,17 @@ class RankingsController {
                             model: Team,
                             attributes: ["id", "title"],
                             include: [
-                                { model: Section, attributes: ["title"] },
-                                { model: User, as: "teamLead", attributes: ["name", "surname"] }
+                                // ИСПРАВЛЕНО: добавлен alias "production_section"
+                                { 
+                                    model: Section, 
+                                    as: "production_section",
+                                    attributes: ["id", "title"] 
+                                },
+                                { 
+                                    model: User, 
+                                    as: "teamLead", 
+                                    attributes: ["id", "name", "surname"] 
+                                }
                             ]
                         }
                     ]
@@ -331,7 +352,12 @@ class RankingsController {
                         model: Team,
                         attributes: ["id", "title"],
                         include: [
-                            { model: Section, attributes: ["title"] }
+                            // ИСПРАВЛЕНО: добавлен alias "production_section"
+                            { 
+                                model: Section, 
+                                as: "production_section",
+                                attributes: ["id", "title"] 
+                            }
                         ]
                     }
                 ]

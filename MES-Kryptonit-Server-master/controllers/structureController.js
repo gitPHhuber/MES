@@ -16,6 +16,7 @@ class StructureController {
           },
           {
             model: Team,
+            as: "teams",  // ИСПРАВЛЕНО: добавлен alias
             include: [
               {
                 model: User,
@@ -25,6 +26,12 @@ class StructureController {
               {
                 model: User,
                 attributes: ["id", "name", "surname", "img"],
+              },
+              // ИСПРАВЛЕНО: добавлен include Section с alias
+              {
+                model: Section,
+                as: "section",  // или "production_section" - зависит от нужного формата
+                attributes: ["id", "title"],
               },
             ],
           },
@@ -96,18 +103,23 @@ class StructureController {
   async assignSectionManager(req, res, next) {
     try {
       const { sectionId, userId } = req.body;
+      
+      const section = await Section.findByPk(sectionId);
+      if (!section) {
+        return next(ApiError.notFound("Участок не найден"));
+      }
 
-      await Section.update({ managerId: userId }, { where: { id: sectionId } });
+      await section.update({ managerId: userId });
 
       await logAudit({
         req,
-        action: "ASSIGN_MANAGER",
+        action: "SECTION_MANAGER_ASSIGN",
         entity: "Section",
         entityId: sectionId,
-        description: `Назначен начальник участка: userId=${userId}`,
+        description: `Назначен менеджер ${userId} на участок ${sectionId}`,
       });
 
-      return res.json({ message: "Manager assigned" });
+      return res.json(section);
     } catch (e) {
       next(ApiError.badRequest(e.message));
     }
@@ -116,18 +128,23 @@ class StructureController {
   async assignTeamLead(req, res, next) {
     try {
       const { teamId, userId } = req.body;
+      
+      const team = await Team.findByPk(teamId);
+      if (!team) {
+        return next(ApiError.notFound("Бригада не найдена"));
+      }
 
-      await Team.update({ teamLeadId: userId }, { where: { id: teamId } });
+      await team.update({ teamLeadId: userId });
 
       await logAudit({
         req,
-        action: "ASSIGN_LEAD",
+        action: "TEAM_LEAD_ASSIGN",
         entity: "Team",
         entityId: teamId,
-        description: `Назначен старший бригады: userId=${userId}`,
+        description: `Назначен бригадир ${userId} на бригаду ${teamId}`,
       });
 
-      return res.json({ message: "Team Lead assigned" });
+      return res.json(team);
     } catch (e) {
       next(ApiError.badRequest(e.message));
     }
@@ -136,18 +153,23 @@ class StructureController {
   async addMemberToTeam(req, res, next) {
     try {
       const { teamId, userId } = req.body;
+      
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return next(ApiError.notFound("Пользователь не найден"));
+      }
 
-      await User.update({ teamId }, { where: { id: userId } });
+      await user.update({ teamId });
 
       await logAudit({
         req,
-        action: "ADD_MEMBER",
+        action: "USER_TEAM_ASSIGN",
         entity: "User",
         entityId: userId,
-        description: `Сотрудник добавлен в бригаду ${teamId}`,
+        description: `Пользователь ${userId} добавлен в бригаду ${teamId}`,
       });
 
-      return res.json({ message: "User added to team" });
+      return res.json(user);
     } catch (e) {
       next(ApiError.badRequest(e.message));
     }
@@ -156,18 +178,24 @@ class StructureController {
   async removeMemberFromTeam(req, res, next) {
     try {
       const { userId } = req.body;
+      
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return next(ApiError.notFound("Пользователь не найден"));
+      }
 
-      await User.update({ teamId: null }, { where: { id: userId } });
+      const previousTeamId = user.teamId;
+      await user.update({ teamId: null });
 
       await logAudit({
         req,
-        action: "REMOVE_MEMBER",
+        action: "USER_TEAM_REMOVE",
         entity: "User",
         entityId: userId,
-        description: `Сотрудник исключён из бригады`,
+        description: `Пользователь ${userId} удалён из бригады ${previousTeamId}`,
       });
 
-      return res.json({ message: "User removed from team" });
+      return res.json(user);
     } catch (e) {
       next(ApiError.badRequest(e.message));
     }
