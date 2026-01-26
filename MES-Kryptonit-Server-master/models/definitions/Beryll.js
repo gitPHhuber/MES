@@ -1,7 +1,9 @@
 /**
  * Beryll.js - Модели системы управления серверами Берилл
  * 
- * Обновлено: добавлены компоненты серверов (BeryllServerComponent)
+ * Обновлено: добавлено поле serialNumberYadro в BeryllServerComponent
+ * 
+ * Положить в: models/definitions/Beryll.js
  */
 
 const sequelize = require("../../db");
@@ -39,7 +41,7 @@ const HISTORY_ACTIONS = {
   ARCHIVED: "ARCHIVED",
   FILE_UPLOADED: "FILE_UPLOADED",
   SERIAL_ASSIGNED: "SERIAL_ASSIGNED",
-  COMPONENTS_FETCHED: "COMPONENTS_FETCHED" // Новое действие
+  COMPONENTS_FETCHED: "COMPONENTS_FETCHED"
 };
 
 const CHECKLIST_GROUPS = {
@@ -74,7 +76,7 @@ const DEFECT_STATUSES = {
 };
 
 // ============================================
-// НОВЫЕ КОНСТАНТЫ - КОМПОНЕНТЫ СЕРВЕРОВ
+// КОНСТАНТЫ - КОМПОНЕНТЫ СЕРВЕРОВ
 // ============================================
 
 /**
@@ -159,7 +161,7 @@ const BeryllBatch = sequelize.define("BeryllBatch", {
 });
 
 // ============================================
-// Модель сервера (ОБНОВЛЁННАЯ - добавлены bmcAddress и lastComponentsFetchAt)
+// Модель сервера
 // ============================================
 const BeryllServer = sequelize.define("BeryllServer", {
   id: {
@@ -198,9 +200,7 @@ const BeryllServer = sequelize.define("BeryllServer", {
     allowNull: true
   },
   
-  // ===============================
-  // НОВОЕ ПОЛЕ: BMC IP адрес
-  // ===============================
+  // BMC IP адрес
   bmcAddress: {
     type: DataTypes.STRING(45),
     allowNull: true
@@ -312,9 +312,7 @@ const BeryllServer = sequelize.define("BeryllServer", {
     allowNull: true
   },
   
-  // ===============================
-  // НОВОЕ ПОЛЕ: Последний опрос компонентов
-  // ===============================
+  // Последний опрос компонентов
   lastComponentsFetchAt: {
     type: DataTypes.DATE,
     allowNull: true
@@ -637,7 +635,7 @@ const BeryllDefectFile = sequelize.define("BeryllDefectFile", {
 });
 
 // ============================================
-// НОВАЯ МОДЕЛЬ: Компоненты сервера
+// Модель компонентов сервера (ОБНОВЛЕНО: добавлено serialNumberYadro)
 // ============================================
 const BeryllServerComponent = sequelize.define("BeryllServerComponent", {
   id: {
@@ -680,10 +678,19 @@ const BeryllServerComponent = sequelize.define("BeryllServerComponent", {
     allowNull: true
   },
   
-  // Серийный номер компонента
+  // Серийный номер компонента (заводской)
   serialNumber: {
     type: DataTypes.STRING(100),
     allowNull: true
+  },
+  
+  // ===============================
+  // НОВОЕ ПОЛЕ: Серийный номер Ядро
+  // ===============================
+  serialNumberYadro: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: "Серийный номер в системе Ядро (внутренний)"
   },
   
   // Part Number
@@ -759,6 +766,28 @@ const BeryllServerComponent = sequelize.define("BeryllServerComponent", {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  
+  // ===============================
+  // Дополнительные поля для связи с инвентарём
+  // ===============================
+  
+  // FK на каталог компонентов (если есть)
+  catalogId: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  
+  // FK на инвентарь (если компонент отслеживается)
+  inventoryId: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  
+  // Кто установил компонент
+  installedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true
   }
 }, {
   tableName: "beryll_server_components",
@@ -767,6 +796,7 @@ const BeryllServerComponent = sequelize.define("BeryllServerComponent", {
     { fields: ["serverId"] },
     { fields: ["componentType"] },
     { fields: ["status"] },
+    { fields: ["serialNumberYadro"] },  // НОВЫЙ ИНДЕКС
     { fields: ["serverId", "componentType", "slot"], unique: true }
   ]
 });
@@ -822,11 +852,11 @@ const setupAssociations = (User) => {
   BeryllDefectFile.belongsTo(BeryllDefectComment, { as: "comment", foreignKey: "commentId" });
   BeryllDefectFile.belongsTo(User, { as: "uploadedBy", foreignKey: "uploadedById" });
 
-  // ===============================
-  // НОВЫЕ СВЯЗИ: Компоненты серверов
-  // ===============================
+  // --- Компоненты серверов ---
   BeryllServer.hasMany(BeryllServerComponent, { as: "components", foreignKey: "serverId", onDelete: "CASCADE" });
   BeryllServerComponent.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
+  
+  // ПРИМЕЧАНИЕ: связь installedBy определена в ComponentModels.js, не дублировать!
 };
 
 // ============================================
@@ -855,7 +885,7 @@ module.exports = {
   DEFECT_PRIORITIES,
   DEFECT_STATUSES,
   
-  // НОВЫЕ КОНСТАНТЫ - Компоненты
+  // Константы компонентов
   COMPONENT_TYPES,
   COMPONENT_STATUSES,
   

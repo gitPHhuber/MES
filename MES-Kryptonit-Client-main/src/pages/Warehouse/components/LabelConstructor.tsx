@@ -51,19 +51,15 @@ export interface LabelElement {
   height: number;
   content?: string;
   fontSize?: number;
-  fontFamily?: string; // Добавлено поле для шрифта
+  fontFamily?: string;
   isBold?: boolean;
   align?: "left" | "center" | "right";
   strokeWidth?: number;
-  // Для IMAGE
   imageUrl?: string;
   imageName?: string;
-  // Для QR - описание что внутри
   qrDescription?: string;
   qrSource?: "code" | "name" | "custom" | "serial" | "contract" | "url";
-  // Для COUNTER
   counterFormat?: string;
-  // Для ICON
   iconType?: string;
 }
 
@@ -299,6 +295,10 @@ export const LabelConstructor: React.FC<Props> = ({
   const [showCounterPreview, setShowCounterPreview] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   
+  // ===== НОВОЕ: состояния для редактирования размера шрифта =====
+  const [fontSizeInput, setFontSizeInput] = useState<string>('');
+  const [isEditingFontSize, setIsEditingFontSize] = useState(false);
+  
   // Пользовательские иконки (загружаются из localStorage)
   const [customIcons, setCustomIcons] = useState<CustomIcon[]>(() => {
     try {
@@ -349,7 +349,7 @@ export const LabelConstructor: React.FC<Props> = ({
   const elementRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iconUploadRef = useRef<HTMLInputElement>(null);
-  const fontUploadRef = useRef<HTMLInputElement>(null); // Для загрузки шрифтов
+  const fontUploadRef = useRef<HTMLInputElement>(null);
 
   const stateRef = useRef({ elements, zoom, selectedId });
   useEffect(() => {
@@ -419,11 +419,8 @@ export const LabelConstructor: React.FC<Props> = ({
           newH = round2(newH);
         }
 
-        const minSize = (initialItem.type === "QR" || initialItem.type === "ICON") ? 10 : MIN_MM;
-        if (newW < minSize) newW = minSize;
-        if (newH < minSize) newH = minSize;
-
-        if (initialItem.type === "QR" || initialItem.type === "ICON") newH = newW;
+        if (newW < MIN_MM) newW = MIN_MM;
+        if (newH < MIN_MM) newH = MIN_MM;
       }
 
       const node = elementRefs.current.get(elId);
@@ -433,9 +430,9 @@ export const LabelConstructor: React.FC<Props> = ({
         node.style.width = `${newW * PX_PER_MM * currentZoom}px`;
         node.style.height = `${newH * PX_PER_MM * currentZoom}px`;
 
-        if (mode === "RESIZE") {
-          const tooltip = node.querySelector(".resize-tooltip");
-          if (tooltip) tooltip.textContent = `${newW.toFixed(1)} x ${newH.toFixed(1)}`;
+        const tooltip = node.querySelector(".resize-tooltip") as HTMLElement;
+        if (tooltip) {
+          tooltip.textContent = `${newW.toFixed(1)} × ${newH.toFixed(1)} мм`;
         }
 
         (node as any).dataset.lastMm = JSON.stringify({ x: newX, y: newY, w: newW, h: newH });
@@ -443,24 +440,19 @@ export const LabelConstructor: React.FC<Props> = ({
     };
 
     const handlePointerUp = () => {
-      if (!dragInfo.current.active || !dragInfo.current.elId) return;
+      if (!dragInfo.current.active) return;
 
       const { elId, mode, initialItem } = dragInfo.current;
-      const node = elementRefs.current.get(elId);
+      const node = elId ? elementRefs.current.get(elId) : null;
 
-      if (node && (node as any).dataset.lastMm) {
-        const finalData = JSON.parse((node as any).dataset.lastMm);
+      if (node && elId) {
+        const lastMm = (node as any).dataset.lastMm;
+        const finalData = lastMm ? JSON.parse(lastMm) : { x: initialItem?.x, y: initialItem?.y, w: initialItem?.width, h: initialItem?.height };
 
         setElements((prev) =>
           prev.map((el) => {
             if (el.id === elId) {
-              const updated: LabelElement = {
-                ...el,
-                x: finalData.x,
-                y: finalData.y,
-                width: finalData.w,
-                height: finalData.h,
-              };
+              const updated = { ...el, x: finalData.x, y: finalData.y, width: finalData.w, height: finalData.h };
 
               if (mode === "RESIZE" && el.type === "TEXT" && initialItem?.height !== finalData.h) {
                 updated.fontSize = Math.max(6, Math.round(finalData.h * 2.8));
@@ -537,7 +529,7 @@ export const LabelConstructor: React.FC<Props> = ({
       width: defaults.w,
       height: defaults.h,
       fontSize: 10,
-      fontFamily: "Arial, sans-serif", // Шрифт по умолчанию
+      fontFamily: "Arial, sans-serif",
       strokeWidth: 0.3,
       align: "left",
       isBold: false,
@@ -852,40 +844,58 @@ export const LabelConstructor: React.FC<Props> = ({
 
           <div className="w-px h-8 bg-slate-200 mx-1 self-center"></div>
 
-          <ToolBtn icon={<Minus />} label="Линия" onClick={() => addElement("LINE", { width: 30, height: 2, strokeWidth: 0.3 })} />
-          <ToolBtn icon={<Square />} label="Рамка" onClick={() => addElement("RECTANGLE", { width: 30, height: 20, strokeWidth: 0.3 })} />
-          <ToolBtn icon={<Columns />} label="Верт." onClick={() => addElement("LINE", { width: 2, height: 30, strokeWidth: 0.3 })} />
+          {/* Линия */}
+          <ToolBtn 
+            icon={<Minus />} 
+            label="Линия" 
+            onClick={() => addElement("LINE", { width: 30, height: 0.5, strokeWidth: 0.3 })} 
+          />
+
+          {/* Рамка */}
+          <ToolBtn 
+            icon={<Square />} 
+            label="Рамка" 
+            onClick={() => addElement("RECTANGLE", { strokeWidth: 0.3 })} 
+          />
+
+          <div className="w-px h-8 bg-slate-200 mx-1 self-center"></div>
+
+          {/* Зум */}
+          <div className="flex items-center gap-1 bg-slate-50 rounded-lg px-2 py-1 border">
+            <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} className="p-1 hover:bg-slate-200 rounded" type="button">
+              <ZoomOut size={16} />
+            </button>
+            <span className="text-xs font-medium w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} className="p-1 hover:bg-slate-200 rounded" type="button">
+              <ZoomIn size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* ZOOM */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))} className="p-2 hover:bg-slate-100 rounded text-slate-600" type="button">
-            <ZoomOut size={18} />
-          </button>
-          <span className="text-xs font-mono w-10 text-center font-bold text-slate-600">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(4, z + 0.1))} className="p-2 hover:bg-slate-100 rounded text-slate-600" type="button">
-            <ZoomIn size={18} />
-          </button>
-          <div className="w-px h-8 bg-slate-200 mx-2"></div>
-          
-          {/* Кнопка справки */}
-          <button 
-            onClick={() => setShowHelp(!showHelp)} 
+        {/* Правая часть - Справка и Закрыть */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp(!showHelp)}
             className={clsx(
-              "p-2 rounded transition-colors flex items-center gap-1",
-              showHelp ? "bg-amber-100 text-amber-700" : "hover:bg-amber-50 text-slate-500 hover:text-amber-600"
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              showHelp ? "bg-amber-100 text-amber-700 border border-amber-300" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             )}
             type="button"
-            title="Справка по переменным"
           >
-            <HelpCircle size={20} />
-            <span className="text-xs font-bold hidden sm:inline">Справка</span>
+            <HelpCircle size={18} />
+            <span className="hidden sm:inline">Справка</span>
           </button>
           
-          <div className="w-px h-8 bg-slate-200 mx-2"></div>
-          <button onClick={onClose} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors" type="button">
-            <X size={20} />
-          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Закрыть конструктор"
+              type="button"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1004,7 +1014,7 @@ export const LabelConstructor: React.FC<Props> = ({
                   </button>
                 </div>
 
-                {/* Размер шрифта - с возможностью ввода */}
+                {/* ===== ИСПРАВЛЕНО: Размер шрифта - с возможностью ввода ===== */}
                 <div className="flex items-center bg-white border border-indigo-200 rounded-lg overflow-hidden shadow-sm">
                   <button 
                     onClick={() => updateSelected({ fontSize: Math.max(6, (activeElement.fontSize || 10) - 1) })} 
@@ -1014,17 +1024,37 @@ export const LabelConstructor: React.FC<Props> = ({
                     −
                   </button>
                   <input
-                    type="number"
-                    min={6}
-                    max={200}
-                    value={activeElement.fontSize || 10}
+                    type="text"
+                    inputMode="numeric"
+                    value={isEditingFontSize ? fontSizeInput : (activeElement.fontSize || 10)}
+                    onFocus={(e) => {
+                      setIsEditingFontSize(true);
+                      setFontSizeInput(String(activeElement.fontSize || 10));
+                      e.target.select();
+                    }}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value);
+                      // Разрешаем только цифры
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setFontSizeInput(value);
+                    }}
+                    onBlur={() => {
+                      setIsEditingFontSize(false);
+                      const val = parseInt(fontSizeInput);
                       if (!isNaN(val) && val >= 6 && val <= 200) {
                         updateSelected({ fontSize: val });
                       }
+                      // Если невалидно - просто вернётся к предыдущему значению
                     }}
-                    className="w-12 text-sm font-bold text-center tabular-nums border-x border-indigo-100 py-2 outline-none focus:bg-indigo-50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur(); // Применить по Enter
+                      }
+                      if (e.key === 'Escape') {
+                        setIsEditingFontSize(false);
+                        setFontSizeInput('');
+                      }
+                    }}
+                    className="w-14 text-sm font-bold text-center tabular-nums border-x border-indigo-100 py-2 outline-none focus:bg-indigo-50 focus:ring-2 focus:ring-indigo-300"
                     onPointerDown={(e) => e.stopPropagation()}
                   />
                   <button 

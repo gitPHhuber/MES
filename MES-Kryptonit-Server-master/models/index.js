@@ -2,6 +2,9 @@
  * models/index.js - Главный файл моделей MES Kryptonit
  * 
  * ОБНОВЛЕНО: исправлены импорты YadroIntegration
+ * ОБНОВЛЕНО: добавлена ассоциация Section -> User (manager)
+ * ОБНОВЛЕНО: добавлены ассоциации ProductionOutput (исправление ошибки "user is not associated to production_output")
+ * ОБНОВЛЕНО: добавлена ассоциация Project -> User (author) (исправление ошибки "user is not associated to project")
  */
 
 // ============================================
@@ -24,6 +27,13 @@ const {
 } = require("./definitions/Warehouse");
 const { Project } = require("./definitions/Project");
 const { AssemblyRecipe, RecipeStep, AssemblyProcess } = require("./definitions/Assembly");
+
+// Учёт выработки
+const { 
+    ProductionOutput, 
+    OperationType, 
+    OUTPUT_STATUSES 
+} = require("./ProductionOutput");
 
 // Система дефектов
 const { 
@@ -115,6 +125,10 @@ Team.belongsTo(Section, { foreignKey: "sectionId", as: "production_section" });
 Section.hasMany(Team, { foreignKey: "sectionId", as: "teams" });
 
 Team.belongsTo(User, { foreignKey: "teamLeadId", as: "teamLead" });
+
+// Section -> User (manager) - ИСПРАВЛЕНИЕ: добавлена недостающая ассоциация
+Section.belongsTo(User, { foreignKey: "managerId", as: "manager" });
+User.hasMany(Section, { foreignKey: "managerId", as: "managedSections" });
 
 // RBAC
 Role.belongsToMany(Ability, { through: RoleAbility, foreignKey: "roleId", as: "abilities" });
@@ -242,6 +256,49 @@ BeryllDefectRecord.belongsTo(ComponentInventory, {
 });
 
 // ============================================
+// 17. УЧЁТ ВЫРАБОТКИ (ProductionOutput)
+// ИСПРАВЛЕНИЕ: добавлены недостающие ассоциации
+// ============================================
+
+// ProductionOutput -> User (сотрудник)
+ProductionOutput.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(ProductionOutput, { foreignKey: "userId", as: "productionOutputs" });
+
+// ProductionOutput -> User (кто подтвердил)
+ProductionOutput.belongsTo(User, { foreignKey: "approvedById", as: "approvedBy" });
+
+// ProductionOutput -> User (кто создал запись)
+ProductionOutput.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+
+// ProductionOutput -> Team
+ProductionOutput.belongsTo(Team, { foreignKey: "teamId", as: "production_team" });
+Team.hasMany(ProductionOutput, { foreignKey: "teamId", as: "outputs" });
+
+// ProductionOutput -> Section
+ProductionOutput.belongsTo(Section, { foreignKey: "sectionId", as: "production_section" });
+Section.hasMany(ProductionOutput, { foreignKey: "sectionId", as: "outputs" });
+
+// ProductionOutput -> Project
+ProductionOutput.belongsTo(Project, { foreignKey: "projectId", as: "project" });
+Project.hasMany(ProductionOutput, { foreignKey: "projectId", as: "outputs" });
+
+// ProductionOutput -> ProductionTask
+ProductionOutput.belongsTo(ProductionTask, { foreignKey: "taskId", as: "task" });
+ProductionTask.hasMany(ProductionOutput, { foreignKey: "taskId", as: "outputs" });
+
+// ProductionOutput -> OperationType
+ProductionOutput.belongsTo(OperationType, { foreignKey: "operationTypeId", as: "operationType" });
+OperationType.hasMany(ProductionOutput, { foreignKey: "operationTypeId", as: "outputs" });
+
+// ============================================
+// 18. PROJECT -> USER (author)
+// ИСПРАВЛЕНИЕ: добавлена недостающая ассоциация для ProjectController
+// ============================================
+
+Project.belongsTo(User, { foreignKey: "createdById", as: "author" });
+User.hasMany(Project, { foreignKey: "createdById", as: "projects" });
+
+// ============================================
 // ЭКСПОРТ
 // ============================================
 
@@ -331,5 +388,12 @@ module.exports = {
     BeryllClusterRack,
     YADRO_REQUEST_TYPES,
     YADRO_LOG_STATUSES,
-    SUBSTITUTE_STATUSES
+    SUBSTITUTE_STATUSES,
+
+    // =========================================
+    // УЧЁТ ВЫРАБОТКИ (ProductionOutput)
+    // =========================================
+    ProductionOutput,
+    OperationType,
+    OUTPUT_STATUSES
 };

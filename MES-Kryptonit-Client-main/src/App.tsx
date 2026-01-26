@@ -3,8 +3,8 @@ import { Header } from "components/Header/Header";
 import background from "assets/images/backGroundTest1.svg";
 import { AppRouter } from "components/AppRouter";
 import { observer } from "mobx-react-lite";
-import { useContext, useEffect, useState } from "react";
-import { Context } from "./main";
+import { useContext, useEffect, useState, useRef } from "react";
+import { Context, getSavedPath, clearSavedPath } from "./main";
 import { Preloader } from "./components/common/Preloader";
 import { useAuth } from "react-oidc-context";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -24,9 +24,13 @@ const App = observer(() => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationStep, setNotificationStep] = useState(1); 
 
+  // Флаг для предотвращения повторной навигации при восстановлении пути
+  const hasRestoredPath = useRef(false);
+
   if (!context) throw new Error("Context required");
   const { user } = context;
 
+  // Анимация уведомлений
   useEffect(() => {
     const timer1 = setTimeout(() => {
         setNotificationStep(1);
@@ -49,6 +53,9 @@ const App = observer(() => {
     };
   }, []);
 
+  // ============================================
+  // ГЛАВНЫЙ ЭФФЕКТ: Аутентификация + восстановление пути
+  // ============================================
   useEffect(() => {
     if (auth.isAuthenticated && auth.user) {
       localStorage.setItem('token', auth.user.access_token);
@@ -58,9 +65,26 @@ const App = observer(() => {
         .then((userData) => {
             user.setUser(userData);
             user.setIsAuth(true);
+            
+            // Проверяем, выбран ли ПК
             const pcId = localStorage.getItem('pcID');
-            if (!pcId && location.pathname !== SELECT_PC_ROUTE) {
-                navigate(SELECT_PC_ROUTE);
+            
+            // Восстанавливаем сохранённый путь (только один раз)
+            if (!hasRestoredPath.current) {
+              hasRestoredPath.current = true;
+              
+              // Получаем сохранённый путь из sessionStorage
+              const savedPath = getSavedPath();
+              
+              if (savedPath && savedPath !== "/" && savedPath !== location.pathname) {
+                // Есть сохранённый путь - переходим туда
+                clearSavedPath();
+                navigate(savedPath, { replace: true });
+              } else if (!pcId && location.pathname !== SELECT_PC_ROUTE) {
+                // Нет ПК и не на странице выбора ПК - редирект на выбор ПК
+                navigate(SELECT_PC_ROUTE, { replace: true });
+              }
+              // Иначе остаёмся на текущей странице
             }
         })
         .catch((err) => {
@@ -73,9 +97,11 @@ const App = observer(() => {
       localStorage.removeItem('token');
       localStorage.removeItem('userID');
       setIsUserLoading(false);
+      hasRestoredPath.current = false; // Сброс флага при выходе
     }
   }, [auth.isAuthenticated, auth.user, user, navigate, location.pathname]);
 
+  // Прелоадер во время загрузки
   if (auth.isLoading || isUserLoading) {
     return <Preloader />;
   }

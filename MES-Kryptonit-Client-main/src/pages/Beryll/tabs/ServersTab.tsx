@@ -33,7 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Globe
 } from "lucide-react";
 import { Context } from "src/main";
 import {
@@ -333,9 +334,49 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   // УТИЛИТЫ
   // ============================================
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Скопировано", { duration: 1500 });
+  // Копирование в буфер обмена (с fallback для http)
+  const copyToClipboard = async (text: string) => {
+    if (!text) {
+      toast.error("Нечего копировать");
+      return;
+    }
+
+    try {
+      // Пробуем современный API
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback для http или старых браузеров
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        
+        if (!successful) {
+          throw new Error("execCommand failed");
+        }
+      }
+      toast.success("Скопировано", { duration: 1500 });
+    } catch (err) {
+      console.error("Copy failed:", err);
+      toast.error("Не удалось скопировать");
+    }
+  };
+
+  // Открыть сервер в браузере
+  const openInBrowser = (ipAddress: string | null) => {
+    if (!ipAddress) {
+      toast.error("IP адрес не указан");
+      return;
+    }
+    window.open(`http://${ipAddress}`, "_blank", "noopener,noreferrer");
   };
 
   const getStatusIcon = (status: ServerStatus) => {
@@ -549,19 +590,28 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
 
                       {/* IP */}
                       <td className="p-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => navigate(`/beryll/server/${server.id}`)}
                             className="font-mono text-sm font-medium text-indigo-600 hover:underline"
                           >
                             {server.ipAddress}
                           </button>
+                          {/* Копировать IP */}
                           <button
                             onClick={() => copyToClipboard(server.ipAddress || "")}
-                            className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                            title="Копировать"
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                            title="Копировать IP"
                           >
                             <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          {/* Открыть в браузере */}
+                          <button
+                            onClick={() => openInBrowser(server.ipAddress)}
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Открыть в браузере"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
                           </button>
                           {!server.leaseActive && (
                             <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] rounded font-medium">

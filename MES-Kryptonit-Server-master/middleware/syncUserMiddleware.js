@@ -1,3 +1,13 @@
+/**
+ * syncUserMiddleware.js
+ * 
+ * Middleware для синхронизации пользователя из Keycloak с локальной БД
+ * 
+ * ИСПРАВЛЕНО: добавлен as: "abilities" в include
+ * 
+ * Положить в: middleware/syncUserMiddleware.js
+ */
+
 const { User, Role, Ability } = require('../models/index');
 
 module.exports = async function (req, res, next) {
@@ -93,6 +103,7 @@ module.exports = async function (req, res, next) {
                 where: { name: mainRole },
                 include: [{
                     model: Ability,
+                    as: "abilities",  // <-- ИСПРАВЛЕНО: добавлен alias
                     through: { attributes: [] }
                 }]
             });

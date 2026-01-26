@@ -4,7 +4,6 @@ import App from "./App.tsx";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "react-oidc-context";
-
 import UserStore from "./store/UserStore.ts";
 import FlightControllerStore from "./store/FCStore.ts";
 import FirmwareFCStore from "./store/FirmwareFC.ts";
@@ -30,23 +29,84 @@ interface IContext {
 
 export const Context = React.createContext<IContext | null>(null);
 
-// --- КОНФИГ KEYCLOAK ---
-const oidcConfig = {
-  authority: "http://keycloak.local/realms/MES-Realm", // Адрес Keycloak
-  client_id: "mes-client",                             // Имя клиента в Keycloak
-  redirect_uri: window.location.origin + "/",          // Куда вернуться после входа
-  post_logout_redirect_uri: window.location.origin + "/", // Куда вернуться после выхода
-  response_type: "code",                               // Стандартный Flow
+// ============================================
+// СОХРАНЕНИЕ МАРШРУТА ПРИ ПЕРЕЗАГРУЗКЕ
+// ============================================
+
+// Ключ для сохранения пути в sessionStorage
+const REDIRECT_PATH_KEY = "mes_redirect_path";
+
+/**
+ * Сохраняем текущий путь перед редиректом на Keycloak
+ * Вызывается при загрузке страницы (перед возможным OIDC редиректом)
+ */
+const saveCurrentPath = () => {
+  const currentPath = window.location.pathname + window.location.search;
   
-  // чистит URL от мусора после редиректа
-  onSigninCallback: () => {
-      window.history.replaceState({}, document.title, window.location.pathname);
+  // Не сохраняем корневой путь, путь логина или если есть OIDC параметры (code, state)
+  const hasOidcParams = window.location.search.includes('code=') || 
+                        window.location.search.includes('state=');
+  
+  if (currentPath !== "/" && 
+      !currentPath.includes("/login") && 
+      !hasOidcParams) {
+    sessionStorage.setItem(REDIRECT_PATH_KEY, currentPath);
   }
 };
 
+/**
+ * Получаем сохранённый путь после аутентификации
+ */
+export const getSavedPath = (): string | null => {
+  return sessionStorage.getItem(REDIRECT_PATH_KEY);
+};
+
+/**
+ * Очищаем сохранённый путь после использования
+ */
+export const clearSavedPath = () => {
+  sessionStorage.removeItem(REDIRECT_PATH_KEY);
+};
+
+// Сохраняем путь при загрузке страницы (ДО возможного редиректа на Keycloak)
+saveCurrentPath();
+
+// ============================================
+// КОНФИГ KEYCLOAK
+// ============================================
+
+const oidcConfig = {
+  authority: "http://keycloak.local/realms/MES-Realm",
+  client_id: "mes-client",
+  redirect_uri: window.location.origin + "/",
+  post_logout_redirect_uri: window.location.origin + "/",
+  response_type: "code",
+  
+  /**
+   * Callback после успешного логина через Keycloak
+   * Очищает URL от параметров OIDC и восстанавливает сохранённый путь
+   */
+  onSigninCallback: () => {
+    // Получаем сохранённый путь (куда пользователь хотел попасть)
+    const savedPath = getSavedPath();
+    
+    // Очищаем URL от OIDC параметров (code, state, session_state)
+    // Если есть сохранённый путь - используем его, иначе оставляем текущий pathname
+    const cleanUrl = savedPath || window.location.pathname;
+    
+    window.history.replaceState({}, document.title, cleanUrl);
+    
+    // Очищаем сохранённый путь после использования
+    clearSavedPath();
+  }
+};
+
+// ============================================
+// РЕНДЕР ПРИЛОЖЕНИЯ
+// ============================================
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {/* Провайдер авторизации оборачивает всё приложение */}
     <AuthProvider {...oidcConfig}>
       <BrowserRouter>
         <Context.Provider

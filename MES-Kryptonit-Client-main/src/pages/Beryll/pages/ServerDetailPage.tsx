@@ -30,6 +30,7 @@ import {
   Download,
   Tag
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { Context } from "src/main";
 import {
   getServerById,
@@ -223,8 +224,10 @@ export const ServerDetailPage: React.FC = observer(() => {
     }
   };
 
+  // ИСПРАВЛЕНО: Функция копирования с toast уведомлением
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success("Скопировано");
   };
 
   const getStatusIcon = (status: ServerStatus) => {
@@ -439,6 +442,7 @@ export const ServerDetailPage: React.FC = observer(() => {
                       <button
                         onClick={() => copyToClipboard(server.apkSerialNumber!)}
                         className="p-1 text-purple-400 hover:text-purple-600"
+                        title="Копировать"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
@@ -463,12 +467,14 @@ export const ServerDetailPage: React.FC = observer(() => {
                 label="MAC адрес"
                 value={server.macAddress || "-"}
                 copyable
+                onCopy={copyToClipboard}
               />
               <InfoRow
                 icon={<FileText className="w-4 h-4" />}
                 label="Серийный номер"
                 value={server.serialNumber || "-"}
                 copyable
+                onCopy={copyToClipboard}
               />
               <InfoRow
                 icon={<Package className="w-4 h-4" />}
@@ -766,17 +772,27 @@ export const ServerDetailPage: React.FC = observer(() => {
   );
 });
 
-// Компонент строки информации
+// ИСПРАВЛЕНО: Компонент строки информации с поддержкой toast уведомлений
 interface InfoRowProps {
   icon: React.ReactNode;
   label: string;
   value: string;
   copyable?: boolean;
   link?: string;
+  onCopy?: (text: string) => void;
 }
 
-const InfoRow: React.FC<InfoRowProps> = ({ icon, label, value, copyable, link }) => {
+const InfoRow: React.FC<InfoRowProps> = ({ icon, label, value, copyable, link, onCopy }) => {
   const navigate = useNavigate();
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    if (onCopy) {
+      onCopy(value);
+    } else {
+      toast.success("Скопировано");
+    }
+  };
 
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
@@ -796,8 +812,9 @@ const InfoRow: React.FC<InfoRowProps> = ({ icon, label, value, copyable, link })
       </div>
       {copyable && value !== "-" && (
         <button
-          onClick={() => navigator.clipboard.writeText(value)}
+          onClick={handleCopy}
           className="p-1 text-gray-400 hover:text-gray-600"
+          title="Копировать"
         >
           <Copy className="w-4 h-4" />
         </button>
