@@ -6,12 +6,15 @@ const cors = require("cors");
 const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
+const requestLogger = require("./middleware/requestLogger");
+const requestId = require("./middleware/requestId");
 const path = require("path");
+const KeycloakSyncService = require("./services/KeycloakSyncService");
 
-// Импорт роутера для Beryll Extended
-const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
 
 const { initChecklistTemplates } = require("./controllers/beryll");
+const { scheduleReleaseExpiredReservations } = require("./jobs/releaseExpiredReservations");
+const logger = require("./services/logger");
 
 const PORT = process.env.PORT || 5000;
 const app = express();
@@ -27,20 +30,18 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.static(path.resolve(__dirname, "static")));
 app.use(fileUpload({}));
+app.use(requestId);
+app.use(requestLogger);
 
 // Основной роутер
 app.use("/api", router);
-
-// Роутер для Beryll Extended
-// Примечание: он монтируется также на /api/beryll, дополняя основной роутер
-app.use("/api/beryll", beryllExtendedRouter);
 
 // Обработка ошибок, последний Middleware
 app.use(errorHandler);
 
 const initInitialData = async () => {
   try {
-    console.log(">>> [RBAC] Начинаем инициализацию ролей и прав...");
+    logger.info(">>> [RBAC] Начинаем инициализацию ролей и прав...");
 
     // 1. Создаем список прав (Slugs) согласно ТЗ
     const permissions = [
@@ -72,6 +73,10 @@ const initInitialData = async () => {
       { code: "beryll.view", description: "Просмотр серверов АПК Берилл" },
       { code: "beryll.work", description: "Взятие в работу и настройка серверов" },
       { code: "beryll.manage", description: "Управление модулем (Синхронизация DHCP)" },
+
+      // --- ДОБАВЛЕНО: Управление ролями ---
+      { code: "roles.view", description: "Просмотр списка ролей" },
+      { code: "roles.manage", description: "Создание, изменение и удаление ролей" },
     ];
 
     // Upsert прав
@@ -122,13 +127,13 @@ const initInitialData = async () => {
     await assign("PRODUCTION_CHIEF", [
       "analytics.view", "users.manage", "defect.manage", 
       "warehouse.view", "devices.view", "recipe.manage",
-      "beryll.view" // Начальник производства может видеть сервера
+      "beryll.view"
     ]);
 
     await assign("TECHNOLOGIST", [
       "recipe.manage", "firmware.flash", "devices.view",
       "defect.manage",
-      "beryll.view", "beryll.work", "beryll.manage" // Технолог управляет Бериллом
+      "beryll.view", "beryll.work", "beryll.manage"
     ]);
 
     await assign("WAREHOUSE_MASTER", [
@@ -145,32 +150,55 @@ const initInitialData = async () => {
 
     await assign("FIRMWARE_OPERATOR", [
       "firmware.flash", "devices.view",
-      "beryll.view", "beryll.work" // Инженеры работают с серверами
+      "beryll.view", "beryll.work"
     ]);
 
-    console.log(">>> [RBAC] Инициализация завершена успешно.");
+    logger.info(">>> [RBAC] Инициализация завершена успешно.");
   } catch (e) {
-    console.error(">>> [RBAC] Ошибка инициализации:", e);
+    logger.error(">>> [RBAC] Ошибка инициализации:", e);
   }
 };
 
 const start = async () => {
   try {
+    logger.info(">>> [DB] Подключение к базе данных...");
+    // Подключаемся к базе, миграции выполняются отдельно (deploy/CI или вручную)
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true }); 
+    logger.info(">>> [DB] Подключение успешно.");
     
     // Инициализация прав доступа
     await initInitialData();
 
     // Инициализация шаблонов чек-листов для Берилл
-    console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
+    logger.info(">>> [Beryll] Инициализация шаблонов чек-листов...");
     await initChecklistTemplates();
-    console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
+    logger.info(">>> [Beryll] Шаблоны чек-листов инициализированы");
 
-    app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+    // Запуск джоба для очистки просроченных резервов (MOD-005)
+    scheduleReleaseExpiredReservations();
+
+    // Auto-sync ролей с Keycloak (MOD-008)
+    if (process.env.KEYCLOAK_AUTO_SYNC !== "false") {
+      logger.info("🔄 Auto-syncing roles from Keycloak...");
+      try {
+        await KeycloakSyncService.syncRolesFromKeycloak();
+      } catch (error) {
+        logger.error("⚠️ [Keycloak] Auto-sync failed:", error.message);
+      }
+    }
+
+    app.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
   } catch (e) {
-    console.log(e);
+    logger.info(e);
   }
 };
 
-start();
+if (require.main === module) {
+  start();
+}
+
+module.exports = {
+  app,
+  start,
+  initInitialData,
+};

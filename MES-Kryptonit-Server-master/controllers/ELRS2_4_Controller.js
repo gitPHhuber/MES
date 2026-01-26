@@ -97,7 +97,7 @@ class ELRS2_4_Controller {
 
       return res.json(boardsAll);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -113,7 +113,7 @@ class ELRS2_4_Controller {
       });
       return res.json(board);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -134,7 +134,7 @@ class ELRS2_4_Controller {
 
       return res.json("добавлены записи");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -161,7 +161,7 @@ class ELRS2_4_Controller {
 
       return res.json("записи удалены");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -175,7 +175,7 @@ class ELRS2_4_Controller {
       const boardUpdated = await ELRS2_4.findAll({ where: { id } });
       return res.json(boardUpdated[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -187,7 +187,7 @@ class ELRS2_4_Controller {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

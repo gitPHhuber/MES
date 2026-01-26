@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { login } from "src/api/userApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 import { REGISTRATION_ROUTE, SELECT_PC_ROUTE } from "src/utils/consts";
 
@@ -15,6 +16,7 @@ export const Login: React.FC = () => {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -33,6 +35,7 @@ export const Login: React.FC = () => {
       console.log(user.user);
       setSuccessMessage("Авторизация прошла успешно");
       setErrorMessage("");
+      setRequestId(null);
       localStorage.removeItem("pcID");
       localStorage.removeItem("sessionID"); 
 
@@ -42,8 +45,10 @@ export const Login: React.FC = () => {
       }, 1000);
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при авторизации. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при авторизации. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
       console.error("Ошибка при регистрации:", error);
     }
@@ -103,7 +108,10 @@ export const Login: React.FC = () => {
           </div>
         )}
         {errorMessage && (
-          <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+          <div className="mt-4 text-red-500 font-medium">
+            {errorMessage}
+            <RequestIdNotice requestId={requestId} />
+          </div>
         )}
       </div>
     </div>

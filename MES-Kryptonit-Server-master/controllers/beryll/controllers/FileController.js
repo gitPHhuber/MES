@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const FileService = require("../services/FileService");
+const logger = require("../../../services/logger");
 
 class FileController {
   async uploadChecklistFile(req, res, next) {
@@ -16,7 +17,7 @@ class FileController {
       
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Сервер не найден" || e.message === "Пункт чек-листа не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -30,7 +31,7 @@ class FileController {
       const files = await FileService.getServerFiles(serverId);
       return res.json(files);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -42,7 +43,7 @@ class FileController {
       
       return res.download(fullPath, originalName);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message.includes("не найден")) {
         return next(ApiError.notFound(e.message));
       }

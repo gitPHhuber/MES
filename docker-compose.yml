@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mes_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mes_user
+      POSTGRES_PASSWORD: mes_secret
+      POSTGRES_DB: mes_kryptonit
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - mes_pgdata:/var/lib/postgresql/data
+
+volumes:
+  mes_pgdata:

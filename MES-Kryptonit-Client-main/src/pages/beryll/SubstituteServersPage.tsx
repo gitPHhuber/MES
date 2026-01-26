@@ -16,7 +16,7 @@ import {
   Clock
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { substituteApi, SubstituteServer, SubstituteStatus } from "../../api/beryllExtendedApi";
+import { substituteApi, SubstituteServer, SubstituteStatus } from "../../api/beryll/beryllExtendedApi";
 
 const STATUS_CONFIG: Record<SubstituteStatus, { label: string; color: string; icon: React.ComponentType<any> }> = {
   AVAILABLE: { label: "Доступен", color: "bg-green-100 text-green-800", icon: CheckCircle },

@@ -56,7 +56,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.create(req.body, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -72,7 +72,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.startDiagnosis(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -84,7 +84,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.completeDiagnosis(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -101,7 +101,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.setWaitingParts(id, userId, notes);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -118,7 +118,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.reserveReplacementComponent(id, inventoryId, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -134,7 +134,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.startRepair(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -146,7 +146,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.performComponentReplacement(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -162,7 +162,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.sendToYadro(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -174,7 +174,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.returnFromYadro(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -191,7 +191,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.issueSubstituteServer(id, userId, substituteServerId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -203,7 +203,7 @@ class DefectRecordController {
             const defect = await DefectRecordService.returnSubstituteServer(id, userId);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
         }
     }
     
@@ -219,7 +219,137 @@ class DefectRecordController {
             const defect = await DefectRecordService.resolve(id, userId, req.body);
             return res.json(defect);
         } catch (error) {
-            next(ApiError.badRequest(error.message));
+            next(error);
+        }
+    }
+
+    async updateStatus(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { status, comment } = req.body;
+            const userId = req.user?.id;
+
+            if (!status) {
+                return next(ApiError.badRequest("status обязателен"));
+            }
+
+            const defect = await DefectRecordService.updateStatus(id, userId, status, comment);
+            return res.json(defect);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // =========================================
+    // CRUD: ДОПОЛНИТЕЛЬНЫЕ ОПЕРАЦИИ
+    // =========================================
+
+    async update(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            const defect = await DefectRecordService.update(id, req.body, userId);
+            return res.json(defect);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(error);
+        }
+    }
+
+    async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            const result = await DefectRecordService.delete(id, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(error);
+        }
+    }
+
+    async markRepeated(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { reason } = req.body;
+            const userId = req.user?.id;
+            const defect = await DefectRecordService.markRepeated(id, userId, reason);
+            return res.json(defect);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(error);
+        }
+    }
+
+    async getHistory(req, res, next) {
+        try {
+            const { id } = req.params;
+            const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+            const offset = req.query.offset ? parseInt(req.query.offset) : undefined;
+            const history = await DefectRecordService.getHistory(id, { limit, offset });
+            return res.json(history);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    // =========================================
+    // ФАЙЛЫ
+    // =========================================
+
+    async uploadFile(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+
+            if (!req.files || !req.files.file) {
+                return next(ApiError.badRequest("Файл не загружен"));
+            }
+
+            const file = req.files.file;
+            const result = await DefectRecordService.uploadFile(id, file, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message === "Запись не найдена") {
+                return next(ApiError.notFound(error.message));
+            }
+            next(error);
+        }
+    }
+
+    async downloadFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const file = await DefectRecordService.getFileForDownload(fileId);
+            return res.download(file.fullPath, file.originalName);
+        } catch (error) {
+            if (error.message.includes("не найден")) {
+                return next(ApiError.notFound(error.message));
+            }
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    async deleteFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user?.id;
+            const result = await DefectRecordService.deleteFile(fileId, userId);
+            return res.json(result);
+        } catch (error) {
+            if (error.message.includes("не найден")) {
+                return next(ApiError.notFound(error.message));
+            }
+            next(error);
         }
     }
     
@@ -240,6 +370,16 @@ class DefectRecordController {
         try {
             const statuses = DefectRecordService.getStatuses();
             return res.json(statuses);
+        } catch (error) {
+            next(ApiError.internal(error.message));
+        }
+    }
+
+    async getAvailableActions(req, res, next) {
+        try {
+            const { id } = req.params;
+            const actions = await DefectRecordService.getAvailableActions(id);
+            return res.json(actions);
         } catch (error) {
             next(ApiError.internal(error.message));
         }

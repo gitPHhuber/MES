@@ -40,13 +40,77 @@ export const RankingsPage = () => {
   const loadRankings = async () => {
     try {
       setLoading(true)
-      
-      // TODO: Заменить на реальные эндпоинты когда будут готовы
-      // Пока используем пустые данные
-      setUserRankings([])
-      setTeamRankings([])
-      setMyStats(null)
-      
+
+      const periodParam = period === 'all' ? 'all' : period
+      const { data } = await api.get('/warehouse/rankings', {
+        params: { period: periodParam },
+      })
+
+      const users = Array.isArray(data?.users) ? data.users : []
+      const teams = Array.isArray(data?.teams) ? data.teams : []
+
+      const mappedUsers: UserRanking[] = users.map((item: any, index: number) => {
+        const teamId = item.teamId ?? null
+        const sectionName = item.sectionName ?? ''
+
+        return {
+          userId: item.id,
+          user: {
+            id: item.id,
+            login: '',
+            name: item.name,
+            surname: item.surname,
+            role: '',
+            abilities: [],
+            teamId: teamId ?? undefined,
+            sectionId: undefined,
+            team: teamId ? { id: teamId, title: item.teamName || 'Без бригады' } : undefined,
+            section: sectionName ? { id: 0, title: sectionName } : undefined,
+            img: item.avatar ?? null,
+          },
+          rank: item.place ?? index + 1,
+          score: Number(item.output) || 0,
+          operations: Number(item.output) || 0,
+          trend: 0,
+        }
+      })
+
+      const mappedTeams: TeamRanking[] = teams.map((team: any, index: number) => ({
+        teamId: team.id,
+        team: {
+          id: team.id,
+          title: team.title,
+          leaderId: undefined,
+        },
+        rank: index + 1,
+        score: Number(team.totalOutput) || 0,
+        operations: Number(team.totalOutput) || 0,
+        memberCount: Number(team.membersCount) || 0,
+      }))
+
+      const currentUserId = user?.id ? Number(user.id) : null
+      const myEntry = currentUserId
+        ? mappedUsers.find((entry) => entry.userId === currentUserId)
+        : null
+
+      const totalUsers = mappedUsers.length
+      const myOutput = myEntry ? myEntry.score : 0
+
+      const stats: UserStats | null = myEntry
+        ? {
+            totalOperations: myOutput,
+            todayOperations: period === 'day' ? myOutput : 0,
+            weekOperations: period === 'week' ? myOutput : 0,
+            monthOperations: period === 'month' ? myOutput : 0,
+            avgPerDay: 0,
+            rank: myEntry.rank,
+            totalUsers,
+          }
+        : null
+
+      setUserRankings(mappedUsers)
+      setTeamRankings(mappedTeams)
+      setMyStats(stats)
       setError(null)
     } catch (err) {
       setError(getErrorMessage(err))

@@ -13,6 +13,7 @@ const { ProductionOutput, OUTPUT_STATUSES } = require("../models/ProductionOutpu
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class RankingsController {
     
@@ -22,7 +23,7 @@ class RankingsController {
      */
     async getStats(req, res, next) {
         try {
-            const { period } = req.query; // 'day', 'week', 'month'
+            const { period } = req.query; // 'day', 'week', 'month', 'all'
 
             // --- 1. Определение периода времени ---
             let startDate = new Date();
@@ -35,11 +36,13 @@ class RankingsController {
                 }
             } else if (period === 'month') {
                 startDate.setDate(1);
+            } else if (period === 'all') {
+                startDate = new Date(0);
             }
 
             const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD для ProductionOutput
 
-            console.log(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
+            logger.info(`>>> [Rankings] Запрос статистики с даты: ${startDate.toISOString()}`);
 
             // --- 2. Статистика со СКЛАДА (WarehouseMovement) ---
             const warehouseStats = await WarehouseMovement.findAll({
@@ -63,7 +66,7 @@ class RankingsController {
                                 model: Team,
                                 attributes: ["id", "title"],
                                 include: [
-                                    { model: Section, attributes: ["title"] },
+                                    { model: Section, as: "production_section", attributes: ["title"] },
                                     { model: User, as: "teamLead", attributes: ["name", "surname"] }
                                 ]
                             }
@@ -132,7 +135,7 @@ class RankingsController {
                             model: Team,
                             attributes: ["id", "title"],
                             include: [
-                                { model: Section, attributes: ["title"] },
+                                { model: Section, as: "production_section", attributes: ["title"] },
                                 { model: User, as: "teamLead", attributes: ["name", "surname"] }
                             ]
                         }
@@ -260,8 +263,9 @@ class RankingsController {
                     : 0;
 
                 // План выработки на человека
-                const PLAN_PER_PERSON = period === 'day' ? 100 : period === 'week' ? 500 : 2000;
-                const totalPlan = t.membersCount * PLAN_PER_PERSON;
+                const planPerPerson =
+                    period === 'day' ? 100 : period === 'week' ? 500 : period === 'month' ? 2000 : 0;
+                const totalPlan = planPerPerson > 0 ? t.membersCount * planPerPerson : 0;
                 const progress = totalPlan > 0 ? Math.min(100, Math.round((t.totalOutput / totalPlan) * 100)) : 0;
 
                 return {
@@ -297,8 +301,8 @@ class RankingsController {
             });
 
         } catch (e) {
-            console.error("Rankings Error:", e);
-            next(ApiError.badRequest("Ошибка при расчете рейтинга: " + e.message));
+            logger.error("Rankings Error:", e);
+            next(ApiError.internal("Ошибка при расчете рейтинга: " + e.message));
         }
     }
 
@@ -319,6 +323,8 @@ class RankingsController {
                 if (day !== 1) startDate.setHours(-24 * (day - 1));
             } else if (period === 'month') {
                 startDate.setDate(1);
+            } else if (period === 'all') {
+                startDate = new Date(0);
             }
 
             const startDateStr = startDate.toISOString().split('T')[0];
@@ -331,7 +337,7 @@ class RankingsController {
                         model: Team,
                         attributes: ["id", "title"],
                         include: [
-                            { model: Section, attributes: ["title"] }
+                            { model: Section, as: "production_section", attributes: ["title"] }
                         ]
                     }
                 ]
@@ -448,8 +454,81 @@ class RankingsController {
             });
 
         } catch (e) {
-            console.error("User Details Error:", e);
-            next(ApiError.badRequest(e.message));
+            logger.error("User Details Error:", e);
+            next(ApiError.internal(e.message));
+        }
+    }
+
+    /**
+     * История выработки пользователя
+     * GET /api/warehouse/rankings/history/:userId?periods=7
+     */
+    async getUserHistory(req, res, next) {
+        try {
+            const { userId } = req.params;
+            const periods = Number(req.query.periods) || 7;
+            const days = periods > 0 ? periods : 7;
+
+            const startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            startDate.setDate(startDate.getDate() - (days - 1));
+
+            const startDateStr = startDate.toISOString().split('T')[0];
+
+            const warehouseByDay = await WarehouseMovement.findAll({
+                attributes: [
+                    [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
+                    [sequelize.fn("SUM", sequelize.col("goodQty")), "good"],
+                ],
+                where: {
+                    performedById: userId,
+                    performedAt: { [Op.gte]: startDate },
+                },
+                group: [sequelize.fn("DATE", sequelize.col("performedAt"))],
+                order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
+                raw: true,
+            });
+
+            const productionByDay = await ProductionOutput.findAll({
+                attributes: [
+                    "date",
+                    [sequelize.fn("SUM", sequelize.col("approvedQty")), "good"],
+                ],
+                where: {
+                    userId,
+                    date: { [Op.gte]: startDateStr },
+                    status: OUTPUT_STATUSES.APPROVED,
+                },
+                group: ["date"],
+                order: [["date", "ASC"]],
+                raw: true,
+            });
+
+            const daysMap = new Map();
+
+            warehouseByDay.forEach((item) => {
+                const dateKey = String(item.date);
+                if (!daysMap.has(dateKey)) {
+                    daysMap.set(dateKey, { date: dateKey, output: 0 });
+                }
+                const day = daysMap.get(dateKey);
+                day.output += Number(item.good) || 0;
+            });
+
+            productionByDay.forEach((item) => {
+                const dateKey = String(item.date);
+                if (!daysMap.has(dateKey)) {
+                    daysMap.set(dateKey, { date: dateKey, output: 0 });
+                }
+                const day = daysMap.get(dateKey);
+                day.output += Number(item.good) || 0;
+            });
+
+            const history = [...daysMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+            return res.json(history);
+        } catch (e) {
+            logger.error("User History Error:", e);
+            next(ApiError.internal(e.message));
         }
     }
 }

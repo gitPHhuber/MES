@@ -10,6 +10,7 @@
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 const { 
     ProductionOutput, 
@@ -41,7 +42,7 @@ async function _getUserWithTeam(userId) {
     return await User.findByPk(userId, {
         include: [{
             model: Team,
-            include: [{ model: Section, foreignKey: "sectionId" }]
+            include: [{ model: Section, as: "production_section" }]
         }]
     });
 }
@@ -52,11 +53,12 @@ async function _getUserSection(user) {
     const fullUser = await User.findByPk(user.id, {
         include: [{
             model: Team,
-            include: [{ model: Section, foreignKey: "sectionId" }]
+            include: [{ model: Section, as: "production_section" }]
         }]
     });
     
-    return fullUser?.Team?.Section || null;
+    const team = fullUser?.production_team || fullUser?.Team;
+    return team?.production_section || team?.Section || null;
 }
 
 async function _canSubmitFor(currentUser, targetUser) {
@@ -139,7 +141,7 @@ class ProductionOutputController {
             
             return res.json(types);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -171,7 +173,7 @@ class ProductionOutputController {
             
             return res.json(opType);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -206,7 +208,7 @@ class ProductionOutputController {
             
             return res.json(opType);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -234,7 +236,7 @@ class ProductionOutputController {
             return res.json({ message: "Тип операции удалён", deleted: true });
             
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -297,7 +299,7 @@ class ProductionOutputController {
                 totalPages: Math.ceil(count / limit)
             });
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -325,7 +327,7 @@ class ProductionOutputController {
             
             return res.json(output);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -350,7 +352,7 @@ class ProductionOutputController {
             const targetUser = await User.findByPk(userId, {
                 include: [{
                     model: Team,
-                    include: [{ model: Section, foreignKey: "sectionId" }]
+                    include: [{ model: Section, as: "production_section" }]
                 }]
             });
             
@@ -365,7 +367,8 @@ class ProductionOutputController {
             
             // Берём teamId и sectionId из профиля целевого сотрудника
             const teamId = targetUser.teamId || null;
-            const sectionId = targetUser.Team?.Section?.id || null;
+            const team = targetUser.production_team || targetUser.Team;
+            const sectionId = team?.production_section?.id || team?.Section?.id || null;
             
             const shouldAutoApprove = await _shouldAutoApprove(currentUser, targetUser);
             const status = shouldAutoApprove ? OUTPUT_STATUSES.APPROVED : OUTPUT_STATUSES.PENDING;
@@ -398,7 +401,7 @@ class ProductionOutputController {
             
             return res.status(201).json(result);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -440,7 +443,7 @@ class ProductionOutputController {
             
             return res.json(output);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -467,7 +470,7 @@ class ProductionOutputController {
             await output.destroy();
             return res.json({ message: "Запись удалена" });
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -512,7 +515,7 @@ class ProductionOutputController {
             
             return res.json(outputs);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -572,7 +575,7 @@ class ProductionOutputController {
             return res.json({ results });
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -618,7 +621,7 @@ class ProductionOutputController {
             return res.json({ results });
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -675,7 +678,7 @@ class ProductionOutputController {
                 byDay
             });
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -753,7 +756,7 @@ class ProductionOutputController {
                 matrix
             });
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }
@@ -820,7 +823,7 @@ class ProductionOutputController {
             
             return res.json(users);
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             next(ApiError.internal(e.message));
         }
     }

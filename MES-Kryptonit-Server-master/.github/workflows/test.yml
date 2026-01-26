@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests with coverage
+        run: npm run test:coverage
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mes_user
+          POSTGRES_PASSWORD: mes_secret
+          POSTGRES_DB: mes_kryptonit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U mes_user -d mes_kryptonit"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      AUTH_MODE: local
+      SECRET_KEY: smoke-secret
+      DB_USER: mes_user
+      DB_PASSWORD: mes_secret
+      DB_NAME: mes_kryptonit
+      DB_NAME_TEST: mes_kryptonit
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      KEYCLOAK_AUTO_SYNC: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run migrations
+        run: npm run db:migrate
+      - name: Run smoke checks
+        run: node scripts/smoke.js

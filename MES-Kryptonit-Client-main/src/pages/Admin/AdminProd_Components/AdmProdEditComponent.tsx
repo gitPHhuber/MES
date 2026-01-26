@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { updateComponentRef } from "src/api/product_componentApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { componentModel } from "src/types/ComponentModel";
 
 interface AdminEditComponentProps {
@@ -23,6 +24,7 @@ export const AdmProdEditComponent: React.FC<AdminEditComponentProps> = ({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const editComponent = async () => {
     try {
@@ -35,12 +37,15 @@ export const AdmProdEditComponent: React.FC<AdminEditComponentProps> = ({
 
       setSuccessMessage("Наименование успешно изменено");
       setErrorMessage("");
+      setRequestId(null);
       updateComponentsList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -90,7 +95,10 @@ export const AdmProdEditComponent: React.FC<AdminEditComponentProps> = ({
           </div>
         )}
         {errorMessage && (
-          <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+          <div className="mt-4 text-red-500 font-medium">
+            {errorMessage}
+            <RequestIdNotice requestId={requestId} />
+          </div>
         )}
       </form>
     </div>

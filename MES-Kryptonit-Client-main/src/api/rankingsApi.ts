@@ -99,7 +99,7 @@ export interface UserDetailsResponse {
 export const fetchRankings = async (
   period: "day" | "week" | "month" = "week"
 ): Promise<RankingResponse> => {
-  const { data } = await $authHost.get("/api/warehouse/rankings", {
+  const { data } = await $authHost.get("api/warehouse/rankings", {
     params: { period }
   });
   return data;
@@ -114,7 +114,7 @@ export const fetchUserRankingDetails = async (
   userId: number,
   period: "day" | "week" | "month" = "week"
 ): Promise<UserDetailsResponse> => {
-  const { data } = await $authHost.get(`/api/warehouse/rankings/user/${userId}`, {
+  const { data } = await $authHost.get(`api/warehouse/rankings/user/${userId}`, {
     params: { period }
   });
   return data;
@@ -127,7 +127,7 @@ export const fetchRankingsHistory = async (
   userId: number,
   periods: number = 7 // дней
 ): Promise<{ date: string; output: number }[]> => {
-  const { data } = await $authHost.get(`/api/warehouse/rankings/history/${userId}`, {
+  const { data } = await $authHost.get(`api/warehouse/rankings/history/${userId}`, {
     params: { periods }
   });
   return data;

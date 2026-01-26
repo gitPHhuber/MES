@@ -9,7 +9,7 @@ class DefectController915 {
       });
       return res.json(defectAll);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -19,7 +19,7 @@ class DefectController915 {
       const defect = await CategoryDefect915.create({ title, description });
       return res.json(defect);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -30,7 +30,7 @@ class DefectController915 {
       const defectUpdated = await CategoryDefect915.findAll({ where: { id } });
       return res.json(defectUpdated[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -42,7 +42,7 @@ class DefectController915 {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

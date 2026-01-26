@@ -11,6 +11,7 @@ const {
 const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
 const sequelize = require("../db");
+const logger = require("../services/logger");
 
 class DefectSystemController {
   
@@ -42,7 +43,7 @@ class DefectSystemController {
       
       return res.json(categories);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -70,7 +71,7 @@ class DefectSystemController {
       
       return res.json(category);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -96,7 +97,7 @@ class DefectSystemController {
       
       return res.json(category);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -121,7 +122,7 @@ class DefectSystemController {
       await category.destroy();
       return res.json({ message: "Категория удалена" });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -235,7 +236,7 @@ class DefectSystemController {
         stats: statsByStatus
       });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -284,7 +285,7 @@ class DefectSystemController {
       try {
         boardInfo = await this._getBoardInfo(defect.boardType, defect.boardId);
       } catch (e) {
-        console.log("Не удалось получить информацию о плате:", e.message);
+        logger.info("Не удалось получить информацию о плате:", e.message);
       }
       
       return res.json({
@@ -292,7 +293,7 @@ class DefectSystemController {
         boardInfo
       });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -343,7 +344,7 @@ class DefectSystemController {
       
       return res.json(result);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -374,7 +375,7 @@ class DefectSystemController {
       
       return res.json(defect);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -441,7 +442,7 @@ class DefectSystemController {
       return res.json(resultAction);
     } catch (e) {
       await t.rollback();
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -460,7 +461,7 @@ class DefectSystemController {
       
       return res.json(actions);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -506,7 +507,7 @@ class DefectSystemController {
       return res.json({ message: "Дефект отмечен как отремонтированный", defect });
     } catch (e) {
       await t.rollback();
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -542,7 +543,7 @@ class DefectSystemController {
       
       return res.json({ message: "Дефект списан", defect });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -569,7 +570,7 @@ class DefectSystemController {
       
       return res.json({ message: "Ремонт подтверждён", defect });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   
@@ -647,7 +648,7 @@ class DefectSystemController {
           : null
       });
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
   

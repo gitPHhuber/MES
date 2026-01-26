@@ -28,14 +28,14 @@ export const fetchDefectCategories = async (
   if (boardType) params.append("boardType", boardType);
   if (activeOnly) params.append("activeOnly", "true");
   
-  const { data } = await $authHost.get(`/api/defects/categories?${params}`);
+  const { data } = await $authHost.get(`api/defects/categories?${params}`);
   return data;
 };
 
 export const createDefectCategory = async (
   dto: CreateDefectCategoryDto
 ): Promise<DefectCategory> => {
-  const { data } = await $authHost.post("/api/defects/categories", dto);
+  const { data } = await $authHost.post("api/defects/categories", dto);
   return data;
 };
 
@@ -43,12 +43,12 @@ export const updateDefectCategory = async (
   id: number,
   dto: UpdateDefectCategoryDto
 ): Promise<DefectCategory> => {
-  const { data } = await $authHost.put(`/api/defects/categories/${id}`, dto);
+  const { data } = await $authHost.put(`api/defects/categories/${id}`, dto);
   return data;
 };
 
 export const deleteDefectCategory = async (id: number): Promise<void> => {
-  await $authHost.delete(`/api/defects/categories/${id}`);
+  await $authHost.delete(`api/defects/categories/${id}`);
 };
 
 // =========================================================
@@ -80,17 +80,17 @@ export const fetchDefects = async (
   if (params.startDate) searchParams.append("startDate", params.startDate);
   if (params.endDate) searchParams.append("endDate", params.endDate);
   
-  const { data } = await $authHost.get(`/api/defects?${searchParams}`);
+  const { data } = await $authHost.get(`api/defects?${searchParams}`);
   return data;
 };
 
 export const fetchDefectById = async (id: number): Promise<DefectDetailResponse> => {
-  const { data } = await $authHost.get(`/api/defects/${id}`);
+  const { data } = await $authHost.get(`api/defects/${id}`);
   return data;
 };
 
 export const createDefect = async (dto: CreateDefectDto): Promise<BoardDefect> => {
-  const { data } = await $authHost.post("/api/defects", dto);
+  const { data } = await $authHost.post("api/defects", dto);
   return data;
 };
 
@@ -99,7 +99,7 @@ export const updateDefectStatus = async (
   status: DefectStatus,
   finalResult?: string
 ): Promise<BoardDefect> => {
-  const { data } = await $authHost.patch(`/api/defects/${id}/status`, {
+  const { data } = await $authHost.patch(`api/defects/${id}/status`, {
     status,
     finalResult
   });
@@ -111,7 +111,7 @@ export const updateDefectStatus = async (
 // =========================================================
 
 export const fetchRepairHistory = async (defectId: number): Promise<RepairAction[]> => {
-  const { data } = await $authHost.get(`/api/defects/${defectId}/repairs`);
+  const { data } = await $authHost.get(`api/defects/${defectId}/repairs`);
   return data;
 };
 
@@ -119,7 +119,7 @@ export const addRepairAction = async (
   defectId: number,
   dto: CreateRepairActionDto
 ): Promise<RepairAction> => {
-  const { data } = await $authHost.post(`/api/defects/${defectId}/repairs`, dto);
+  const { data } = await $authHost.post(`api/defects/${defectId}/repairs`, dto);
   return data;
 };
 
@@ -131,7 +131,7 @@ export const markDefectRepaired = async (
   id: number,
   dto?: MarkRepairedDto
 ): Promise<{ message: string; defect: BoardDefect }> => {
-  const { data } = await $authHost.post(`/api/defects/${id}/repaired`, dto || {});
+  const { data } = await $authHost.post(`api/defects/${id}/repaired`, dto || {});
   return data;
 };
 
@@ -139,14 +139,14 @@ export const markDefectScrapped = async (
   id: number,
   dto?: MarkScrappedDto
 ): Promise<{ message: string; defect: BoardDefect }> => {
-  const { data } = await $authHost.post(`/api/defects/${id}/scrap`, dto || {});
+  const { data } = await $authHost.post(`api/defects/${id}/scrap`, dto || {});
   return data;
 };
 
 export const verifyDefectRepair = async (
   id: number
 ): Promise<{ message: string; defect: BoardDefect }> => {
-  const { data } = await $authHost.post(`/api/defects/${id}/verify`);
+  const { data } = await $authHost.post(`api/defects/${id}/verify`);
   return data;
 };
 
@@ -169,6 +169,6 @@ export const fetchDefectStatistics = async (
   if (params.endDate) searchParams.append("endDate", params.endDate);
   if (params.boardType) searchParams.append("boardType", params.boardType);
   
-  const { data } = await $authHost.get(`/api/defects/statistics?${searchParams}`);
+  const { data } = await $authHost.get(`api/defects/statistics?${searchParams}`);
   return data;
 };

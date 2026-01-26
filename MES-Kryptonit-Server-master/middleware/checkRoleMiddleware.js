@@ -1,3 +1,4 @@
+const logger = require("../services/logger");
 module.exports = function (role) {
   return function (req, res, next) {
     if (req.method === "OPTIONS") {
@@ -17,7 +18,7 @@ module.exports = function (role) {
 
       next();
     } catch (e) {
-      console.error("CheckRole Error:", e);
+      logger.error("CheckRole Error:", e);
       return res.status(500).json({ message: "Ошибка проверки роли" });
     }
   };

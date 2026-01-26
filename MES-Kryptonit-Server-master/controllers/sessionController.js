@@ -1,6 +1,7 @@
 const { Session, PC } = require("../models/index");
 const ApiError = require("../error/ApiError");
 const { logAudit } = require("../utils/auditLogger");
+const logger = require("../services/logger");
 
 class SessionController {
   async getSessions(req, res, next) {
@@ -8,7 +9,7 @@ class SessionController {
       const sessionAll = await Session.findAll();
       return res.json(sessionAll);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -35,7 +36,7 @@ class SessionController {
 
       return res.json(newSession);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -105,7 +106,7 @@ class SessionController {
             pcIp = pc.ip;
           }
         } catch (err) {
-          console.error("Ошибка при чтении ПК для аудита:", err);
+          logger.error("Ошибка при чтении ПК для аудита:", err);
         }
       }
 
@@ -133,7 +134,7 @@ class SessionController {
 
       return res.json(session);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -158,7 +159,7 @@ class SessionController {
 
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -192,7 +193,7 @@ class SessionController {
         return res.json("Сейчас не время для сброса");
       }
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -213,7 +214,7 @@ class SessionController {
 
       return res.json("Все активные сессии сброшены");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

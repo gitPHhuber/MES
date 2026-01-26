@@ -19,6 +19,7 @@ const {
 } = require("../../../models/definitions/Beryll");
 const { User } = require("../../../models/index");
 const sequelize = require("../../../db");
+const logger = require("../../../services/logger");
 
 // Директория файлов
 const DEFECT_FILES_DIR = path.join(__dirname, "../../../../uploads/beryll/defects");
@@ -332,7 +333,7 @@ class DefectMonitoringService {
       where, attributes: ["id", "ipAddress", "hostname", "serialNumber", "apkSerialNumber", "status", "batchId"]
     });
     
-    console.log(`[Monitoring] Пингуем ${servers.length} серверов...`);
+    logger.info(`[Monitoring] Пингуем ${servers.length} серверов...`);
     const results = [];
     const batchSize = 10;
     
@@ -355,7 +356,7 @@ class DefectMonitoringService {
     
     lastFullScan = new Date();
     const online = results.filter(r => r.online).length;
-    console.log(`[Monitoring] Завершено: ${online} online, ${results.length - online} offline`);
+    logger.info(`[Monitoring] Завершено: ${online} online, ${results.length - online} offline`);
     
     return { total: results.length, online, offline: results.length - online, checkedAt: lastFullScan, servers: results };
   }
@@ -422,7 +423,7 @@ class DefectMonitoringService {
     return { count: servers.count, rows: servers.rows, page: Math.floor(offset / limit) + 1, totalPages: Math.ceil(servers.count / limit) };
   }
   
-  clearCache() { pingCache.clear(); lastFullScan = null; console.log("[Monitoring] Кэш очищен"); }
+  clearCache() { pingCache.clear(); lastFullScan = null; logger.info("[Monitoring] Кэш очищен"); }
 }
 
 module.exports = new DefectMonitoringService();

@@ -28,7 +28,7 @@ import {
   DefectRecord, 
   DefectRecordStatus,
   ComponentInventory
-} from "../../api/beryllExtendedApi";
+} from "../../api/beryll/beryllExtendedApi";
 
 interface Props {
   record: DefectRecord;
@@ -38,6 +38,15 @@ interface Props {
 }
 
 const STATUS_FLOW: Record<DefectRecordStatus, DefectRecordStatus[]> = {
+  PENDING_DIAGNOSIS: ["DIAGNOSED", "DIAGNOSING", "CANCELLED"],
+  DIAGNOSED: ["WAITING_APPROVAL", "PARTS_RESERVED", "REPAIRING", "IN_YADRO_REPAIR", "SCRAPPED", "CANCELLED"],
+  WAITING_APPROVAL: ["PARTS_RESERVED", "CANCELLED"],
+  PARTS_RESERVED: ["REPAIRING", "IN_YADRO_REPAIR", "SUBSTITUTE_ISSUED", "SCRAPPED"],
+  REPAIRED_LOCALLY: ["RESOLVED", "CLOSED"],
+  IN_YADRO_REPAIR: ["RETURNED", "SUBSTITUTE_ISSUED"],
+  SUBSTITUTE_ISSUED: ["REPAIRING", "CLOSED"],
+  SCRAPPED: [],
+  CANCELLED: [],
   NEW: ["DIAGNOSING"],
   DIAGNOSING: ["WAITING_PARTS", "REPAIRING", "SENT_TO_YADRO"],
   WAITING_PARTS: ["REPAIRING", "SENT_TO_YADRO"],

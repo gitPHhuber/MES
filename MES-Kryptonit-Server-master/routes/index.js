@@ -20,6 +20,7 @@ const pcRouter = require("./pcRouter");
 const rbacRouter = require("./rbacRouter");
 const structureRouter = require("./structureRouter");
 const auditRouter = require("./auditRouter");
+const rolesRouter = require("./rolesRouter");
 
 // --- Склад ---
 const warehouseRouter = require("./warehouseRouter");
@@ -47,9 +48,13 @@ const defectRouter_CoralB = require("./defectRouterCoralB");
 // --- Beryll (АПК серверы) ---
 const beryllRouter = require("./beryllRouter");
 const beryllExtendedRouter = require("./beryllExtendedRouter");
+const beryllExtendedRoutes = require("./beryll/beryllExtendedRoutes");
 
 // --- Система дефектов (Учёт брака) ---
 const defectSystemRouter = require("./defectSystemRouter");
+
+// --- Система мониторинга ---
+const healthRouter = require("./healthRouter");
 
 // =========================================================================
 // НОВОЕ: Учёт выработки (Production Output)
@@ -69,6 +74,7 @@ router.use("/pcs", pcRouter);
 router.use("/rbac", rbacRouter);
 router.use("/structure", structureRouter);
 router.use("/audit", auditRouter);
+router.use("/roles", rolesRouter);
 
 // --- Склад ---
 router.use("/warehouse", warehouseRouter);
@@ -88,17 +94,21 @@ router.use("/ELRS2-4", ELRS2_4_Router);
 router.use("/Coral-B", coralB_router);
 
 // --- Legacy: Дефекты плат ---
-router.use("/defectsFC", defectRouter);
-router.use("/defects915", defectRouter915);
-router.use("/defects2-4", defectRouter2_4);
-router.use("/defects-Coral-B", defectRouter_CoralB);
+router.use("/board-defects/fc", defectRouter);
+router.use("/board-defects/915", defectRouter915);
+router.use("/board-defects/2-4", defectRouter2_4);
+router.use("/board-defects/coral-b", defectRouter_CoralB);
 
 // --- Beryll (АПК серверы) ---
 router.use("/beryll", beryllRouter);
 router.use("/beryll", beryllExtendedRouter);
+router.use("/beryll/extended", beryllExtendedRoutes);
 
 // --- Система дефектов (Учёт брака) ---
 router.use("/defects", defectSystemRouter);
+
+// --- Мониторинг ---
+router.use("/", healthRouter);
 
 // =========================================================================
 // НОВОЕ: Учёт выработки

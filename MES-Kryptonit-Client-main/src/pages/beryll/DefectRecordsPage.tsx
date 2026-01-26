@@ -19,11 +19,20 @@ import {
   AlertCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { defectRecordApi, DefectRecord, DefectRecordStatus } from "../../api/beryllExtendedApi";
+import { defectRecordApi, DefectRecord, DefectRecordStatus } from "../../api/beryll/beryllExtendedApi";
 import DefectRecordModal from "./DefectRecordModal";
 import DefectRecordDetails from "./DefectRecordDetails";
 
 const STATUS_COLORS: Record<DefectRecordStatus, string> = {
+  PENDING_DIAGNOSIS: "bg-blue-50 text-blue-700",
+  DIAGNOSED: "bg-indigo-100 text-indigo-800",
+  WAITING_APPROVAL: "bg-yellow-100 text-yellow-800",
+  PARTS_RESERVED: "bg-amber-100 text-amber-800",
+  REPAIRED_LOCALLY: "bg-green-100 text-green-800",
+  IN_YADRO_REPAIR: "bg-indigo-100 text-indigo-800",
+  SUBSTITUTE_ISSUED: "bg-purple-100 text-purple-800",
+  SCRAPPED: "bg-red-100 text-red-800",
+  CANCELLED: "bg-gray-100 text-gray-600",
   NEW: "bg-blue-100 text-blue-800",
   DIAGNOSING: "bg-yellow-100 text-yellow-800",
   WAITING_PARTS: "bg-orange-100 text-orange-800",
@@ -36,6 +45,15 @@ const STATUS_COLORS: Record<DefectRecordStatus, string> = {
 };
 
 const STATUS_LABELS: Record<DefectRecordStatus, string> = {
+  PENDING_DIAGNOSIS: "Ожидает диагностики",
+  DIAGNOSED: "Диагностирован",
+  WAITING_APPROVAL: "Ожидание согласования",
+  PARTS_RESERVED: "Запчасти зарезервированы",
+  REPAIRED_LOCALLY: "Отремонтирован локально",
+  IN_YADRO_REPAIR: "В ремонте у Ядро",
+  SUBSTITUTE_ISSUED: "Выдан подменный сервер",
+  SCRAPPED: "Списан",
+  CANCELLED: "Отменён",
   NEW: "Новый",
   DIAGNOSING: "Диагностика",
   WAITING_PARTS: "Ожидание запчастей",

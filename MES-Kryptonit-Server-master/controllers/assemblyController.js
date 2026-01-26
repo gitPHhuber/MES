@@ -1,5 +1,6 @@
 const { Op } = require("sequelize");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 const {
   AssemblyRoute,
   AssemblyRouteStep,
@@ -46,7 +47,7 @@ class AssemblyController {
 
       return res.json(routes);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -75,7 +76,7 @@ class AssemblyController {
 
       return res.json(route);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -131,7 +132,7 @@ class AssemblyController {
 
       return res.json(fullRoute);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -191,7 +192,7 @@ class AssemblyController {
 
       return res.json(fullRoute);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -210,7 +211,7 @@ class AssemblyController {
 
       return res.json({ message: "Маршрут удалён" });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }

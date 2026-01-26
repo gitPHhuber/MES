@@ -5,6 +5,7 @@ const {
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 class AssemblyRecipeController {
     
@@ -53,8 +54,8 @@ class AssemblyRecipeController {
 
         } catch (e) {
             await t.rollback();
-            console.error(e);
-            next(ApiError.badRequest(e.message));
+            logger.error(e);
+            next(e);
         }
     }
 
@@ -70,7 +71,7 @@ class AssemblyRecipeController {
             
             return res.json(recipe);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -121,7 +122,7 @@ class AssemblyRecipeController {
                     acceptedAt: new Date()
                 }, { transaction: t });
                 
-                console.log(`[Assembly] Создано новое изделие: ${qrCode} (User: ${req.user.id})`);
+                logger.info(`[Assembly] Создано новое изделие: ${qrCode} (User: ${req.user.id})`);
             } else {
                 // Если изделие уже было, обновляем статус, если оно не "Завершено"
                 if (box.status !== 'ASSEMBLY' && box.status !== 'DONE') {
@@ -157,8 +158,8 @@ class AssemblyRecipeController {
 
         } catch (e) {
             await t.rollback();
-            console.error(e);
-            next(ApiError.badRequest(e.message));
+            logger.error(e);
+            next(e);
         }
     }
 
@@ -186,7 +187,7 @@ class AssemblyRecipeController {
 
             return res.json(process);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -228,7 +229,7 @@ class AssemblyRecipeController {
             return res.json({ message: "Сборка успешно завершена" });
         } catch (e) {
             await t.rollback();
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -289,7 +290,7 @@ class AssemblyRecipeController {
 
             return res.json(result);
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -318,13 +319,15 @@ class AssemblyRecipeController {
             const user = await User.findByPk(process.box.acceptedById, {
                 include: [{
                     model: Team,
-                    include: [{ model: Section }]
+                    include: [{ model: Section, as: "production_section" }]
                 }]
             });
 
             let structureInfo = "Вне структуры";
-            if (user && user.team) {
-                structureInfo = `${user.team.section ? user.team.section.title : "Нет участка"} / ${user.team.title}`;
+            const team = user?.production_team || user?.team;
+            if (team) {
+                const section = team.production_section || team.section;
+                structureInfo = `${section ? section.title : "Нет участка"} / ${team.title}`;
             }
 
             return res.json({
@@ -338,7 +341,7 @@ class AssemblyRecipeController {
                 } : null
             });
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 
@@ -355,7 +358,7 @@ class AssemblyRecipeController {
             
             return res.json({ message: "Паспорт обновлен" });
         } catch (e) {
-            next(ApiError.badRequest(e.message));
+            next(e);
         }
     }
 }

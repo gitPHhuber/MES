@@ -1,6 +1,7 @@
 import { observer } from "mobx-react-lite";
 import { useContext, useEffect, useState } from "react";
 import { createFC, fetchCategoryDefect } from "src/api/fcApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 
 export const CreateFC: React.FC = observer(() => {
@@ -23,6 +24,7 @@ export const CreateFC: React.FC = observer(() => {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -34,10 +36,13 @@ export const CreateFC: React.FC = observer(() => {
       await createFC(uniqId, valueFIRM, sessionId, defectCategoryId);
       setSuccessMessage("FC успешно добавлен");
       setErrorMessage("");
+      setRequestId(null);
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при добавлении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при добавлении. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
     }
     flightController.resetSelectedDefect();
@@ -127,7 +132,10 @@ export const CreateFC: React.FC = observer(() => {
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
       {confirm && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">

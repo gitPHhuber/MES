@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 
 interface CreateDefectModel {
   createDefect: (title: string, description: string) => void;
@@ -9,6 +10,7 @@ export const CreateDefect: React.FC<CreateDefectModel> = ({ createDefect }) => {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -20,10 +22,13 @@ export const CreateDefect: React.FC<CreateDefectModel> = ({ createDefect }) => {
 
       setSuccessMessage("Категория дефекта успешно добавлена");
       setErrorMessage("");
+      setRequestId(null);
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при добавлении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при добавлении. ${error.response?.data?.message}`
       );
+      setRequestId(error.requestId ?? null);
       setSuccessMessage("");
     }
   };
@@ -58,7 +63,10 @@ export const CreateDefect: React.FC<CreateDefectModel> = ({ createDefect }) => {
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
 
       {confirm && (

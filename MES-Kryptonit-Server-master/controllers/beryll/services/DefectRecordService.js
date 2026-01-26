@@ -33,6 +33,7 @@ const {
 
 const fs = require("fs");
 const path = require("path");
+const DefectStateMachine = require("../../../services/beryll/DefectStateMachine");
 
 const UPLOADS_DIR = path.join(__dirname, "../../../../uploads/beryll/defect-records");
 
@@ -174,10 +175,8 @@ class DefectRecordService {
     async startDiagnosis(id, diagnosticianId) {
         const defect = await BeryllDefectRecord.findByPk(id);
         if (!defect) throw new Error("Запись не найдена");
-        
-        if (defect.status !== DEFECT_RECORD_STATUSES.NEW) {
-            throw new Error(`Невозможно начать диагностику из статуса ${defect.status}`);
-        }
+
+        DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.DIAGNOSING);
         
         await defect.update({
             status: DEFECT_RECORD_STATUSES.DIAGNOSING,
@@ -233,7 +232,9 @@ class DefectRecordService {
     async setWaitingParts(id, userId, notes = null) {
         const defect = await BeryllDefectRecord.findByPk(id);
         if (!defect) throw new Error("Запись не найдена");
-        
+
+        DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.WAITING_PARTS);
+
         await defect.update({
             status: DEFECT_RECORD_STATUSES.WAITING_PARTS,
             notes: notes ? `${defect.notes || ""}\n\n[Ожидание запчастей]: ${notes}` : defect.notes
@@ -290,7 +291,9 @@ class DefectRecordService {
     async startRepair(id, userId) {
         const defect = await BeryllDefectRecord.findByPk(id);
         if (!defect) throw new Error("Запись не найдена");
-        
+
+        DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.REPAIRING);
+
         await defect.update({
             status: DEFECT_RECORD_STATUSES.REPAIRING,
             repairStartedAt: new Date()
@@ -399,7 +402,9 @@ class DefectRecordService {
                 include: [{ model: BeryllServer, as: "server" }]
             });
             if (!defect) throw new Error("Запись не найдена");
-            
+
+            DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.SENT_TO_YADRO);
+
             const { ticketNumber, subject, description, trackingNumber } = data;
             
             // 1. Создаём заявку в Ядро
@@ -458,7 +463,9 @@ class DefectRecordService {
         try {
             const defect = await BeryllDefectRecord.findByPk(id);
             if (!defect) throw new Error("Запись не найдена");
-            
+
+            DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.RETURNED);
+
             const { resolution, replacementSerialYadro, replacementSerialManuf, condition } = data;
             
             await defect.update({
@@ -615,9 +622,11 @@ class DefectRecordService {
                 include: [{ model: BeryllServer, as: "server" }]
             });
             if (!defect) throw new Error("Запись не найдена");
-            
+
             const { resolution, notes } = data;
-            
+
+            DefectStateMachine.assertTransition(defect.status, DEFECT_RECORD_STATUSES.RESOLVED);
+
             // Рассчитываем общее время простоя
             const totalDowntimeMinutes = defect.detectedAt 
                 ? Math.round((new Date() - defect.detectedAt) / (1000 * 60))
@@ -724,7 +733,7 @@ class DefectRecordService {
             entityId: defectRecordId,
             action,
             userId,
-            description,
+            comment: description,
             metadata: {}
         }, { transaction });
     }
@@ -913,21 +922,269 @@ class DefectRecordService {
             label: this.getStatusLabel(value)
         }));
     }
+
+    async getAvailableActions(id) {
+        const defect = await BeryllDefectRecord.findByPk(id);
+        if (!defect) throw new Error("Запись не найдена");
+
+        return DefectStateMachine.getAvailableActions(defect.status);
+    }
+
+    async updateStatus(id, userId, status, comment = null) {
+        const defect = await BeryllDefectRecord.findByPk(id);
+        if (!defect) throw new Error("Запись не найдена");
+
+        const previousStatus = defect.status;
+
+        if (status !== defect.status) {
+            DefectStateMachine.assertTransition(defect.status, status);
+        }
+
+        await defect.update({ status });
+
+        await this.logHistory(id, "STATUS_CHANGED", userId,
+            `Статус изменён: ${previousStatus} → ${status}${comment ? `. ${comment}` : ""}`
+        );
+
+        return this.getById(id);
+    }
+
+    // =========================================
+    // CRUD: ДОПОЛНИТЕЛЬНЫЕ ОПЕРАЦИИ
+    // =========================================
+
+    async update(id, data, userId) {
+        const defect = await BeryllDefectRecord.findByPk(id);
+        if (!defect) throw new Error("Запись не найдена");
+
+        const allowedFields = [
+            "yadroTicketNumber",
+            "hasSPISI",
+            "clusterCode",
+            "problemDescription",
+            "repairPartType",
+            "defectPartSerialYadro",
+            "defectPartSerialManuf",
+            "replacementPartSerialYadro",
+            "replacementPartSerialManuf",
+            "repairDetails",
+            "diagnosisResult",
+            "notes"
+        ];
+
+        const updates = {};
+        const changeList = [];
+
+        for (const field of allowedFields) {
+            if (data[field] !== undefined && data[field] !== defect[field]) {
+                updates[field] = data[field];
+                changeList.push(field);
+            }
+        }
+
+        let priority = undefined;
+        let priorityChanged = false;
+        if (data.priority !== undefined) {
+            priority = data.priority;
+        } else if (data.metadata?.priority !== undefined) {
+            priority = data.metadata.priority;
+        }
+
+        if (priority !== undefined && priority !== defect.metadata?.priority) {
+            const nextMetadata = { ...(defect.metadata || {}) };
+            nextMetadata.priority = priority;
+            updates.metadata = nextMetadata;
+            priorityChanged = true;
+            if (!changeList.includes("metadata")) {
+                changeList.push("metadata");
+            }
+        }
+
+        if (updates.repairPartType !== undefined || priorityChanged) {
+            const partType = updates.repairPartType || defect.repairPartType;
+            if (partType) {
+                updates.slaDeadline = await SlaConfig.calculateDeadline(
+                    partType,
+                    priorityChanged ? priority : defect.metadata?.priority
+                );
+                changeList.push("slaDeadline");
+            }
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return this.getById(id);
+        }
+
+        await defect.update(updates);
+
+        await this.logHistory(
+            id,
+            "UPDATED",
+            userId,
+            `Обновлены поля: ${changeList.join(", ")}`
+        );
+
+        return this.getById(id);
+    }
+
+    async delete(id, userId) {
+        const defect = await BeryllDefectRecord.findByPk(id, {
+            include: [{ model: BeryllDefectRecordFile, as: "files" }]
+        });
+        if (!defect) throw new Error("Запись не найдена");
+
+        if (defect.files?.length) {
+            defect.files.forEach((file) => {
+                const fullPath = path.join(UPLOADS_DIR, file.filePath);
+                if (fs.existsSync(fullPath)) {
+                    fs.unlinkSync(fullPath);
+                }
+            });
+        }
+
+        await this.logHistory(id, "DELETED", userId, "Запись удалена");
+        await defect.destroy();
+
+        return { success: true, message: "Запись удалена" };
+    }
+
+    async markRepeated(id, userId, reason = null) {
+        const defect = await BeryllDefectRecord.findByPk(id);
+        if (!defect) throw new Error("Запись не найдена");
+
+        await defect.update({
+            isRepeatedDefect: true,
+            repeatedDefectReason: reason || defect.repeatedDefectReason,
+            repeatedDefectDate: new Date(),
+            status: DEFECT_RECORD_STATUSES.REPEATED
+        });
+
+        await this.logHistory(
+            id,
+            "REPEATED",
+            userId,
+            `Отмечен повторный брак${reason ? `: ${reason}` : ""}`
+        );
+
+        return this.getById(id);
+    }
+
+    async getHistory(id, options = {}) {
+        const defect = await BeryllDefectRecord.findByPk(id);
+        if (!defect) throw new Error("Запись не найдена");
+
+        const { limit = 50, offset = 0 } = options;
+        const { BeryllExtendedHistory } = require("../../../models/index");
+
+        return BeryllExtendedHistory.findAndCountAll({
+            where: { entityType: "DEFECT_RECORD", entityId: id },
+            include: [{ model: User, as: "user", attributes: ["id", "login", "name", "surname"] }],
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset
+        });
+    }
+
+    // =========================================
+    // ФАЙЛЫ
+    // =========================================
+
+    async uploadFile(defectRecordId, file, userId) {
+        const defect = await BeryllDefectRecord.findByPk(defectRecordId, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
+        if (!defect) throw new Error("Запись не найдена");
+
+        const recordDir = path.join(UPLOADS_DIR, `defect_${defectRecordId}`);
+        if (!fs.existsSync(recordDir)) {
+            fs.mkdirSync(recordDir, { recursive: true });
+        }
+
+        const ext = path.extname(file.name);
+        const fileName = `defect_${defectRecordId}_${Date.now()}${ext}`;
+        const filePath = path.join(recordDir, fileName);
+
+        await file.mv(filePath);
+
+        const fileRecord = await BeryllDefectRecordFile.create({
+            defectRecordId,
+            originalName: file.name,
+            fileName,
+            filePath: path.join(`defect_${defectRecordId}`, fileName),
+            mimeType: file.mimetype,
+            fileSize: file.size,
+            uploadedById: userId
+        });
+
+        await this.logHistory(
+            defectRecordId,
+            "FILE_UPLOADED",
+            userId,
+            `Загружен файл: ${file.name}`
+        );
+
+        return {
+            success: true,
+            file: {
+                id: fileRecord.id,
+                fileName: fileRecord.fileName,
+                originalName: fileRecord.originalName,
+                fileSize: fileRecord.fileSize,
+                mimeType: fileRecord.mimeType
+            }
+        };
+    }
+
+    async getFileForDownload(fileId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId);
+        if (!file) throw new Error("Файл не найден");
+
+        const fullPath = path.join(UPLOADS_DIR, file.filePath);
+        if (!fs.existsSync(fullPath)) throw new Error("Файл не найден на диске");
+
+        return { fullPath, originalName: file.originalName };
+    }
+
+    async deleteFile(fileId, userId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId);
+        if (!file) throw new Error("Файл не найден");
+
+        const fullPath = path.join(UPLOADS_DIR, file.filePath);
+        if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+        }
+
+        await this.logHistory(
+            file.defectRecordId,
+            "FILE_DELETED",
+            userId,
+            `Удалён файл: ${file.originalName}`
+        );
+
+        await file.destroy();
+        return { success: true, message: "Файл удалён" };
+    }
     
     getPartTypeLabel(type) {
         const labels = {
             RAM: "Оперативная память",
+            RAM_ECC: "ECC память",
             MOTHERBOARD: "Материнская плата",
             CPU: "Процессор",
+            CPU_SOCKET: "Сокет процессора",
             HDD: "Жёсткий диск",
             SSD: "SSD накопитель",
             PSU: "Блок питания",
             FAN: "Вентилятор",
+            THERMAL: "Термомодуль",
             RAID: "RAID контроллер",
             NIC: "Сетевая карта",
             BACKPLANE: "Backplane",
             BMC: "BMC модуль",
             CABLE: "Кабель",
+            PCIE_SLOT: "PCIe слот",
+            RAM_SOCKET: "Слот оперативной памяти",
+            CHASSIS: "Шасси",
             OTHER: "Другое"
         };
         return labels[type] || type;
@@ -935,6 +1192,15 @@ class DefectRecordService {
     
     getStatusLabel(status) {
         const labels = {
+            PENDING_DIAGNOSIS: "Ожидает диагностики",
+            DIAGNOSED: "Диагностирован",
+            WAITING_APPROVAL: "Ожидание согласования",
+            PARTS_RESERVED: "Запчасти зарезервированы",
+            REPAIRED_LOCALLY: "Отремонтирован локально",
+            IN_YADRO_REPAIR: "В ремонте у Ядро",
+            SUBSTITUTE_ISSUED: "Выдан подменный сервер",
+            SCRAPPED: "Списан",
+            CANCELLED: "Отменён",
             NEW: "Новый",
             DIAGNOSING: "Диагностика",
             WAITING_PARTS: "Ожидание запчастей",

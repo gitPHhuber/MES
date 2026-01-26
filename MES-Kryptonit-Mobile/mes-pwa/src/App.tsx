@@ -21,6 +21,10 @@ import { ChecklistPage } from './pages/Production/ChecklistPage'
 import { RankingsPage } from './pages/Rankings/RankingsPage'
 import { TasksPage } from './pages/Tasks/TasksPage'
 import { ProfilePage } from './pages/Profile/ProfilePage'
+import { BeryllPage } from './pages/Beryll/BeryllPage'
+import { BeryllServerPage } from './pages/Beryll/BeryllServerPage'
+import { BeryllBatchPage } from './pages/Beryll/BeryllBatchPage'
+import { FEATURE_FLAGS } from './config'
 
 /**
  * Protected Route wrapper
@@ -44,6 +48,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
  */
 function App() {
   const auth = useAuth()
+  const isBeryllEnabled = FEATURE_FLAGS.BERYLL
 
   // Регистрация обновления SW
   useEffect(() => {
@@ -104,6 +109,15 @@ function App() {
         
         {/* Profile */}
         <Route path="profile" element={<ProfilePage />} />
+
+        {/* Beryll */}
+        {isBeryllEnabled && (
+          <>
+            <Route path="beryll" element={<BeryllPage />} />
+            <Route path="beryll/server/:id" element={<BeryllServerPage />} />
+            <Route path="beryll/batch/:id" element={<BeryllBatchPage />} />
+          </>
+        )}
       </Route>
 
       {/* Fallback */}

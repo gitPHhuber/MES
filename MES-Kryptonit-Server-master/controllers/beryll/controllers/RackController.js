@@ -8,6 +8,7 @@
 
 const RackService = require("../services/RackService");
 const ApiError = require("../../../error/ApiError");
+const logger = require("../../../services/logger");
 
 class RackController {
   
@@ -28,7 +29,7 @@ class RackController {
       });
       res.json(racks);
     } catch (error) {
-      console.error("[RackController] getAllRacks error:", error);
+      logger.error("[RackController] getAllRacks error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -47,7 +48,7 @@ class RackController {
       
       res.json(rack);
     } catch (error) {
-      console.error("[RackController] getRackById error:", error);
+      logger.error("[RackController] getRackById error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -61,8 +62,8 @@ class RackController {
       const rack = await RackService.createRack(req.body, userId);
       res.status(201).json(rack);
     } catch (error) {
-      console.error("[RackController] createRack error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] createRack error:", error);
+      next(error);
     }
   }
   
@@ -76,8 +77,8 @@ class RackController {
       const rack = await RackService.updateRack(id, req.body, userId);
       res.json(rack);
     } catch (error) {
-      console.error("[RackController] updateRack error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] updateRack error:", error);
+      next(error);
     }
   }
   
@@ -91,8 +92,8 @@ class RackController {
       const result = await RackService.deleteRack(id, userId);
       res.json(result);
     } catch (error) {
-      console.error("[RackController] deleteRack error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] deleteRack error:", error);
+      next(error);
     }
   }
   
@@ -106,7 +107,7 @@ class RackController {
       const history = await RackService.getHistory("RACK", id, { limit, offset });
       res.json(history);
     } catch (error) {
-      console.error("[RackController] getRackHistory error:", error);
+      logger.error("[RackController] getRackHistory error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -134,7 +135,7 @@ class RackController {
       const fullUnit = await RackService.getUnitById(unit.id);
       res.json(fullUnit);
     } catch (error) {
-      console.error("[RackController] getUnit error:", error);
+      logger.error("[RackController] getUnit error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -162,8 +163,8 @@ class RackController {
       
       res.json(unit);
     } catch (error) {
-      console.error("[RackController] installServer error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] installServer error:", error);
+      next(error);
     }
   }
   
@@ -183,8 +184,8 @@ class RackController {
       
       res.json(result);
     } catch (error) {
-      console.error("[RackController] removeServer error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] removeServer error:", error);
+      next(error);
     }
   }
   
@@ -198,8 +199,8 @@ class RackController {
       const unit = await RackService.updateUnit(unitId, req.body, userId);
       res.json(unit);
     } catch (error) {
-      console.error("[RackController] updateUnit error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] updateUnit error:", error);
+      next(error);
     }
   }
   
@@ -218,8 +219,8 @@ class RackController {
       const unit = await RackService.moveServer(fromRackId, fromUnit, toRackId, toUnit, userId);
       res.json(unit);
     } catch (error) {
-      console.error("[RackController] moveServer error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[RackController] moveServer error:", error);
+      next(error);
     }
   }
   
@@ -232,7 +233,7 @@ class RackController {
       const units = await RackService.getFreeUnits(rackId);
       res.json(units);
     } catch (error) {
-      console.error("[RackController] getFreeUnits error:", error);
+      logger.error("[RackController] getFreeUnits error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -246,7 +247,7 @@ class RackController {
       const location = await RackService.findServerInRacks(serverId);
       res.json(location || { found: false });
     } catch (error) {
-      console.error("[RackController] findServerInRacks error:", error);
+      logger.error("[RackController] findServerInRacks error:", error);
       next(ApiError.internal(error.message));
     }
   }

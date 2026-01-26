@@ -55,6 +55,9 @@ class HistoryController {
             });
 
         } catch (e) {
+            if (e.status) {
+                return next(e);
+            }
             next(ApiError.internal(e.message));
         }
     }

@@ -1,6 +1,7 @@
 const { FC, Session } = require("../models/index");
 const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
+const logger = require("../services/logger");
 
 class FCController {
   async getFCs(req, res, next) {
@@ -114,7 +115,7 @@ class FCController {
 
       return res.json(fcAll);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -131,7 +132,7 @@ class FCController {
       });
       return res.json(fc);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -152,7 +153,7 @@ class FCController {
 
       return res.json("добавлены записи");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -179,7 +180,7 @@ class FCController {
 
       return res.json("записи удалены");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -193,7 +194,7 @@ class FCController {
       const fcUpdated = await FC.findAll({ where: { id } });
       return res.json(fcUpdated[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -213,7 +214,7 @@ class FCController {
         let newCategoryDefectId, newFirmware;
         standTestBool ? (newCategoryDefectId = 1) : (newCategoryDefectId = 2);
         if (standTestBool) newFirmware = true;
-        console.log(newCategoryDefectId);
+        logger.info(newCategoryDefectId);
         await FC.update(
           {
             stand_test: standTestBool,
@@ -240,7 +241,7 @@ class FCController {
         return res.json(newFC);
       }
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -252,7 +253,7 @@ class FCController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -264,7 +265,7 @@ class FCController {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }
