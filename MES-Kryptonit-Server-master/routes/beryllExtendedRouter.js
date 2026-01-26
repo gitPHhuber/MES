@@ -4,11 +4,13 @@ const router = new Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const syncUserMiddleware = require("../middleware/syncUserMiddleware");
 const checkAbility = require("../middleware/checkAbilityMiddleware");
+const validateRequest = require("../middleware/validateRequest");
 
 const RackController = require("../controllers/beryll/controllers/RackController");
 const ClusterController = require("../controllers/beryll/controllers/ClusterController");
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
+const { defectFiltersSchema } = require("../schemas/beryll/defect.schema");
 
 const protect = [authMiddleware, syncUserMiddleware];
 
@@ -28,7 +30,7 @@ router.post("/racks/:rackId/units/:unitNumber/install", ...protect, checkAbility
 router.post("/racks/:rackId/units/:unitNumber/remove", ...protect, checkAbility("beryll.work"), RackController.removeServer);
 router.put("/rack-units/:unitId", ...protect, checkAbility("beryll.work"), RackController.updateUnit);
 router.post("/rack-units/move", ...protect, checkAbility("beryll.work"), RackController.moveServer);
-router.get("/servers/:serverId/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
+router.get("/servers/:serverId(\\d+)/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
 
 // ============================================
 // КОМПЛЕКТЫ / ОТГРУЗКИ (SHIPMENTS)
@@ -53,10 +55,10 @@ router.delete("/clusters/:id", ...protect, checkAbility("beryll.manage"), Cluste
 router.get("/clusters/:id/history", ...protect, checkAbility("beryll.view"), ClusterController.getClusterHistory);
 router.post("/clusters/:clusterId/servers", ...protect, checkAbility("beryll.work"), ClusterController.addServerToCluster);
 router.post("/clusters/:clusterId/servers/bulk", ...protect, checkAbility("beryll.work"), ClusterController.addServersToCluster);
-router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility("beryll.work"), ClusterController.removeServerFromCluster);
+router.delete("/clusters/:clusterId/servers/:serverId(\\d+)", ...protect, checkAbility("beryll.work"), ClusterController.removeServerFromCluster);
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
-router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+router.get("/servers/:serverId(\\d+)/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
 
 // ============================================
 // УЧЁТ БРАКА (DEFECT RECORDS)
@@ -64,10 +66,22 @@ router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"
 
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
-router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
-router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
+router.get("/defect-records/stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
+router.get(
+  "/defect-records",
+  ...protect,
+  checkAbility("beryll.view"),
+  validateRequest({ query: defectFiltersSchema }),
+  DefectRecordController.getAll
+);
 router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
+router.get("/defect-records/:id/available-actions", ...protect, checkAbility("beryll.view"), DefectRecordController.getAvailableActions);
+router.get("/defect-records/:id/history", ...protect, checkAbility("beryll.view"), DefectRecordController.getHistory);
 router.post("/defect-records", ...protect, checkAbility("beryll.work"), DefectRecordController.create);
+router.put("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.update);
+router.delete("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.delete);
+router.put("/defect-records/:id/status", ...protect, checkAbility("beryll.work"), DefectRecordController.updateStatus);
+router.post("/defect-records/:id/mark-repeated", ...protect, checkAbility("beryll.work"), DefectRecordController.markRepeated);
 router.post("/defect-records/:id/start-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.startDiagnosis);
 router.post("/defect-records/:id/complete-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.completeDiagnosis);
 router.post("/defect-records/:id/waiting-parts", ...protect, checkAbility("beryll.work"), DefectRecordController.setWaitingParts);
@@ -79,6 +93,9 @@ router.post("/defect-records/:id/return-from-yadro", ...protect, checkAbility("b
 router.post("/defect-records/:id/issue-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.issueSubstitute);
 router.post("/defect-records/:id/return-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.returnSubstitute);
 router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
+router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
+router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
+router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
 
 // ============================================
 // ЖУРНАЛ ЗАЯВОК ЯДРО

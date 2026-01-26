@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createComponentRef } from "src/api/product_componentApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 
 export const CreateProdComp: React.FC = () => {
   const [title, SetTitle] = useState("");
@@ -8,6 +9,7 @@ export const CreateProdComp: React.FC = () => {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -19,12 +21,14 @@ export const CreateProdComp: React.FC = () => {
       SetArticle("");
       setSuccessMessage("Комплектующее успешно добавлено");
       setErrorMessage("");
+      setRequestId(null);
     } catch (error: any) {
-        setSuccessMessage("");
-        setErrorMessage('!Ошибка')
       setErrorMessage(
-        `Произошла ошибка при добавлении. ${error.response.data.error}`
+        error.userMessage ??
+          `Произошла ошибка при добавлении. ${error.response?.data?.error}`
       );
+      setRequestId(error.requestId ?? null);
+      setSuccessMessage("");
       console.log(error);
     }
   };
@@ -69,7 +73,10 @@ export const CreateProdComp: React.FC = () => {
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
 
       {confirm && (

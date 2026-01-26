@@ -15,6 +15,7 @@ import {
   updateDefectCategory,
   deleteDefectCategory
 } from "src/api/defectApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import {
   DefectCategory,
   BoardType,
@@ -47,6 +48,7 @@ export const AdminDefectCategoriesPage: React.FC = () => {
   
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   // Загрузка
   const loadCategories = async () => {
@@ -80,6 +82,7 @@ export const AdminDefectCategoriesPage: React.FC = () => {
     setFormTypes([]);
     setFormActive(true);
     setError("");
+    setRequestId(null);
     setShowModal(true);
   };
 
@@ -93,6 +96,7 @@ export const AdminDefectCategoriesPage: React.FC = () => {
     setFormTypes(category.applicableTypes || []);
     setFormActive(category.isActive);
     setError("");
+    setRequestId(null);
     setShowModal(true);
   };
 
@@ -113,6 +117,7 @@ export const AdminDefectCategoriesPage: React.FC = () => {
     
     setSaving(true);
     setError("");
+    setRequestId(null);
     
     try {
       if (editingCategory) {
@@ -137,7 +142,10 @@ export const AdminDefectCategoriesPage: React.FC = () => {
       setShowModal(false);
       loadCategories();
     } catch (e: any) {
-      setError(e.response?.data?.message || "Ошибка при сохранении");
+      setError(
+        e.userMessage ?? e.response?.data?.message ?? "Ошибка при сохранении"
+      );
+      setRequestId(e.requestId ?? null);
     } finally {
       setSaving(false);
     }
@@ -442,6 +450,7 @@ export const AdminDefectCategoriesPage: React.FC = () => {
               {error && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
                   {error}
+                  <RequestIdNotice requestId={requestId} />
                 </div>
               )}
 

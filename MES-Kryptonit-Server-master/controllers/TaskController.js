@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const ApiError = require("../error/ApiError");
 const sequelize = require("../db");
+const logger = require("../services/logger");
 
 const {
   ProductionTask,
@@ -55,7 +56,7 @@ class TaskController {
 
       return res.json(task);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -160,7 +161,7 @@ class TaskController {
 
       return res.json({ rows, count, page, limit });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }
@@ -237,7 +238,7 @@ class TaskController {
         boxes,
       });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       next(ApiError.internal(e.message));
     }
   }

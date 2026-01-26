@@ -1,7 +1,9 @@
 const { User, Role, Ability } = require('../models/index');
+const KeycloakSyncService = require("../services/KeycloakSyncService");
+const logger = require("../services/logger");
 
 module.exports = async function (req, res, next) {
-    // console.log("--- [SyncUserMiddleware] START ---");
+    // logger.info("--- [SyncUserMiddleware] START ---");
     
     // Пропускаем preflight запросы (OPTIONS), чтобы не нагружать БД
     if (req.method === "OPTIONS") return next();
@@ -9,26 +11,33 @@ module.exports = async function (req, res, next) {
     try {
         // 1. Проверка: есть ли данные от authMiddleware
         if (!req.auth || !req.auth.payload) {
-            console.error("❌ ОШИБКА: authMiddleware не передал payload. Токен невалиден или не проверен.");
+            logger.error("❌ ОШИБКА: authMiddleware не передал payload. Токен невалиден или не проверен.");
             return res.status(401).json({ message: "Invalid token payload" });
         }
 
         const payload = req.auth.payload;
-        // console.log("🔑 Данные из токена:", payload.sub);
+        // logger.info("🔑 Данные из токена:", payload.sub);
+
+        const isLocalToken = Boolean(payload.id) && !payload.sub;
 
         // 2. Извлечение данных пользователя
-        const keycloakUUID = payload.sub;
-        
+        const keycloakUUID = isLocalToken ? null : payload.sub;
+
         // Пытаемся найти логин (Keycloak может отдавать его в разных полях)
-        const login = payload.preferred_username || payload.nickname || payload.email;
+        const login = payload.preferred_username
+            || payload.username
+            || payload.login
+            || payload.nickname
+            || payload.email
+            || payload.upn;
 
         if (!login) {
-            console.error("❌ ОШИБКА: В токене нет поля login (preferred_username/nickname/email).");
-            return res.status(500).json({ message: "Token structure error: missing username" });
+            logger.error("❌ ОШИБКА: В токене нет поля login/username/email.");
+            return res.status(401).json({ message: "Invalid token payload" });
         }
 
-        const name = payload.given_name || login;
-        const surname = payload.family_name || '';
+        const name = payload.given_name || payload.name || login;
+        const surname = payload.family_name || payload.surname || '';
 
         // ---------------------------------------------------------------------
         // 3. RBAC: Определение роли на основе Keycloak
@@ -37,29 +46,26 @@ module.exports = async function (req, res, next) {
         // Получаем массив ролей из токена
         const kcRoles = payload.realm_access?.roles || [];
         
-        // Список ролей, которые существуют в нашей системе (в порядке приоритета)
-        const priorityRoles = [
-            "SUPER_ADMIN", 
-            "PRODUCTION_CHIEF", 
-            "TECHNOLOGIST", 
-            "WAREHOUSE_MASTER", 
-            "QC_ENGINEER", 
-            "FIRMWARE_OPERATOR", 
-            "ASSEMBLER"
-        ];
-
-        // Ищем первую роль из списка priorityRoles, которая есть у пользователя в Keycloak.
-        // Если ничего не нашли — выдаем базовую роль "ASSEMBLER" (или "USER")
-        const mainRole = priorityRoles.find(r => kcRoles.includes(r)) || "ASSEMBLER";
+        // Определяем основную роль через синхронизированный приоритет в БД
+        const mainRole = isLocalToken
+            ? (payload.role || "ASSEMBLER")
+            : await KeycloakSyncService.getMainRole(kcRoles);
 
         // ---------------------------------------------------------------------
         // 4. Синхронизация с БД (Поиск / Создание / Обновление)
         // ---------------------------------------------------------------------
         
-        let user = await User.findOne({ where: { login } });
+        let user = await User.findOne({
+            where: isLocalToken ? { id: payload.id } : { login }
+        });
 
         if (!user) {
-            console.log(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
+            if (isLocalToken) {
+                logger.error("❌ ОШИБКА: Пользователь из локального токена не найден.");
+                return res.status(401).json({ message: "User not found" });
+            }
+
+            logger.info(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
             try {
                 user = await User.create({
                     login,
@@ -69,15 +75,15 @@ module.exports = async function (req, res, next) {
                     password: 'sso_managed_account', // Пароль не используется при SSO
                     img: null
                 });
-                console.log(`✅ Пользователь создан. ID: ${user.id}`);
+                logger.info(`✅ Пользователь создан. ID: ${user.id}`);
             } catch (dbError) {
-                console.error("❌ ОШИБКА БАЗЫ ДАННЫХ при создании:", dbError);
+                logger.error("❌ ОШИБКА БАЗЫ ДАННЫХ при создании:", dbError);
                 return res.status(500).json({ message: "DB Error during user creation" });
             }
         } else {
             // Если пользователь есть, но его роль в Keycloak изменилась — обновляем БД
-            if (user.role !== mainRole) {
-                console.log(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
+            if (!isLocalToken && user.role !== mainRole) {
+                logger.info(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
                 user.role = mainRole;
                 await user.save();
             }
@@ -92,7 +98,7 @@ module.exports = async function (req, res, next) {
             const roleEntity = await Role.findOne({
                 where: { name: mainRole },
                 include: [{
-                    model: Ability,
+                    model: Ability, as: "abilities",
                     through: { attributes: [] }
                 }]
             });
@@ -101,7 +107,7 @@ module.exports = async function (req, res, next) {
                 abilities = roleEntity.abilities.map(ab => ab.code);
             }
         } catch (e) {
-            console.error("⚠️ Ошибка при загрузке прав (abilities):", e.message);
+            logger.error("⚠️ Ошибка при загрузке прав (abilities):", e.message);
         }
 
         // ---------------------------------------------------------------------
@@ -122,7 +128,7 @@ module.exports = async function (req, res, next) {
         next();
 
     } catch (e) {
-        console.error("🔥 КРИТИЧЕСКАЯ ОШИБКА в syncUserMiddleware:", e);
+        logger.error("🔥 КРИТИЧЕСКАЯ ОШИБКА в syncUserMiddleware:", e);
         return res.status(500).json({ message: "Sync Middleware Crash", error: e.message });
     }
 };

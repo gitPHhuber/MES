@@ -9,7 +9,7 @@ class DefectController_CoralB {
       });
       return res.json(defectAll);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -19,7 +19,7 @@ class DefectController_CoralB {
       const defect = await CategoryDefect_CoralB.create({ title, description });
       return res.json(defect);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -35,7 +35,7 @@ class DefectController_CoralB {
       });
       return res.json(defectUpdated[0]);
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 
@@ -47,7 +47,7 @@ class DefectController_CoralB {
       });
       return res.json("ok");
     } catch (e) {
-      next(ApiError.badRequest(e.message));
+      next(e);
     }
   }
 }

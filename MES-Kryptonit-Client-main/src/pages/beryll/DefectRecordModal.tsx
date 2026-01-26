@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from "react";
 import { X, AlertTriangle, Search, Server, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { defectRecordApi, TicketPriority } from "../../api/beryllExtendedApi";
+import { defectRecordApi, TicketPriority } from "../../api/beryll/beryllExtendedApi";
 
 interface Props {
   onClose: () => void;

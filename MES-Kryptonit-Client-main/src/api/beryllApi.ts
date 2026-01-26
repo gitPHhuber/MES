@@ -285,7 +285,7 @@ export const getStatusProgress = (stats: Record<ServerStatus, number> | undefine
 // ============================================
 
 export const syncWithDhcp = async (): Promise<SyncResult> => {
-  const { data } = await $authHost.post<SyncResult>("/api/beryll/sync");
+  const { data } = await $authHost.post<SyncResult>("api/beryll/sync");
   return data;
 };
 
@@ -299,12 +299,12 @@ export const getServers = async (params?: {
   onlyActive?: boolean;
   batchId?: number | "null";
 }): Promise<BeryllServer[]> => {
-  const { data } = await $authHost.get<BeryllServer[]>("/api/beryll/servers", { params });
+  const { data } = await $authHost.get<BeryllServer[]>("api/beryll/servers", { params });
   return data;
 };
 
 export const getStats = async (): Promise<BeryllStats> => {
-  const { data } = await $authHost.get<BeryllStats>("/api/beryll/stats");
+  const { data } = await $authHost.get<BeryllStats>("api/beryll/stats");
   return data;
 };
 
@@ -312,22 +312,22 @@ export const getAnalytics = async (params?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<BeryllAnalytics> => {
-  const { data } = await $authHost.get<BeryllAnalytics>("/api/beryll/analytics", { params });
+  const { data } = await $authHost.get<BeryllAnalytics>("api/beryll/analytics", { params });
   return data;
 };
 
 export const getServerById = async (id: number): Promise<BeryllServer> => {
-  const { data } = await $authHost.get<BeryllServer>(`/api/beryll/servers/${id}`);
+  const { data } = await $authHost.get<BeryllServer>(`api/beryll/servers/${id}`);
   return data;
 };
 
 export const takeServer = async (id: number): Promise<BeryllServer> => {
-  const { data } = await $authHost.post<BeryllServer>(`/api/beryll/servers/${id}/take`);
+  const { data } = await $authHost.post<BeryllServer>(`api/beryll/servers/${id}/take`);
   return data;
 };
 
 export const releaseServer = async (id: number): Promise<BeryllServer> => {
-  const { data } = await $authHost.post<BeryllServer>(`/api/beryll/servers/${id}/release`);
+  const { data } = await $authHost.post<BeryllServer>(`api/beryll/servers/${id}/release`);
   return data;
 };
 
@@ -336,7 +336,7 @@ export const updateServerStatus = async (
   status: ServerStatus,
   notes?: string
 ): Promise<BeryllServer> => {
-  const { data } = await $authHost.put<BeryllServer>(`/api/beryll/servers/${id}/status`, {
+  const { data } = await $authHost.put<BeryllServer>(`api/beryll/servers/${id}/status`, {
     status,
     notes
   });
@@ -347,12 +347,12 @@ export const updateServerNotes = async (
   id: number,
   notes: string
 ): Promise<BeryllServer> => {
-  const { data } = await $authHost.put<BeryllServer>(`/api/beryll/servers/${id}/notes`, { notes });
+  const { data } = await $authHost.put<BeryllServer>(`api/beryll/server-notes/${id}`, { notes });
   return data;
 };
 
 export const deleteServer = async (id: number): Promise<{ success: boolean }> => {
-  const { data } = await $authHost.delete(`/api/beryll/servers/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/servers/${id}`);
   return data;
 };
 
@@ -367,14 +367,14 @@ export const toggleChecklistItem = async (
   notes?: string
 ): Promise<BeryllServerChecklist> => {
   const { data } = await $authHost.put<BeryllServerChecklist>(
-    `/api/beryll/servers/${serverId}/checklist/${checklistId}`,
+    `api/beryll/servers/${serverId}/checklist/${checklistId}`,
     { completed, notes }
   );
   return data;
 };
 
 export const getChecklistTemplates = async (): Promise<BeryllChecklistTemplate[]> => {
-  const { data } = await $authHost.get<BeryllChecklistTemplate[]>("/api/beryll/checklists/templates");
+  const { data } = await $authHost.get<BeryllChecklistTemplate[]>("api/beryll/checklists/templates");
   return data;
 };
 
@@ -388,7 +388,7 @@ export const createChecklistTemplate = async (template: {
   fileCode?: string;
 }): Promise<BeryllChecklistTemplate> => {
   const { data } = await $authHost.post<BeryllChecklistTemplate>(
-    "/api/beryll/checklists/templates",
+    "api/beryll/checklists/templates",
     template
   );
   return data;
@@ -399,14 +399,14 @@ export const updateChecklistTemplate = async (
   template: Partial<BeryllChecklistTemplate>
 ): Promise<BeryllChecklistTemplate> => {
   const { data } = await $authHost.put<BeryllChecklistTemplate>(
-    `/api/beryll/checklists/templates/${id}`,
+    `api/beryll/checklists/templates/${id}`,
     template
   );
   return data;
 };
 
 export const deleteChecklistTemplate = async (id: number): Promise<{ success: boolean }> => {
-  const { data } = await $authHost.delete(`/api/beryll/checklists/templates/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/checklists/templates/${id}`);
   return data;
 };
 
@@ -418,12 +418,12 @@ export const getBatches = async (params?: {
   status?: BatchStatus;
   search?: string;
 }): Promise<BeryllBatch[]> => {
-  const { data } = await $authHost.get<BeryllBatch[]>("/api/beryll/batches", { params });
+  const { data } = await $authHost.get<BeryllBatch[]>("api/beryll/batches", { params });
   return data;
 };
 
 export const getBatchById = async (id: number): Promise<BeryllBatch> => {
-  const { data } = await $authHost.get<BeryllBatch>(`/api/beryll/batches/${id}`);
+  const { data } = await $authHost.get<BeryllBatch>(`api/beryll/batches/${id}`);
   return data;
 };
 
@@ -434,7 +434,7 @@ export const createBatch = async (batch: {
   expectedCount?: number;
   notes?: string;
 }): Promise<BeryllBatch> => {
-  const { data } = await $authHost.post<BeryllBatch>("/api/beryll/batches", batch);
+  const { data } = await $authHost.post<BeryllBatch>("api/beryll/batches", batch);
   return data;
 };
 
@@ -442,12 +442,12 @@ export const updateBatch = async (
   id: number,
   batch: Partial<BeryllBatch>
 ): Promise<BeryllBatch> => {
-  const { data } = await $authHost.put<BeryllBatch>(`/api/beryll/batches/${id}`, batch);
+  const { data } = await $authHost.put<BeryllBatch>(`api/beryll/batches/${id}`, batch);
   return data;
 };
 
 export const deleteBatch = async (id: number): Promise<{ success: boolean }> => {
-  const { data } = await $authHost.delete(`/api/beryll/batches/${id}`);
+  const { data } = await $authHost.delete(`api/beryll/batches/${id}`);
   return data;
 };
 
@@ -455,7 +455,7 @@ export const assignServersToBatch = async (
   batchId: number,
   serverIds: number[]
 ): Promise<{ success: boolean; assigned: number }> => {
-  const { data } = await $authHost.post(`/api/beryll/batches/${batchId}/assign`, { serverIds });
+  const { data } = await $authHost.post(`api/beryll/batches/${batchId}/assign`, { serverIds });
   return data;
 };
 
@@ -463,7 +463,7 @@ export const removeServersFromBatch = async (
   batchId: number,
   serverIds: number[]
 ): Promise<{ success: boolean; removed: number }> => {
-  const { data } = await $authHost.post(`/api/beryll/batches/${batchId}/remove`, { serverIds });
+  const { data } = await $authHost.post(`api/beryll/batches/${batchId}/remove`, { serverIds });
   return data;
 };
 
@@ -480,7 +480,7 @@ export const getHistory = async (params?: {
   page?: number;
   limit?: number;
 }): Promise<HistoryResponse> => {
-  const { data } = await $authHost.get<HistoryResponse>("/api/beryll/history", { params });
+  const { data } = await $authHost.get<HistoryResponse>("api/beryll/history", { params });
   return data;
 };
 
@@ -494,12 +494,12 @@ export const getArchivedServers = async (params?: {
   page?: number;
   limit?: number;
 }): Promise<ArchivedServersResponse> => {
-  const { data } = await $authHost.get<ArchivedServersResponse>("/api/beryll/archive", { params });
+  const { data } = await $authHost.get<ArchivedServersResponse>("api/beryll/archive", { params });
   return data;
 };
 
 export const archiveServer = async (id: number): Promise<{ success: boolean; message: string }> => {
-  const { data } = await $authHost.post(`/api/beryll/servers/${id}/archive`);
+  const { data } = await $authHost.post(`api/beryll/servers/${id}/archive`);
   return data;
 };
 
@@ -508,7 +508,7 @@ export const archiveServer = async (id: number): Promise<{ success: boolean; mes
  * Возвращает сервер в статус DONE с возможностью продолжить работу
  */
 export const unarchiveServer = async (id: number): Promise<BeryllServer> => {
-  const { data } = await $authHost.post<BeryllServer>(`/api/beryll/servers/${id}/unarchive`);
+  const { data } = await $authHost.post<BeryllServer>(`api/beryll/servers/${id}/unarchive`);
   return data;
 };
 
@@ -520,7 +520,7 @@ export const updateApkSerialNumber = async (
   id: number,
   apkSerialNumber: string
 ): Promise<{ success: boolean; apkSerialNumber: string }> => {
-  const { data } = await $authHost.put(`/api/beryll/servers/${id}/apk-serial`, { apkSerialNumber });
+  const { data } = await $authHost.put(`api/beryll/servers/${id}/apk-serial`, { apkSerialNumber });
   return data;
 };
 
@@ -537,7 +537,7 @@ export const uploadChecklistFile = async (
   formData.append("file", file);
   
   const { data } = await $authHost.post(
-    `/api/beryll/servers/${serverId}/checklist/${checklistId}/file`,
+    `api/beryll/servers/${serverId}/checklist/${checklistId}/file`,
     formData,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
@@ -545,12 +545,12 @@ export const uploadChecklistFile = async (
 };
 
 export const getServerFiles = async (serverId: number): Promise<BeryllChecklistFile[]> => {
-  const { data } = await $authHost.get<BeryllChecklistFile[]>(`/api/beryll/servers/${serverId}/files`);
+  const { data } = await $authHost.get<BeryllChecklistFile[]>(`api/beryll/servers/${serverId}/files`);
   return data;
 };
 
 export const downloadFile = (fileId: number): string => {
-  return `/api/beryll/files/${fileId}`;
+  return `api/beryll/files/${fileId}`;
 };
 
 // ============================================
@@ -558,11 +558,11 @@ export const downloadFile = (fileId: number): string => {
 // ============================================
 
 export const downloadPassport = (serverId: number): string => {
-  return `/api/beryll/servers/${serverId}/passport`;
+  return `api/beryll/servers/${serverId}/passport`;
 };
 
 export const generatePassport = async (serverId: number): Promise<Blob> => {
-  const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/passport`, {
+  const { data } = await $authHost.get(`api/beryll/servers/${serverId}/passport`, {
     responseType: "blob"
   });
   return data;

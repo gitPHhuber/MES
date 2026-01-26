@@ -6,6 +6,7 @@ import {
   fetchCategoryDefect24,
   fetchCategoryDefect915,
 } from "src/api/elrsApi";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 import { Context } from "src/main";
 
 interface CreateBoardModel {
@@ -40,6 +41,7 @@ export const CreateBoard: React.FC<CreateBoardModel> = observer(
 
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
+    const [requestId, setRequestId] = useState<string | null>(null);
 
     const [confirm, setConfirm] = useState(false);
 
@@ -55,10 +57,13 @@ export const CreateBoard: React.FC<CreateBoardModel> = observer(
         }
         setSuccessMessage(" успешно добавлен");
         setErrorMessage("");
+        setRequestId(null);
       } catch (error: any) {
         setErrorMessage(
-          `Произошла ошибка при добавлении. ${error.response.data.message}`
+          error.userMessage ??
+            `Произошла ошибка при добавлении. ${error.response?.data?.message}`
         );
+        setRequestId(error.requestId ?? null);
         setSuccessMessage("");
       }
       elrsStore.resetSelectedDefect();
@@ -183,7 +188,10 @@ export const CreateBoard: React.FC<CreateBoardModel> = observer(
           </div>
         )}
         {errorMessage && (
-          <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+          <div className="mt-4 text-red-500 font-medium">
+            {errorMessage}
+            <RequestIdNotice requestId={requestId} />
+          </div>
         )}
         {confirm && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">

@@ -14,13 +14,25 @@ const Router = require("express");
 const router = new Router();
 
 // Контроллеры
-const ComponentInventoryController = require("../controllers/ComponentInventoryController");
-const DefectRecordController = require("../controllers/DefectRecordController");
-const YadroController = require("../controllers/YadroController");
+const ComponentInventoryController = require("../../controllers/beryll/controllers/ComponentInventoryController");
+const DefectRecordController = require("../../controllers/beryll/controllers/DefectRecordController");
+const YadroController = require("../../controllers/beryll/controllers/YadroController");
 
 // Middleware
-const authMiddleware = require("../../../middleware/authMiddleware");
-const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
+const authMiddleware = require("../../middleware/authMiddleware");
+
+const checkAbilityMiddleware = require("../../middleware/checkAbilityMiddleware");
+const validateRequest = require("../../middleware/validateRequest");
+
+const {
+    defectFiltersSchema,
+    defectCreateSchema,
+    defectCompleteDiagnosisSchema,
+    defectNotesSchema,
+    defectInventorySchema,
+    defectSubstituteSchema,
+    defectIdParamSchema,
+} = require("../../schemas/beryll/defect.schema");
 
 // ============================================
 // ИНВЕНТАРЬ КОМПОНЕНТОВ
@@ -33,12 +45,12 @@ router.get("/inventory/catalog",
 );
 router.post("/inventory/catalog", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.createCatalogEntry
 );
 router.put("/inventory/catalog/:id", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.updateCatalogEntry
 );
 
@@ -75,59 +87,59 @@ router.get("/inventory/:id/history",
 // Создание
 router.post("/inventory", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.create
 );
 router.post("/inventory/bulk", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.bulkCreate
 );
 
 // Операции
 router.post("/inventory/:id/reserve", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.reserve
 );
 router.post("/inventory/:id/release", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.release
 );
 router.post("/inventory/:id/install", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.installToServer
 );
 router.post("/inventory/:id/remove", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.removeFromServer
 );
 router.post("/inventory/:id/send-to-yadro", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.sendToYadro
 );
 router.post("/inventory/:id/return-from-yadro", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.returnFromYadro
 );
 router.post("/inventory/:id/scrap", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.scrap
 );
 router.post("/inventory/:id/location", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.updateLocation
 );
 router.post("/inventory/:id/test", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_component_manage"),
+    checkAbilityMiddleware("beryll.work"),
     ComponentInventoryController.markTested
 );
 
@@ -151,83 +163,106 @@ router.get("/defects/stats",
 
 // CRUD
 router.get("/defects", 
-    authMiddleware, 
+    authMiddleware,
+    validateRequest({ query: defectFiltersSchema }),
     DefectRecordController.getAll
 );
 router.get("/defects/:id", 
-    authMiddleware, 
+    authMiddleware,
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.getById
+);
+router.get("/defects/:id/available-actions", 
+    authMiddleware, 
+    DefectRecordController.getAvailableActions
 );
 router.post("/defects", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_create"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ body: defectCreateSchema }),
     DefectRecordController.create
+);
+router.put("/defects/:id/status", 
+    authMiddleware, 
+    checkAbilityMiddleware("beryll.work"),
+    DefectRecordController.updateStatus
 );
 
 // Workflow: Диагностика
 router.post("/defects/:id/start-diagnosis", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.startDiagnosis
 );
 router.post("/defects/:id/complete-diagnosis", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectCompleteDiagnosisSchema }),
     DefectRecordController.completeDiagnosis
 );
 
 // Workflow: Ожидание запчастей
 router.post("/defects/:id/waiting-parts", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.setWaitingParts
 );
 router.post("/defects/:id/reserve-component", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectInventorySchema }),
     DefectRecordController.reserveComponent
 );
 
 // Workflow: Ремонт
 router.post("/defects/:id/start-repair", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.startRepair
 );
 router.post("/defects/:id/perform-replacement", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.performReplacement
 );
 
 // Workflow: Ядро
 router.post("/defects/:id/send-to-yadro", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.sendToYadro
 );
 router.post("/defects/:id/return-from-yadro", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.returnFromYadro
 );
 
 // Workflow: Подменные серверы
 router.post("/defects/:id/issue-substitute", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectSubstituteSchema }),
     DefectRecordController.issueSubstitute
 );
 router.post("/defects/:id/return-substitute", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema }),
     DefectRecordController.returnSubstitute
 );
 
 // Workflow: Закрытие
 router.post("/defects/:id/resolve", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
+    validateRequest({ params: defectIdParamSchema, body: defectNotesSchema }),
     DefectRecordController.resolve
 );
 
@@ -265,12 +300,12 @@ router.get("/yadro/logs/:id",
 );
 router.post("/yadro/logs", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     YadroController.createLog
 );
 router.put("/yadro/logs/:id/status", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     YadroController.updateLogStatus
 );
 
@@ -292,27 +327,27 @@ router.get("/substitutes/stats",
 );
 router.post("/substitutes", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.addToSubstitutePool
 );
 router.delete("/substitutes/:id", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.removeFromSubstitutePool
 );
 router.post("/substitutes/:id/issue", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     YadroController.issueSubstitute
 );
 router.post("/substitutes/:id/return", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_defect_manage"),
+    checkAbilityMiddleware("beryll.work"),
     YadroController.returnSubstitute
 );
 router.post("/substitutes/:id/maintenance", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.setSubstituteMaintenance
 );
 
@@ -326,17 +361,17 @@ router.get("/sla",
 );
 router.post("/sla", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.createSlaConfig
 );
 router.put("/sla/:id", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.updateSlaConfig
 );
 router.delete("/sla/:id", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.deleteSlaConfig
 );
 
@@ -354,17 +389,17 @@ router.get("/aliases/find/:alias",
 );
 router.post("/aliases", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.createAlias
 );
 router.delete("/aliases/:id", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.deleteAlias
 );
 router.post("/aliases/generate/:userId", 
     authMiddleware, 
-    checkAbilityMiddleware("beryll_admin"),
+    checkAbilityMiddleware("beryll.manage"),
     YadroController.generateAliasesForUser
 );
 

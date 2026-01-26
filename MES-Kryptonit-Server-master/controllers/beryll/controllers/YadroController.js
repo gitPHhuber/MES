@@ -161,7 +161,7 @@ class YadroController {
 
       return res.json(created);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -236,7 +236,7 @@ class YadroController {
 
       return res.json(updated);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -294,7 +294,7 @@ class YadroController {
 
       return res.json(log);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -368,7 +368,7 @@ class YadroController {
 
       return res.json(updated);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -457,7 +457,7 @@ class YadroController {
 
       return res.json(substitute);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -483,7 +483,7 @@ class YadroController {
 
       return res.json({ success: true });
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -506,7 +506,7 @@ class YadroController {
 
       return res.json(substitute);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -523,7 +523,7 @@ class YadroController {
 
       return res.json(substitute);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -541,7 +541,7 @@ class YadroController {
 
       return res.json(substitute);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -571,7 +571,7 @@ class YadroController {
       const config = await SlaConfig.create(req.body);
       return res.json(config);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -587,7 +587,7 @@ class YadroController {
       await config.update(req.body);
       return res.json(config);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -603,7 +603,7 @@ class YadroController {
       await config.update({ isActive: false });
       return res.json({ success: true });
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -659,7 +659,7 @@ class YadroController {
 
       return res.json(record);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -675,7 +675,7 @@ class YadroController {
       await alias.update({ isActive: false });
       return res.json({ success: true });
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 
@@ -691,7 +691,7 @@ class YadroController {
       const aliases = await UserAlias.generateAliasesFromUser(user);
       return res.json(aliases);
     } catch (error) {
-      next(ApiError.badRequest(error.message));
+      next(error);
     }
   }
 

@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "/home/worker/MES_git/MES/MES-Kryptonit-Server-master/logs/.00214efc6041308c3a49a6582ad8e22bf963ccfb-audit.json",
+    "files": [
+        {
+            "date": 1769342273875,
+            "name": "/home/worker/MES_git/MES/MES-Kryptonit-Server-master/logs/error-2026-01-25.log",
+            "hash": "185fb6b718671a35e901115a7a3046380d0a607df945ce8e7765b05c519c2939"
+        }
+    ],
+    "hashType": "sha256"
+}

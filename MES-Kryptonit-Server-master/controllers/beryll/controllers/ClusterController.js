@@ -8,6 +8,7 @@
 
 const ClusterService = require("../services/ClusterService");
 const ApiError = require("../../../error/ApiError");
+const logger = require("../../../services/logger");
 
 class ClusterController {
   
@@ -24,7 +25,7 @@ class ClusterController {
       const shipments = await ClusterService.getAllShipments({ status, search, city });
       res.json(shipments);
     } catch (error) {
-      console.error("[ClusterController] getAllShipments error:", error);
+      logger.error("[ClusterController] getAllShipments error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -43,7 +44,7 @@ class ClusterController {
       
       res.json(shipment);
     } catch (error) {
-      console.error("[ClusterController] getShipmentById error:", error);
+      logger.error("[ClusterController] getShipmentById error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -57,8 +58,8 @@ class ClusterController {
       const shipment = await ClusterService.createShipment(req.body, userId);
       res.status(201).json(shipment);
     } catch (error) {
-      console.error("[ClusterController] createShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] createShipment error:", error);
+      next(error);
     }
   }
   
@@ -72,8 +73,8 @@ class ClusterController {
       const shipment = await ClusterService.updateShipment(id, req.body, userId);
       res.json(shipment);
     } catch (error) {
-      console.error("[ClusterController] updateShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] updateShipment error:", error);
+      next(error);
     }
   }
   
@@ -87,8 +88,8 @@ class ClusterController {
       const result = await ClusterService.deleteShipment(id, userId);
       res.json(result);
     } catch (error) {
-      console.error("[ClusterController] deleteShipment error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] deleteShipment error:", error);
+      next(error);
     }
   }
   
@@ -102,7 +103,7 @@ class ClusterController {
       const history = await ClusterService.getHistory("SHIPMENT", id, { limit, offset });
       res.json(history);
     } catch (error) {
-      console.error("[ClusterController] getShipmentHistory error:", error);
+      logger.error("[ClusterController] getShipmentHistory error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -120,7 +121,7 @@ class ClusterController {
       const clusters = await ClusterService.getAllClusters({ status, shipmentId, search });
       res.json(clusters);
     } catch (error) {
-      console.error("[ClusterController] getAllClusters error:", error);
+      logger.error("[ClusterController] getAllClusters error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -139,7 +140,7 @@ class ClusterController {
       
       res.json(cluster);
     } catch (error) {
-      console.error("[ClusterController] getClusterById error:", error);
+      logger.error("[ClusterController] getClusterById error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -153,8 +154,8 @@ class ClusterController {
       const cluster = await ClusterService.createCluster(req.body, userId);
       res.status(201).json(cluster);
     } catch (error) {
-      console.error("[ClusterController] createCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] createCluster error:", error);
+      next(error);
     }
   }
   
@@ -168,8 +169,8 @@ class ClusterController {
       const cluster = await ClusterService.updateCluster(id, req.body, userId);
       res.json(cluster);
     } catch (error) {
-      console.error("[ClusterController] updateCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] updateCluster error:", error);
+      next(error);
     }
   }
   
@@ -183,8 +184,8 @@ class ClusterController {
       const result = await ClusterService.deleteCluster(id, userId);
       res.json(result);
     } catch (error) {
-      console.error("[ClusterController] deleteCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] deleteCluster error:", error);
+      next(error);
     }
   }
   
@@ -198,7 +199,7 @@ class ClusterController {
       const history = await ClusterService.getHistory("CLUSTER", id, { limit, offset });
       res.json(history);
     } catch (error) {
-      console.error("[ClusterController] getClusterHistory error:", error);
+      logger.error("[ClusterController] getClusterHistory error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -223,8 +224,8 @@ class ClusterController {
       const clusterServer = await ClusterService.addServerToCluster(clusterId, serverId, data, userId);
       res.status(201).json(clusterServer);
     } catch (error) {
-      console.error("[ClusterController] addServerToCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] addServerToCluster error:", error);
+      next(error);
     }
   }
   
@@ -244,8 +245,8 @@ class ClusterController {
       const result = await ClusterService.addServersToCluster(clusterId, serverIds, data, userId);
       res.json(result);
     } catch (error) {
-      console.error("[ClusterController] addServersToCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] addServersToCluster error:", error);
+      next(error);
     }
   }
   
@@ -260,8 +261,8 @@ class ClusterController {
       const result = await ClusterService.removeServerFromCluster(clusterId, serverId, userId);
       res.json(result);
     } catch (error) {
-      console.error("[ClusterController] removeServerFromCluster error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] removeServerFromCluster error:", error);
+      next(error);
     }
   }
   
@@ -275,8 +276,8 @@ class ClusterController {
       const clusterServer = await ClusterService.updateClusterServer(id, req.body, userId);
       res.json(clusterServer);
     } catch (error) {
-      console.error("[ClusterController] updateClusterServer error:", error);
-      next(ApiError.badRequest(error.message));
+      logger.error("[ClusterController] updateClusterServer error:", error);
+      next(error);
     }
   }
   
@@ -289,7 +290,7 @@ class ClusterController {
       const servers = await ClusterService.getUnassignedServers({ status, batchId, search, limit });
       res.json(servers);
     } catch (error) {
-      console.error("[ClusterController] getUnassignedServers error:", error);
+      logger.error("[ClusterController] getUnassignedServers error:", error);
       next(ApiError.internal(error.message));
     }
   }
@@ -303,7 +304,7 @@ class ClusterController {
       const clusters = await ClusterService.getServerClusters(serverId);
       res.json(clusters);
     } catch (error) {
-      console.error("[ClusterController] getServerClusters error:", error);
+      logger.error("[ClusterController] getServerClusters error:", error);
       next(ApiError.internal(error.message));
     }
   }

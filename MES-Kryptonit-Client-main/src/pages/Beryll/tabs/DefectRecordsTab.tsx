@@ -28,6 +28,15 @@ import { ConfirmModal } from "../../../components/Modal/ConfirmModal";
 
 // Конфигурация статусов
 const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  PENDING_DIAGNOSIS: { label: "Ожидает диагностики", color: "text-blue-600", bg: "bg-blue-100", icon: <Clock size={14} /> },
+  DIAGNOSED: { label: "Диагностирован", color: "text-indigo-600", bg: "bg-indigo-100", icon: <Eye size={14} /> },
+  WAITING_APPROVAL: { label: "Ожидание согласования", color: "text-yellow-600", bg: "bg-yellow-100", icon: <Clock size={14} /> },
+  PARTS_RESERVED: { label: "Запчасти зарезервированы", color: "text-amber-600", bg: "bg-amber-100", icon: <Clock size={14} /> },
+  REPAIRED_LOCALLY: { label: "Отремонтирован локально", color: "text-green-600", bg: "bg-green-100", icon: <CheckCircle size={14} /> },
+  IN_YADRO_REPAIR: { label: "В ремонте у Ядро", color: "text-indigo-600", bg: "bg-indigo-100", icon: <Send size={14} /> },
+  SUBSTITUTE_ISSUED: { label: "Выдан подменный сервер", color: "text-purple-600", bg: "bg-purple-100", icon: <RotateCcw size={14} /> },
+  SCRAPPED: { label: "Списан", color: "text-red-600", bg: "bg-red-100", icon: <Trash2 size={14} /> },
+  CANCELLED: { label: "Отменён", color: "text-gray-600", bg: "bg-gray-100", icon: <XCircle size={14} /> },
   NEW: { label: "Новый", color: "text-blue-600", bg: "bg-blue-100", icon: <Clock size={14} /> },
   DIAGNOSING: { label: "Диагностика", color: "text-purple-600", bg: "bg-purple-100", icon: <Eye size={14} /> },
   WAITING_PARTS: { label: "Ожидание запчастей", color: "text-yellow-600", bg: "bg-yellow-100", icon: <Clock size={14} /> },
@@ -42,17 +51,23 @@ const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; 
 // Названия типов деталей
 const PART_TYPE_LABELS: Record<RepairPartType, string> = {
   RAM: "ОЗУ",
+  RAM_ECC: "ОЗУ ECC",
   MOTHERBOARD: "Материнская плата",
   CPU: "Процессор",
+  CPU_SOCKET: "Сокет процессора",
   HDD: "HDD диск",
   SSD: "SSD диск",
   PSU: "Блок питания",
   FAN: "Вентилятор",
+  THERMAL: "Термомодуль",
   RAID: "RAID контроллер",
   NIC: "Сетевая карта",
   BACKPLANE: "Backplane",
   BMC: "BMC модуль",
   CABLE: "Кабель",
+  PCIE_SLOT: "PCIe слот",
+  RAM_SOCKET: "Слот ОЗУ",
+  CHASSIS: "Шасси",
   OTHER: "Другое"
 };
 

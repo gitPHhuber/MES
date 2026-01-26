@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RequestIdNotice } from "src/components/common/RequestIdNotice";
 
 interface AdminEditDefectProps {
   updateDefectCategoriesList: () => void;
@@ -25,6 +26,7 @@ export const AdminEditDefectCategory: React.FC<AdminEditDefectProps> = ({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [confirm, setConfirm] = useState(false);
 
@@ -36,12 +38,15 @@ export const AdminEditDefectCategory: React.FC<AdminEditDefectProps> = ({
       setCurrentTitle("");
       setSuccessMessage("Категория брака успешно изменена");
       setErrorMessage("");
+      setRequestId(null);
       updateDefectCategoriesList();
     } catch (error: any) {
       setErrorMessage(
-        `Произошла ошибка при изменении. ${error.response.data.message}`
+        error.userMessage ??
+          `Произошла ошибка при изменении. ${error.response?.data?.message}`
       );
-      console.log(error.response.data.message);
+      setRequestId(error.requestId ?? null);
+      console.log(error.response?.data?.message);
       setSuccessMessage("");
     }
   };
@@ -77,7 +82,10 @@ export const AdminEditDefectCategory: React.FC<AdminEditDefectProps> = ({
         <div className="mt-4 text-green-500 font-medium">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mt-4 text-red-500 font-medium">{errorMessage}</div>
+        <div className="mt-4 text-red-500 font-medium">
+          {errorMessage}
+          <RequestIdNotice requestId={requestId} />
+        </div>
       )}
 
       {confirm && (

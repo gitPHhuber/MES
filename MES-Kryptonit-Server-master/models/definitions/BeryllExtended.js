@@ -1,3 +1,4 @@
+// Canonical BeryllExtended model definitions (replaces former models/BeryllExtended.js).
 const sequelize = require("../../db");
 const { DataTypes } = require("sequelize");
 
@@ -32,21 +33,36 @@ const SERVER_ROLES = {
 
 const REPAIR_PART_TYPES = {
   RAM: "RAM",
+  RAM_ECC: "RAM_ECC",
   MOTHERBOARD: "MOTHERBOARD",
   CPU: "CPU",
+  CPU_SOCKET: "CPU_SOCKET",
   HDD: "HDD",
   SSD: "SSD",
   PSU: "PSU",
   FAN: "FAN",
+  THERMAL: "THERMAL",
   RAID: "RAID",
   NIC: "NIC",
   BACKPLANE: "BACKPLANE",
   BMC: "BMC",
   CABLE: "CABLE",
+  PCIE_SLOT: "PCIE_SLOT",
+  RAM_SOCKET: "RAM_SOCKET",
+  CHASSIS: "CHASSIS",
   OTHER: "OTHER"
 };
 
 const DEFECT_RECORD_STATUSES = {
+  PENDING_DIAGNOSIS: "PENDING_DIAGNOSIS",
+  DIAGNOSED: "DIAGNOSED",
+  WAITING_APPROVAL: "WAITING_APPROVAL",
+  PARTS_RESERVED: "PARTS_RESERVED",
+  REPAIRED_LOCALLY: "REPAIRED_LOCALLY",
+  IN_YADRO_REPAIR: "IN_YADRO_REPAIR",
+  SUBSTITUTE_ISSUED: "SUBSTITUTE_ISSUED",
+  SCRAPPED: "SCRAPPED",
+  CANCELLED: "CANCELLED",
   NEW: "NEW",
   DIAGNOSING: "DIAGNOSING",
   WAITING_PARTS: "WAITING_PARTS",
@@ -690,14 +706,17 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
 
 const setupAssociations = (models) => {
   const { User, BeryllServer } = models;
+  const ensureHasMany = (source, target, options) => {
+    if (!source.associations || !source.associations[options.as]) {
+      source.hasMany(target, options);
+    }
+  };
 
   BeryllRack.hasMany(BeryllRackUnit, { as: "units", foreignKey: "rackId", onDelete: "CASCADE" });
   BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
 
   BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
 
   BeryllRackUnit.belongsTo(User, { as: "installedBy", foreignKey: "installedById" });
 
@@ -712,9 +731,7 @@ const setupAssociations = (models) => {
   BeryllClusterServer.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllClusterServer.belongsTo(User, { as: "addedBy", foreignKey: "addedById" });
 
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
 
   BeryllDefectRecord.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllDefectRecord.belongsTo(BeryllServer, { as: "substituteServer", foreignKey: "substituteServerId" });
@@ -725,9 +742,7 @@ const setupAssociations = (models) => {
   BeryllDefectRecord.hasMany(BeryllDefectRecord, { as: "repeatedDefects", foreignKey: "previousDefectId" });
   BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", foreignKey: "defectRecordId", onDelete: "CASCADE" });
 
-  if (BeryllServer.hasMany) {
-    BeryllServer.hasMany(BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
-  }
+  ensureHasMany(BeryllServer, BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
 
   BeryllDefectRecordFile.belongsTo(BeryllDefectRecord, { as: "defectRecord", foreignKey: "defectRecordId" });
   BeryllDefectRecordFile.belongsTo(User, { as: "uploadedBy", foreignKey: "uploadedById" });

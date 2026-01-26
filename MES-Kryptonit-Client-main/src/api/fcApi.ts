@@ -46,19 +46,19 @@ export const fetchSession = async () => {
 
 //запросы для defectCategoryFC эндпоинта
 export const createCategoryDefect = async (title: string, description: string) => {
-    const { data } = await $authHost.post('api/defectsFC', { title, description })
+    const { data } = await $authHost.post('api/board-defects/fc', { title, description })
     return data
 }
 export const fetchCategoryDefect = async () => {
-    const { data } = await $host.get('api/defectsFC',)
+    const { data } = await $host.get('api/board-defects/fc',)
     return data
 }
 export const updateCategoryDefect = async (id: number, title: string, description: string) => {
-    const { data } = await $authHost.put('api/defectsFC', { id, title, description })
+    const { data } = await $authHost.put('api/board-defects/fc', { id, title, description })
     return data
 }
 export const deleteCategoryDefect = async (id: number) => {
-    const { data } = await $authHost.delete(`api/defectsFC/${id}`)
+    const { data } = await $authHost.delete(`api/board-defects/fc/${id}`)
     return data
 }
 
