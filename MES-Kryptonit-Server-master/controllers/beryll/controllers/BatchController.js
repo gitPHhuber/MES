@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const BatchService = require("../services/BatchService");
+const logger = require("../../../services/logger");
 
 class BatchController {
   async getBatches(req, res, next) {
@@ -7,7 +8,7 @@ class BatchController {
       const batches = await BatchService.getBatches(req.query);
       return res.json(batches);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -18,7 +19,7 @@ class BatchController {
       const batch = await BatchService.getBatchById(id);
       return res.json(batch);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Партия не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -32,7 +33,7 @@ class BatchController {
       const batch = await BatchService.createBatch(req.body, userId);
       return res.json(batch);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Название партии обязательно") {
         return next(ApiError.badRequest(e.message));
       }
@@ -46,7 +47,7 @@ class BatchController {
       const batch = await BatchService.updateBatch(id, req.body);
       return res.json(batch);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Партия не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -60,7 +61,7 @@ class BatchController {
       const result = await BatchService.deleteBatch(id);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Партия не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -77,7 +78,7 @@ class BatchController {
       const result = await BatchService.assignServersToBatch(id, serverIds, userId);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Партия не найдена") {
         return next(ApiError.notFound(e.message));
       }
@@ -97,7 +98,7 @@ class BatchController {
       const result = await BatchService.removeServersFromBatch(id, serverIds, userId);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Партия не найдена") {
         return next(ApiError.notFound(e.message));
       }

@@ -8,6 +8,7 @@
 
 const axios = require("axios");
 const https = require("https");
+const logger = require("../../../services/logger");
 
 // Отключаем проверку SSL для самоподписанных сертификатов
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -64,7 +65,7 @@ class OpenBMCService {
         }
         
         if (attempt < retries) {
-          console.log(`[OpenBMC] Retry ${attempt + 1}/${retries} for ${url}...`);
+          logger.info(`[OpenBMC] Retry ${attempt + 1}/${retries} for ${url}...`);
           await this.sleep(retryDelay);
         }
       }
@@ -133,7 +134,7 @@ class OpenBMCService {
       }
       throw new Error("System info not found");
     } catch (error) {
-      console.error("[OpenBMC] Error getting system info:", error.message);
+      logger.error("[OpenBMC] Error getting system info:", error.message);
       throw error;
     }
   }
@@ -178,7 +179,7 @@ class OpenBMCService {
                   rawData: cpu
                 });
               } catch (e) {
-                console.error("[OpenBMC] Error fetching CPU:", e.message);
+                logger.error("[OpenBMC] Error fetching CPU:", e.message);
               }
             }
             break;
@@ -188,7 +189,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting processors:", error.message);
+      logger.error("[OpenBMC] Error getting processors:", error.message);
     }
     
     return processors;
@@ -240,7 +241,7 @@ class OpenBMCService {
                   rawData: mem
                 });
               } catch (e) {
-                console.error("[OpenBMC] Error fetching memory:", e.message);
+                logger.error("[OpenBMC] Error fetching memory:", e.message);
               }
             }
             break;
@@ -250,7 +251,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting memory:", error.message);
+      logger.error("[OpenBMC] Error getting memory:", error.message);
     }
     
     return memory;
@@ -327,12 +328,12 @@ class OpenBMCService {
                         rawData: drive
                       });
                     } catch (e) {
-                      console.error("[OpenBMC] Error fetching drive:", e.message);
+                      logger.error("[OpenBMC] Error fetching drive:", e.message);
                     }
                   }
                 }
               } catch (e) {
-                console.error("[OpenBMC] Error fetching storage controller:", e.message);
+                logger.error("[OpenBMC] Error fetching storage controller:", e.message);
               }
             }
             break;
@@ -342,7 +343,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting storage:", error.message);
+      logger.error("[OpenBMC] Error getting storage:", error.message);
     }
     
     return storage;
@@ -401,7 +402,7 @@ class OpenBMCService {
                   rawData: nic
                 });
               } catch (e) {
-                console.error("[OpenBMC] Error fetching NIC:", e.message);
+                logger.error("[OpenBMC] Error fetching NIC:", e.message);
               }
             }
             break;
@@ -411,7 +412,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting network adapters:", error.message);
+      logger.error("[OpenBMC] Error getting network adapters:", error.message);
     }
     
     return adapters;
@@ -462,7 +463,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting motherboard:", error.message);
+      logger.error("[OpenBMC] Error getting motherboard:", error.message);
     }
     
     return null;
@@ -512,7 +513,7 @@ class OpenBMCService {
         }
       }
     } catch (error) {
-      console.error("[OpenBMC] Error getting BMC info:", error.message);
+      logger.error("[OpenBMC] Error getting BMC info:", error.message);
     }
     
     return null;
@@ -523,43 +524,43 @@ class OpenBMCService {
    * Последовательная загрузка для избежания перегрузки BMC
    */
   static async getAllComponents(bmcAddress, config = {}) {
-    console.log(`[OpenBMC] Fetching components from ${bmcAddress}...`);
+    logger.info(`[OpenBMC] Fetching components from ${bmcAddress}...`);
     
     // Сначала проверяем доступность
     const connectionCheck = await this.checkConnection(bmcAddress, config);
     if (!connectionCheck.success) {
-      console.error(`[OpenBMC] BMC недоступен: ${connectionCheck.error}`);
+      logger.error(`[OpenBMC] BMC недоступен: ${connectionCheck.error}`);
       return [];
     }
     
     const components = [];
     
     // Последовательная загрузка - BMC может не справляться с параллельными запросами
-    console.log("[OpenBMC] Загрузка процессоров...");
+    logger.info("[OpenBMC] Загрузка процессоров...");
     const processors = await this.getProcessors(bmcAddress, config);
     components.push(...processors);
     
-    console.log("[OpenBMC] Загрузка памяти...");
+    logger.info("[OpenBMC] Загрузка памяти...");
     const memory = await this.getMemory(bmcAddress, config);
     components.push(...memory);
     
-    console.log("[OpenBMC] Загрузка накопителей...");
+    logger.info("[OpenBMC] Загрузка накопителей...");
     const storage = await this.getStorage(bmcAddress, config);
     components.push(...storage);
     
-    console.log("[OpenBMC] Загрузка сетевых адаптеров...");
+    logger.info("[OpenBMC] Загрузка сетевых адаптеров...");
     const network = await this.getNetworkAdapters(bmcAddress, config);
     components.push(...network);
     
-    console.log("[OpenBMC] Загрузка информации о плате...");
+    logger.info("[OpenBMC] Загрузка информации о плате...");
     const motherboard = await this.getMotherboard(bmcAddress, config);
     if (motherboard) components.push(motherboard);
     
-    console.log("[OpenBMC] Загрузка информации о BMC...");
+    logger.info("[OpenBMC] Загрузка информации о BMC...");
     const bmc = await this.getBMCInfo(bmcAddress, config);
     if (bmc) components.push(bmc);
     
-    console.log(`[OpenBMC] Found ${components.length} components`);
+    logger.info(`[OpenBMC] Found ${components.length} components`);
     
     return components;
   }

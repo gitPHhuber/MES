@@ -1,6 +1,7 @@
 const { FC, Session } = require("../models/index");
 const ApiError = require("../error/ApiError");
 const { Op } = require("sequelize");
+const logger = require("../services/logger");
 
 class FCController {
   async getFCs(req, res, next) {
@@ -213,7 +214,7 @@ class FCController {
         let newCategoryDefectId, newFirmware;
         standTestBool ? (newCategoryDefectId = 1) : (newCategoryDefectId = 2);
         if (standTestBool) newFirmware = true;
-        console.log(newCategoryDefectId);
+        logger.info("Updated categoryDefectId", { categoryDefectId: newCategoryDefectId });
         await FC.update(
           {
             stand_test: standTestBool,

@@ -1,3 +1,4 @@
+// Canonical BeryllExtended model definitions (replaces former models/BeryllExtended.js).
 const sequelize = require("../../db");
 const { DataTypes } = require("sequelize");
 

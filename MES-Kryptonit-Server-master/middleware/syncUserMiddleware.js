@@ -1,4 +1,5 @@
 const { User, Role, Ability } = require('../models/index');
+const logger = require("../services/logger");
 
 module.exports = async function (req, res, next) {
     // console.log("--- [SyncUserMiddleware] START ---");
@@ -9,7 +10,7 @@ module.exports = async function (req, res, next) {
     try {
         // 1. Проверка: есть ли данные от authMiddleware
         if (!req.auth || !req.auth.payload) {
-            console.error("❌ ОШИБКА: authMiddleware не передал payload. Токен невалиден или не проверен.");
+            logger.error("❌ ОШИБКА: authMiddleware не передал payload. Токен невалиден или не проверен.");
             return res.status(401).json({ message: "Invalid token payload" });
         }
 
@@ -23,7 +24,7 @@ module.exports = async function (req, res, next) {
         const login = payload.preferred_username || payload.nickname || payload.email;
 
         if (!login) {
-            console.error("❌ ОШИБКА: В токене нет поля login (preferred_username/nickname/email).");
+            logger.error("❌ ОШИБКА: В токене нет поля login (preferred_username/nickname/email).");
             return res.status(500).json({ message: "Token structure error: missing username" });
         }
 
@@ -59,7 +60,7 @@ module.exports = async function (req, res, next) {
         let user = await User.findOne({ where: { login } });
 
         if (!user) {
-            console.log(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
+            logger.info(`ℹ️ Пользователь ${login} не найден. Создаем с ролью ${mainRole}...`);
             try {
                 user = await User.create({
                     login,
@@ -69,15 +70,15 @@ module.exports = async function (req, res, next) {
                     password: 'sso_managed_account', // Пароль не используется при SSO
                     img: null
                 });
-                console.log(`✅ Пользователь создан. ID: ${user.id}`);
+                logger.info(`✅ Пользователь создан. ID: ${user.id}`);
             } catch (dbError) {
-                console.error("❌ ОШИБКА БАЗЫ ДАННЫХ при создании:", dbError);
+                logger.error("❌ ОШИБКА БАЗЫ ДАННЫХ при создании:", { error: dbError });
                 return res.status(500).json({ message: "DB Error during user creation" });
             }
         } else {
             // Если пользователь есть, но его роль в Keycloak изменилась — обновляем БД
             if (user.role !== mainRole) {
-                console.log(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
+                logger.info(`🔄 Обновление роли пользователя ${login}: ${user.role} -> ${mainRole}`);
                 user.role = mainRole;
                 await user.save();
             }
@@ -101,7 +102,7 @@ module.exports = async function (req, res, next) {
                 abilities = roleEntity.abilities.map(ab => ab.code);
             }
         } catch (e) {
-            console.error("⚠️ Ошибка при загрузке прав (abilities):", e.message);
+            logger.warn("⚠️ Ошибка при загрузке прав (abilities):", { error: e.message });
         }
 
         // ---------------------------------------------------------------------
@@ -122,7 +123,7 @@ module.exports = async function (req, res, next) {
         next();
 
     } catch (e) {
-        console.error("🔥 КРИТИЧЕСКАЯ ОШИБКА в syncUserMiddleware:", e);
+        logger.error("🔥 КРИТИЧЕСКАЯ ОШИБКА в syncUserMiddleware:", { error: e });
         return res.status(500).json({ message: "Sync Middleware Crash", error: e.message });
     }
 };

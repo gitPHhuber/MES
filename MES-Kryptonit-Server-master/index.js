@@ -7,6 +7,8 @@ const fileUpload = require("express-fileupload");
 const router = require("./routes/index");
 const errorHandler = require("./middleware/ErrorHandlingMiddleware");
 const path = require("path");
+const logger = require("./services/logger");
+const requestLogger = require("./middleware/requestLogger");
 
 // Импорт роутера для Beryll Extended
 const beryllExtendedRouter = require("./routes/beryllExtendedRouter");
@@ -17,6 +19,7 @@ const PORT = process.env.PORT || 5000;
 const app = express();
 
 app.use(express.json());
+app.use(requestLogger);
 
 const corsOptions = {
   origin: "*",
@@ -40,7 +43,7 @@ app.use(errorHandler);
 
 const initInitialData = async () => {
   try {
-    console.log(">>> [RBAC] Начинаем инициализацию ролей и прав...");
+    logger.info(">>> [RBAC] Начинаем инициализацию ролей и прав...");
 
     // 1. Создаем список прав (Slugs) согласно ТЗ
     const permissions = [
@@ -148,28 +151,28 @@ const initInitialData = async () => {
       "beryll.view", "beryll.work" // Инженеры работают с серверами
     ]);
 
-    console.log(">>> [RBAC] Инициализация завершена успешно.");
+    logger.info(">>> [RBAC] Инициализация завершена успешно.");
   } catch (e) {
-    console.error(">>> [RBAC] Ошибка инициализации:", e);
+    logger.error(">>> [RBAC] Ошибка инициализации:", { error: e });
   }
 };
 
 const start = async () => {
   try {
+    // Подключаемся к базе, миграции выполняются отдельно (deploy/CI или вручную)
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true }); 
     
     // Инициализация прав доступа
     await initInitialData();
 
     // Инициализация шаблонов чек-листов для Берилл
-    console.log(">>> [Beryll] Инициализация шаблонов чек-листов...");
+    logger.info(">>> [Beryll] Инициализация шаблонов чек-листов...");
     await initChecklistTemplates();
-    console.log(">>> [Beryll] Шаблоны чек-листов инициализированы");
+    logger.info(">>> [Beryll] Шаблоны чек-листов инициализированы");
 
-    app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+    app.listen(PORT, () => logger.info(`Server started on port ${PORT}`));
   } catch (e) {
-    console.log(e);
+    logger.error("Server start failed", { error: e });
   }
 };
 

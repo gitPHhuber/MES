@@ -10,6 +10,7 @@
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const ApiError = require("../error/ApiError");
+const logger = require("../services/logger");
 
 const { 
     ProductionOutput, 
@@ -139,7 +140,7 @@ class ProductionOutputController {
             
             return res.json(types);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -171,7 +172,7 @@ class ProductionOutputController {
             
             return res.json(opType);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -206,7 +207,7 @@ class ProductionOutputController {
             
             return res.json(opType);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -234,7 +235,7 @@ class ProductionOutputController {
             return res.json({ message: "Тип операции удалён", deleted: true });
             
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -297,7 +298,7 @@ class ProductionOutputController {
                 totalPages: Math.ceil(count / limit)
             });
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -325,7 +326,7 @@ class ProductionOutputController {
             
             return res.json(output);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -398,7 +399,7 @@ class ProductionOutputController {
             
             return res.status(201).json(result);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -440,7 +441,7 @@ class ProductionOutputController {
             
             return res.json(output);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -467,7 +468,7 @@ class ProductionOutputController {
             await output.destroy();
             return res.json({ message: "Запись удалена" });
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -512,7 +513,7 @@ class ProductionOutputController {
             
             return res.json(outputs);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -572,7 +573,7 @@ class ProductionOutputController {
             return res.json({ results });
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -618,7 +619,7 @@ class ProductionOutputController {
             return res.json({ results });
         } catch (e) {
             await t.rollback();
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -675,7 +676,7 @@ class ProductionOutputController {
                 byDay
             });
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -753,7 +754,7 @@ class ProductionOutputController {
                 matrix
             });
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }
@@ -820,7 +821,7 @@ class ProductionOutputController {
             
             return res.json(users);
         } catch (e) {
-            console.error(e);
+            logger.error("ProductionOutputController error", { error: e });
             next(ApiError.internal(e.message));
         }
     }

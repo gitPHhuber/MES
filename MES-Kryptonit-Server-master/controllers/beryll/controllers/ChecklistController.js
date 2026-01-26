@@ -1,5 +1,6 @@
 const ApiError = require("../../../error/ApiError");
 const ChecklistService = require("../services/ChecklistService");
+const logger = require("../../../services/logger");
 
 class ChecklistController {
   async getChecklistTemplates(req, res, next) {
@@ -7,7 +8,7 @@ class ChecklistController {
       const templates = await ChecklistService.getChecklistTemplates();
       return res.json(templates);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
@@ -17,7 +18,7 @@ class ChecklistController {
       const template = await ChecklistService.createChecklistTemplate(req.body);
       return res.json(template);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Название обязательно") {
         return next(ApiError.badRequest(e.message));
       }
@@ -31,7 +32,7 @@ class ChecklistController {
       const template = await ChecklistService.updateChecklistTemplate(id, req.body);
       return res.json(template);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Шаблон не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -45,7 +46,7 @@ class ChecklistController {
       const result = await ChecklistService.deleteChecklistTemplate(id);
       return res.json(result);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       if (e.message === "Шаблон не найден") {
         return next(ApiError.notFound(e.message));
       }
@@ -69,7 +70,7 @@ class ChecklistController {
       
       return res.json(checklist);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       return next(ApiError.internal(e.message));
     }
   }
