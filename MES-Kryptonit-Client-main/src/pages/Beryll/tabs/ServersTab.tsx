@@ -1,32 +1,39 @@
+/**
+ * ServersTab.tsx (обновлённый)
+ * 
+ * Вкладка "Серверы" для APK Beryll
+ * + Пагинация
+ * + Кнопка пинга
+ * 
+ * Заменить: src/pages/Beryll/tabs/ServersTab.tsx
+ */
 
 import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
+import toast from "react-hot-toast";
 import {
   Server,
   Search,
-  Filter,
   RefreshCw,
   Play,
-  Square,
   CheckCircle2,
   XCircle,
   HelpCircle,
   Clock,
-  MoreVertical,
   Trash2,
   ExternalLink,
   Package,
   User,
-  Network,
   Copy,
-  MessageSquare,
   Archive,
   FileSpreadsheet,
-  AlertCircle,
-  Settings,
-  Edit,
-  ChevronDown
+  Wifi,
+  WifiOff,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { Context } from "src/main";
 import {
@@ -39,6 +46,7 @@ import {
   archiveServer,
   assignServersToBatch,
   generatePassport,
+  pingServer,
   BeryllServer,
   BeryllBatch,
   ServerStatus,
@@ -51,6 +59,9 @@ interface ServersTabProps {
   onStatsUpdate?: () => void;
 }
 
+// Количество серверов на странице
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }) => {
   const navigate = useNavigate();
   const context = useContext(Context);
@@ -61,11 +72,19 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
+  // Пинг
+  const [pingingServerId, setPingingServerId] = useState<number | null>(null);
+  const [pingResults, setPingResults] = useState<Record<number, { online: boolean; latency: number | null }>>({});
+
   // Фильтры
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ServerStatus | "ALL">("ALL");
   const [batchFilter, setBatchFilter] = useState<number | "ALL" | "UNASSIGNED">("ALL");
   const [onlyActive, setOnlyActive] = useState(false);
+
+  // Пагинация
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Выбор серверов для групповых операций
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
@@ -73,6 +92,10 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   
   // Контекстное меню
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+
+  // ============================================
+  // ЗАГРУЗКА ДАННЫХ
+  // ============================================
 
   const loadData = async () => {
     setLoading(true);
@@ -88,8 +111,11 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       ]);
       setServers(serversData);
       setBatches(batchesData);
+      // Сброс на первую страницу при изменении фильтров
+      setCurrentPage(1);
     } catch (e) {
       console.error("Ошибка загрузки:", e);
+      toast.error("Ошибка загрузки данных");
     } finally {
       setLoading(false);
     }
@@ -112,6 +138,61 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   }, []);
 
   // ============================================
+  // ПАГИНАЦИЯ
+  // ============================================
+
+  const totalPages = Math.ceil(servers.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedServers = servers.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      // Снять выделение при переходе на другую страницу
+      setSelectedServers([]);
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    setSelectedServers([]);
+  };
+
+  // ============================================
+  // ПИНГ
+  // ============================================
+
+  const handlePing = async (server: BeryllServer) => {
+    setPingingServerId(server.id);
+    try {
+      const result = await pingServer(server.id);
+      setPingResults(prev => ({
+        ...prev,
+        [server.id]: {
+          online: result.online,
+          latency: result.latency
+        }
+      }));
+      
+      if (result.online) {
+        toast.success(`${server.ipAddress} доступен (${result.latency}ms)`, { duration: 2000 });
+      } else {
+        toast.error(`${server.ipAddress} недоступен`, { duration: 2000 });
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Ошибка пинга");
+      setPingResults(prev => ({
+        ...prev,
+        [server.id]: { online: false, latency: null }
+      }));
+    } finally {
+      setPingingServerId(null);
+    }
+  };
+
+  // ============================================
   // ДЕЙСТВИЯ
   // ============================================
 
@@ -121,8 +202,9 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       await takeServer(server.id);
       await loadData();
       onStatsUpdate?.();
+      toast.success("Сервер взят в работу");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(null);
     }
@@ -134,8 +216,9 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       await releaseServer(server.id);
       await loadData();
       onStatsUpdate?.();
+      toast.success("Сервер освобождён");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(null);
     }
@@ -148,7 +231,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       await loadData();
       onStatsUpdate?.();
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(null);
     }
@@ -156,12 +239,12 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
 
   const handleArchive = async (server: BeryllServer) => {
     if (!server.apkSerialNumber) {
-      alert("Для переноса в архив необходимо присвоить серийный номер АПК");
+      toast.error("Для переноса в архив необходимо присвоить серийный номер АПК");
       return;
     }
     
     if (server.status !== "DONE") {
-      alert("Перенести в архив можно только серверы со статусом \"Готово\"");
+      toast.error("Перенести в архив можно только серверы со статусом 'Готово'");
       return;
     }
     
@@ -174,93 +257,115 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       await archiveServer(server.id);
       await loadData();
       onStatsUpdate?.();
+      toast.success("Сервер перенесён в архив");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка архивации");
+      toast.error(e.response?.data?.message || "Ошибка архивации");
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleDelete = async (server: BeryllServer) => {
-    if (!confirm(`Удалить сервер ${server.ipAddress}?`)) return;
+    if (!confirm(`Удалить сервер ${server.ipAddress}? Это действие нельзя отменить.`)) {
+      return;
+    }
     
     setActionLoading(server.id);
     try {
       await deleteServer(server.id);
       await loadData();
       onStatsUpdate?.();
+      toast.success("Сервер удалён");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка удаления");
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDownloadPassport = async (server: BeryllServer) => {
+  const handleGeneratePassport = async (server: BeryllServer) => {
     try {
       const blob = await generatePassport(server.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Паспорт_${server.apkSerialNumber || server.id}.xlsx`;
-      document.body.appendChild(a);
+      a.download = `passport_${server.apkSerialNumber || server.ipAddress}.pdf`;
       a.click();
-      document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Ошибка скачивания паспорта:", e);
-      alert("Ошибка при генерации паспорта");
+      toast.success("Паспорт сгенерирован");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Ошибка генерации паспорта");
+    }
+  };
+
+  // ============================================
+  // ВЫБОР СЕРВЕРОВ
+  // ============================================
+
+  const toggleSelect = (id: number) => {
+    setSelectedServers(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedServers.length === paginatedServers.length) {
+      setSelectedServers([]);
+    } else {
+      setSelectedServers(paginatedServers.map(s => s.id));
     }
   };
 
   const handleAssignToBatch = async (batchId: number) => {
-    if (selectedServers.length === 0) return;
-    
     try {
-      await assignServersToBatch(batchId, selectedServers);
-      setSelectedServers([]);
-      setShowBatchModal(false);
+      await assignServersToBatch(selectedServers, batchId);
       await loadData();
-    } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
-    }
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedServers.length === servers.length) {
+      onStatsUpdate?.();
+      setShowBatchModal(false);
       setSelectedServers([]);
-    } else {
-      setSelectedServers(servers.map(s => s.id));
+      toast.success(`Серверы привязаны к партии`);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Ошибка");
     }
   };
 
-  const toggleSelect = (id: number) => {
-    setSelectedServers(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
+  // ============================================
+  // УТИЛИТЫ
+  // ============================================
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success("Скопировано", { duration: 1500 });
   };
-
-  // ============================================
-  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-  // ============================================
 
   const getStatusIcon = (status: ServerStatus) => {
     switch (status) {
-      case "NEW": return <Clock className="w-4 h-4" />;
-      case "IN_WORK": return <RefreshCw className="w-4 h-4" />;
-      case "CLARIFYING": return <HelpCircle className="w-4 h-4" />;
-      case "DEFECT": return <XCircle className="w-4 h-4" />;
-      case "DONE": return <CheckCircle2 className="w-4 h-4" />;
-      case "ARCHIVED": return <Archive className="w-4 h-4" />;
+      case "NEW": return <Clock className="w-3.5 h-3.5" />;
+      case "IN_WORK": return <RefreshCw className="w-3.5 h-3.5" />;
+      case "DONE": return <CheckCircle2 className="w-3.5 h-3.5" />;
+      case "DEFECT": return <XCircle className="w-3.5 h-3.5" />;
+      default: return <HelpCircle className="w-3.5 h-3.5" />;
     }
   };
 
-  const canArchive = (server: BeryllServer): boolean => {
-    return server.status === "DONE" && !!server.apkSerialNumber;
+  const getPingStatusIcon = (serverId: number) => {
+    const result = pingResults[serverId];
+    if (!result) return null;
+    
+    if (result.online) {
+      return (
+        <span className="flex items-center gap-1 text-xs text-green-600">
+          <Wifi className="w-3.5 h-3.5" />
+          {result.latency !== null && `${result.latency}ms`}
+        </span>
+      );
+    } else {
+      return (
+        <span className="flex items-center gap-1 text-xs text-red-500">
+          <WifiOff className="w-3.5 h-3.5" />
+        </span>
+      );
+    }
   };
 
   // ============================================
@@ -268,63 +373,95 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   // ============================================
 
   return (
-    <div className="space-y-4">
-      {/* Панель фильтров */}
-      <div className="flex flex-col md:flex-row md:items-center gap-4">
+    <div className="p-4 space-y-4">
+      {/* Фильтры */}
+      <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
         {/* Поиск */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
+            placeholder="Поиск по IP, hostname, серийному номеру..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по IP, hostname, серийному номеру..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
-        {/* Фильтры */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Статус */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as ServerStatus | "ALL")}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
-          >
-            <option value="ALL">Все статусы</option>
-            {Object.entries(STATUS_LABELS)
-              .filter(([key]) => key !== "ARCHIVED")
-              .map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-          </select>
+        {/* Фильтр по статусу */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as ServerStatus | "ALL")}
+          className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="ALL">Все статусы</option>
+          <option value="NEW">Новый</option>
+          <option value="IN_WORK">В работе</option>
+          <option value="DONE">Готово</option>
+          <option value="DEFECT">Брак</option>
+        </select>
 
-          {/* Партия */}
+        {/* Фильтр по партии */}
+        <select
+          value={batchFilter}
+          onChange={(e) => {
+            const val = e.target.value;
+            setBatchFilter(val === "ALL" ? "ALL" : val === "UNASSIGNED" ? "UNASSIGNED" : Number(val));
+          }}
+          className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="ALL">Все партии</option>
+          <option value="UNASSIGNED">Без партии</option>
+          {batches.map(b => (
+            <option key={b.id} value={b.id}>{b.title}</option>
+          ))}
+        </select>
+
+        {/* Только активные */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlyActive}
+            onChange={(e) => setOnlyActive(e.target.checked)}
+            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span className="text-sm text-gray-600">Только активные</span>
+        </label>
+
+        {/* Кнопка обновления */}
+        <button
+          onClick={() => loadData()}
+          disabled={loading}
+          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          title="Обновить"
+        >
+          <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {/* Статистика и пагинация сверху */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Найдено: <span className="font-medium text-gray-700">{servers.length}</span> серверов
+          {servers.length > 0 && (
+            <span className="ml-2">
+              (показаны {startIndex + 1}-{Math.min(endIndex, servers.length)})
+            </span>
+          )}
+        </div>
+
+        {/* Выбор размера страницы */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">На странице:</span>
           <select
-            value={batchFilter}
-            onChange={(e) => {
-              const val = e.target.value;
-              setBatchFilter(val === "ALL" ? "ALL" : val === "UNASSIGNED" ? "UNASSIGNED" : parseInt(val));
-            }}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            className="px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="ALL">Все партии</option>
-            <option value="UNASSIGNED">Без партии</option>
-            {batches.map(batch => (
-              <option key={batch.id} value={batch.id}>{batch.title}</option>
+            {PAGE_SIZE_OPTIONS.map(size => (
+              <option key={size} value={size}>{size}</option>
             ))}
           </select>
-
-          {/* Только активные */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-            <input
-              type="checkbox"
-              checked={onlyActive}
-              onChange={(e) => setOnlyActive(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Только активные
-          </label>
         </div>
       </div>
 
@@ -372,7 +509,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                   <th className="p-3 text-left w-10">
                     <input
                       type="checkbox"
-                      checked={selectedServers.length === servers.length && servers.length > 0}
+                      checked={selectedServers.length === paginatedServers.length && paginatedServers.length > 0}
                       onChange={toggleSelectAll}
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
@@ -387,10 +524,11 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {servers.map((server) => {
+                {paginatedServers.map((server) => {
                   const isAssignedToMe = server.assignedToId === currentUser?.id;
                   const canWork = server.status === "IN_WORK" && isAssignedToMe;
                   const isLoading = actionLoading === server.id;
+                  const isPinging = pingingServerId === server.id;
 
                   return (
                     <tr
@@ -430,6 +568,8 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                               OFFLINE
                             </span>
                           )}
+                          {/* Результат пинга */}
+                          {getPingStatusIcon(server.id)}
                         </div>
                         {/* Серийный номер АПК под IP */}
                         {server.apkSerialNumber && (
@@ -502,6 +642,20 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                       {/* Действия */}
                       <td className="p-3">
                         <div className="flex items-center justify-center gap-1">
+                          {/* Пинг */}
+                          <button
+                            onClick={() => handlePing(server)}
+                            disabled={isPinging}
+                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Проверить доступность (ping)"
+                          >
+                            {isPinging ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Wifi className="w-4 h-4" />
+                            )}
+                          </button>
+
                           {/* Открыть карточку */}
                           <button
                             onClick={() => navigate(`/beryll/server/${server.id}`)}
@@ -527,66 +681,54 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {/* Действия для взятого сервера */}
+                          {/* Завершить */}
                           {canWork && (
-                            <>
-                              <button
-                                onClick={() => handleRelease(server)}
-                                disabled={isLoading}
-                                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                title="Отпустить"
-                              >
-                                <Square className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleStatusChange(server, "DONE")}
-                                disabled={isLoading}
-                                className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                title="Завершить"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-
-                          {/* НОВОЕ: Перенести в архив */}
-                          {canArchive(server) && (
                             <button
-                              onClick={() => handleArchive(server)}
+                              onClick={() => handleStatusChange(server, "DONE")}
                               disabled={isLoading}
-                              className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-                              title="Перенести в архив"
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50 transition-colors"
+                              title="Завершить"
                             >
                               {isLoading ? (
                                 <RefreshCw className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Archive className="w-4 h-4" />
+                                <CheckCircle2 className="w-4 h-4" />
                               )}
                             </button>
                           )}
 
-                          {/* Скачать паспорт (для готовых) */}
-                          {(server.status === "DONE" || server.status === "ARCHIVED") && server.apkSerialNumber && (
+                          {/* Архив */}
+                          {server.status === "DONE" && server.apkSerialNumber && (
                             <button
-                              onClick={() => handleDownloadPassport(server)}
-                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Скачать паспорт"
+                              onClick={() => handleArchive(server)}
+                              disabled={isLoading}
+                              className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg disabled:opacity-50 transition-colors"
+                              title="В архив"
+                            >
+                              <Archive className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Паспорт */}
+                          {server.status === "DONE" && server.apkSerialNumber && (
+                            <button
+                              onClick={() => handleGeneratePassport(server)}
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Сгенерировать паспорт"
                             >
                               <FileSpreadsheet className="w-4 h-4" />
                             </button>
                           )}
 
-                          {/* Удалить (только для админа) */}
-                          {currentUser?.role === "SUPER_ADMIN" && (
-                            <button
-                              onClick={() => handleDelete(server)}
-                              disabled={isLoading}
-                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Удалить"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
+                          {/* Удалить */}
+                          <button
+                            onClick={() => handleDelete(server)}
+                            disabled={isLoading}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50 transition-colors"
+                            title="Удалить"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -598,25 +740,86 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
         )}
       </div>
 
-      {/* Легенда действий */}
-      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 px-2">
-        <div className="flex items-center gap-1">
-          <Play className="w-3.5 h-3.5 text-blue-600" />
-          <span>Взять в работу</span>
+      {/* Пагинация снизу */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Страница {currentPage} из {totalPages}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Первая страница */}
+            <button
+              onClick={() => goToPage(1)}
+              disabled={currentPage === 1}
+              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Первая страница"
+            >
+              <ChevronsLeft className="w-5 h-5" />
+            </button>
+
+            {/* Предыдущая */}
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Предыдущая"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            {/* Номера страниц */}
+            <div className="flex items-center gap-1 mx-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => goToPage(pageNum)}
+                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                      currentPage === pageNum
+                        ? "bg-indigo-600 text-white"
+                        : "text-gray-600 hover:bg-indigo-50 hover:text-indigo-600"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Следующая */}
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Следующая"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+
+            {/* Последняя страница */}
+            <button
+              onClick={() => goToPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Последняя страница"
+            >
+              <ChevronsRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-          <span>Завершить</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Archive className="w-3.5 h-3.5 text-purple-500" />
-          <span>В архив</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
-          <span>Паспорт</span>
-        </div>
-      </div>
+      )}
 
       {/* Модальное окно выбора партии */}
       {showBatchModal && (

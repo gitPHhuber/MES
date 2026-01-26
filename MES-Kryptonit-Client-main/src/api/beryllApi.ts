@@ -1,6 +1,8 @@
 /**
  * API функции для модуля АПК Берилл
- * Улучшенная версия с поддержкой восстановления из архива
+ * Улучшенная версия с поддержкой восстановления из архива и мониторинга
+ * 
+ * Заменить: src/api/beryllApi.ts
  */
 
 import { $authHost } from "./index";
@@ -12,6 +14,7 @@ import { $authHost } from "./index";
 export type ServerStatus = "NEW" | "IN_WORK" | "CLARIFYING" | "DEFECT" | "DONE" | "ARCHIVED";
 export type BatchStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
 export type ChecklistGroup = "VISUAL" | "TESTING" | "QC_PRIMARY" | "BURN_IN" | "QC_FINAL";
+export type PingStatus = "ONLINE" | "OFFLINE" | "UNKNOWN";
 export type HistoryAction = 
   | "CREATED" | "TAKEN" | "RELEASED" | "STATUS_CHANGED" | "NOTE_ADDED"
   | "CHECKLIST_COMPLETED" | "BATCH_ASSIGNED" | "BATCH_REMOVED" | "DELETED"
@@ -173,6 +176,44 @@ export interface ArchivedServersResponse {
   total: number;
   page: number;
   totalPages: number;
+}
+
+// ============================================
+// ТИПЫ МОНИТОРИНГА (ПИНГ)
+// ============================================
+
+export interface ServerPingResult {
+  serverId: number;
+  ipAddress: string;
+  hostname: string;
+  serialNumber?: string;
+  apkSerialNumber?: string;
+  serverStatus?: string;
+  batchId?: number;
+  online: boolean;
+  latency: number | null;
+  error: string | null;
+  checkedAt: string;
+}
+
+export interface MonitoringStats {
+  byStatus: Record<PingStatus, number>;
+  total: number;
+  online: number;
+  offline: number;
+  unknown: number;
+  staleServers: number;
+  avgLatency: string | null;
+  lastFullScan: string | null;
+}
+
+export interface PingAllResult {
+  total: number;
+  online: number;
+  offline: number;
+  checkedAt: string;
+  cached?: boolean;
+  servers: ServerPingResult[];
 }
 
 // ============================================
@@ -357,6 +398,64 @@ export const deleteServer = async (id: number): Promise<{ success: boolean }> =>
 };
 
 // ============================================
+// API ФУНКЦИИ - МОНИТОРИНГ (ПИНГ)
+// ============================================
+
+/**
+ * Получить кэшированный статус всех серверов
+ */
+export const getCachedStatus = async (): Promise<PingAllResult> => {
+  const { data } = await $authHost.get<PingAllResult>("/api/beryll/monitoring/status");
+  return data;
+};
+
+/**
+ * Пинг одного сервера по ID
+ */
+export const pingServer = async (serverId: number): Promise<ServerPingResult> => {
+  const { data } = await $authHost.get<ServerPingResult>(`/api/beryll/monitoring/ping/${serverId}`);
+  return data;
+};
+
+/**
+ * Пинг всех серверов
+ */
+export const pingAllServers = async (params?: { forceRefresh?: boolean }): Promise<PingAllResult> => {
+  const { data } = await $authHost.post<PingAllResult>("/api/beryll/monitoring/ping-all", null, { params });
+  return data;
+};
+
+/**
+ * Получить статистику мониторинга
+ */
+export const getMonitoringStats = async (): Promise<MonitoringStats> => {
+  const { data } = await $authHost.get<MonitoringStats>("/api/beryll/monitoring/stats");
+  return data;
+};
+
+/**
+ * Получить онлайн серверы
+ */
+export const getOnlineServers = async (params?: {
+  page?: number;
+  limit?: number;
+}): Promise<{ servers: ServerPingResult[]; total: number }> => {
+  const { data } = await $authHost.get("/api/beryll/monitoring/online", { params });
+  return data;
+};
+
+/**
+ * Получить офлайн серверы
+ */
+export const getOfflineServers = async (params?: {
+  page?: number;
+  limit?: number;
+}): Promise<{ servers: ServerPingResult[]; total: number }> => {
+  const { data } = await $authHost.get("/api/beryll/monitoring/offline", { params });
+  return data;
+};
+
+// ============================================
 // API ФУНКЦИИ - ЧЕК-ЛИСТЫ
 // ============================================
 
@@ -452,8 +551,8 @@ export const deleteBatch = async (id: number): Promise<{ success: boolean }> => 
 };
 
 export const assignServersToBatch = async (
-  batchId: number,
-  serverIds: number[]
+  serverIds: number[],
+  batchId: number
 ): Promise<{ success: boolean; assigned: number }> => {
   const { data } = await $authHost.post(`/api/beryll/batches/${batchId}/assign`, { serverIds });
   return data;
@@ -504,7 +603,7 @@ export const archiveServer = async (id: number): Promise<{ success: boolean; mes
 };
 
 /**
- * НОВАЯ ФУНКЦИЯ: Восстановление сервера из архива
+ * Восстановление сервера из архива
  * Возвращает сервер в статус DONE с возможностью продолжить работу
  */
 export const unarchiveServer = async (id: number): Promise<BeryllServer> => {
@@ -585,6 +684,13 @@ export default {
   updateServerStatus,
   updateServerNotes,
   deleteServer,
+  // Мониторинг (НОВОЕ!)
+  getCachedStatus,
+  pingServer,
+  pingAllServers,
+  getMonitoringStats,
+  getOnlineServers,
+  getOfflineServers,
   // Чек-листы
   toggleChecklistItem,
   getChecklistTemplates,
@@ -604,7 +710,7 @@ export default {
   // Архив
   getArchivedServers,
   archiveServer,
-  unarchiveServer, // НОВАЯ ФУНКЦИЯ
+  unarchiveServer,
   // Серийный номер
   updateApkSerialNumber,
   // Файлы
