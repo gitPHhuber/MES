@@ -26,6 +26,25 @@ const App = observer(() => {
 
   // Флаг для предотвращения повторной навигации при восстановлении пути
   const hasRestoredPath = useRef(false);
+  
+  // ============================================
+  // НОВОЕ: Сохраняем начальный путь при монтировании
+  // Это путь из URL при загрузке страницы (до любых редиректов)
+  // ============================================
+  const initialPathRef = useRef<string | null>(null);
+  
+  useEffect(() => {
+    // Сохраняем начальный путь только один раз при первом рендере
+    if (initialPathRef.current === null) {
+      const currentPath = window.location.pathname + window.location.search;
+      // Не сохраняем если это корень или есть OIDC параметры
+      const hasOidcParams = window.location.search.includes('code=') || 
+                            window.location.search.includes('state=');
+      if (currentPath !== "/" && !hasOidcParams) {
+        initialPathRef.current = currentPath;
+      }
+    }
+  }, []);
 
   if (!context) throw new Error("Context required");
   const { user } = context;
@@ -69,19 +88,36 @@ const App = observer(() => {
             // Проверяем, выбран ли ПК
             const pcId = localStorage.getItem('pcID');
             
-            // Восстанавливаем сохранённый путь (только один раз)
+            // Восстанавливаем путь (только один раз)
             if (!hasRestoredPath.current) {
               hasRestoredPath.current = true;
               
-              // Получаем сохранённый путь из sessionStorage
-              const savedPath = getSavedPath();
+              // ============================================
+              // ИСПРАВЛЕННАЯ ЛОГИКА ВОССТАНОВЛЕНИЯ ПУТИ:
+              // 1. Приоритет: начальный путь из URL (при F5)
+              // 2. Затем: сохранённый путь из sessionStorage (после OIDC редиректа)
+              // 3. Иначе: текущий location.pathname
+              // ============================================
               
-              if (savedPath && savedPath !== "/" && savedPath !== location.pathname) {
-                // Есть сохранённый путь - переходим туда
+              const savedPath = getSavedPath();
+              const targetPath = initialPathRef.current || savedPath;
+              
+              // Очищаем сохранённый путь после использования
+              if (savedPath) {
                 clearSavedPath();
-                navigate(savedPath, { replace: true });
-              } else if (!pcId && location.pathname !== SELECT_PC_ROUTE) {
-                // Нет ПК и не на странице выбора ПК - редирект на выбор ПК
+              }
+              
+              // Определяем нужно ли делать навигацию
+              const currentPath = location.pathname;
+              
+              if (targetPath && targetPath !== "/" && targetPath !== currentPath) {
+                // Есть целевой путь, отличный от текущего - переходим туда
+                console.log(`[App] Восстанавливаем путь: ${targetPath}`);
+                navigate(targetPath, { replace: true });
+              } else if (!pcId && currentPath !== SELECT_PC_ROUTE && currentPath === "/") {
+                // Нет ПК, на корне - редирект на выбор ПК
+                // НО: если мы уже на другой странице (не корень) - НЕ редиректим!
+                console.log(`[App] Нет pcID, редирект на выбор ПК`);
                 navigate(SELECT_PC_ROUTE, { replace: true });
               }
               // Иначе остаёмся на текущей странице
@@ -98,6 +134,7 @@ const App = observer(() => {
       localStorage.removeItem('userID');
       setIsUserLoading(false);
       hasRestoredPath.current = false; // Сброс флага при выходе
+      initialPathRef.current = null; // Сброс начального пути
     }
   }, [auth.isAuthenticated, auth.user, user, navigate, location.pathname]);
 
@@ -175,67 +212,50 @@ const App = observer(() => {
               <div className="absolute inset-0 bg-white opacity-20 rounded-2xl animate-ping"></div>
            </div>
 
-           <div className="flex items-start gap-2 mb-2">
-               <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                 MES <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-600">Kryptonit</span>
-               </h1>
-               <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] font-bold shadow-md transform -translate-y-1 rotate-6 border border-white/30">
-                   v2.1
-               </span>
-           </div>
+           <h1 className="text-3xl font-bold text-slate-800 mb-2 tracking-tight">MES Kryptonit</h1>
+           <p className="text-slate-500 mb-8 text-center text-sm">Система управления производством</p>
            
-           <p className="text-slate-500 text-center mb-8 text-sm font-medium leading-relaxed">
-             Единая экосистема управления производством
-           </p>
-
-           <button 
-              onClick={() => auth.signinRedirect()}
-              className="group relative w-full flex items-center justify-center gap-3 bg-slate-900 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 overflow-hidden"
+           <button
+             onClick={() => auth.signinRedirect()}
+             className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 group"
            >
-              <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 group-hover:animate-[shimmer_1.5s_infinite]"></div>
-              
-              <div className="bg-white/10 p-1.5 rounded-lg flex items-center justify-center">
-                 <Lock className="w-5 h-5 group-hover:hidden transition-all duration-200" />
-                 <Unlock className="w-5 h-5 hidden group-hover:block transition-all duration-200 animate-in fade-in zoom-in-75" />
-              </div>
-              
-              <span className="text-md">Войти через единую точку входа</span>
+             <ShieldCheck className="w-5 h-5 group-hover:animate-bounce" />
+             <span>Войти через Keycloak</span>
            </button>
 
-           <div className="mt-8 w-full border-t border-slate-100 pt-6">
-              <div className="flex justify-between items-center text-xs text-slate-400 font-medium">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                    <span>Защищенное соединение</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 text-emerald-500 animate-pulse" />
-                    <span>Система в сети</span>
-                  </div>
-              </div>
+           <div className="mt-8 flex items-center gap-2 text-xs text-slate-400">
+              <Lock size={12} />
+              <span>Защищено SSO аутентификацией</span>
            </div>
         </div>
 
-        <div className="absolute bottom-6 text-slate-400 text-xs font-medium text-center w-full opacity-50">
-          © 2018-{new Date().getFullYear()} НПК Криптонит. Только для внутреннего пользования.
+        {/* Footer */}
+        <div className="absolute bottom-6 text-center text-xs text-slate-400">
+          <p>© 2024 MES Kryptonit • Версия 2.1</p>
         </div>
       </div>
     );
   }
 
+  // --- MAIN APP ---
   return (
-    <div className="flex flex-col min-h-screen">
-      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
-      
-      <Header />
-      <main
-        className="flex-grow mt-16"
-        style={{
-          backgroundImage: `url(${background})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+    <div
+      style={{ backgroundImage: `url(${background})` }}
+      className="bg-cover bg-no-repeat bg-center min-h-screen flex flex-col"
+    >
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#1e293b',
+            color: '#fff',
+            borderRadius: '12px',
+          },
         }}
-      >
+      />
+      <Header />
+      <main className="flex-1 overflow-auto pb-4">
         <AppRouter />
       </main>
     </div>

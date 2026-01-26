@@ -21,6 +21,14 @@ const PC = sequelize.define("PC", {
 const Session = sequelize.define("session", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   online: { type: DataTypes.BOOLEAN },
+  PCId: {                                    // <-- ДОБАВЛЕНО
+    type: DataTypes.SMALLINT,
+    allowNull: true,
+    references: {
+      model: 'PCs',
+      key: 'id'
+    }
+  }
 });
 
 const AuditLog = sequelize.define("audit_log", {

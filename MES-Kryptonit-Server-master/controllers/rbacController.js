@@ -8,6 +8,7 @@ class RbacController {
             const roles = await Role.findAll({
                 include: [{
                     model: Ability,
+                    as: "abilities",  // <-- ИСПРАВЛЕНО: добавлен alias
                     through: { attributes: [] }
                 }],
                 order: [['id', 'ASC']]

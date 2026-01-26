@@ -5,6 +5,8 @@
  * ОБНОВЛЕНО: добавлена ассоциация Section -> User (manager)
  * ОБНОВЛЕНО: добавлены ассоциации ProductionOutput (исправление ошибки "user is not associated to production_output")
  * ОБНОВЛЕНО: добавлена ассоциация Project -> User (author) (исправление ошибки "user is not associated to project")
+ * ОБНОВЛЕНО: добавлена ассоциация AuditLog -> User (исправление ошибки "user is not associated to audit_log")
+ * ОБНОВЛЕНО: добавлена ассоциация Session -> PC (исправление ошибки "столбец session.PCId не существует")
  */
 
 // ============================================
@@ -116,6 +118,14 @@ const {
 // 1. Базовые связи структуры
 User.hasMany(Session);
 Session.belongsTo(User);
+
+// ИСПРАВЛЕНИЕ: Session -> PC (для sessionController)
+Session.belongsTo(PC, { foreignKey: "PCId", as: "pc" });
+PC.hasMany(Session, { foreignKey: "PCId", as: "sessions" });
+
+// ИСПРАВЛЕНИЕ: AuditLog -> User (для auditController)
+AuditLog.belongsTo(User, { foreignKey: "userId", as: "User" });
+User.hasMany(AuditLog, { foreignKey: "userId", as: "auditLogs" });
 
 User.belongsTo(Team, { foreignKey: "teamId" });
 Team.hasMany(User, { foreignKey: "teamId" });

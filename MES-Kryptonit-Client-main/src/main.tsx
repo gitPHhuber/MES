@@ -84,20 +84,21 @@ const oidcConfig = {
   
   /**
    * Callback после успешного логина через Keycloak
-   * Очищает URL от параметров OIDC и восстанавливает сохранённый путь
+   * ИСПРАВЛЕНО: Только очищаем URL от OIDC параметров, НЕ очищаем savedPath
+   * Очистка savedPath происходит в App.tsx после использования
    */
   onSigninCallback: () => {
     // Получаем сохранённый путь (куда пользователь хотел попасть)
     const savedPath = getSavedPath();
     
     // Очищаем URL от OIDC параметров (code, state, session_state)
-    // Если есть сохранённый путь - используем его, иначе оставляем текущий pathname
-    const cleanUrl = savedPath || window.location.pathname;
+    // Если есть сохранённый путь - используем его, иначе оставляем корень
+    const cleanUrl = savedPath || "/";
     
     window.history.replaceState({}, document.title, cleanUrl);
     
-    // Очищаем сохранённый путь после использования
-    clearSavedPath();
+    // НЕ очищаем savedPath здесь! Очистка происходит в App.tsx
+    // Это позволяет App.tsx прочитать путь и сделать navigate()
   }
 };
 
