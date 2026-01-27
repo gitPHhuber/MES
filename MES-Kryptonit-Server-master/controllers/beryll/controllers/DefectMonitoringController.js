@@ -486,10 +486,10 @@ class DefectMonitoringController {
   }
 }
 
-// Создаём экземпляр и биндим методы
+// Создаём экземпляр
 const controller = new DefectMonitoringController();
 
-// Биндим все методы к экземпляру для использования в роутере
+// Экспортируем объект с забинденными методами
 module.exports = {
   // Мониторинг
   pingServer: controller.pingServer.bind(controller),

@@ -4,6 +4,8 @@
  * Вкладка "Учёт брака" для APK Beryll
  * Журнал дефектов серверов с отслеживанием ремонта
  * 
+ * ОБНОВЛЕНО: Добавлены все колонки из Excel (13 колонок в таблице)
+ * 
  * Положить в: src/pages/Beryll/tabs/DefectRecordsTab.tsx
  */
 
@@ -11,7 +13,8 @@ import React, { useState, useEffect } from "react";
 import { 
   AlertTriangle, Plus, Search, Filter, FileText, Download,
   Clock, CheckCircle, XCircle, Send, RotateCcw, Repeat,
-  ChevronDown, Trash2, Edit, Paperclip, Eye, Calendar
+  ChevronDown, Trash2, Edit, Paperclip, Eye, Calendar,
+  Truck, Package, ChevronLeft, ChevronRight, RefreshCw
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -168,42 +171,109 @@ const DefectRecordsTab: React.FC = () => {
     return new Date(dateStr).toLocaleDateString("ru-RU", {
       day: "2-digit",
       month: "2-digit",
+      year: "numeric"
+    });
+  };
+  
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit"
     });
   };
   
-  // Компонент строки таблицы
+  // Компонент строки таблицы - РАСШИРЕННЫЙ НА 13 КОЛОНОК
   const RecordRow: React.FC<{ record: BeryllDefectRecord }> = ({ record }) => {
     const statusConfig = STATUS_CONFIG[record.status];
     
     return (
       <tr 
-        className={`hover:bg-gray-50 cursor-pointer ${selectedRecord?.id === record.id ? "bg-blue-50" : ""}`}
+        className={`hover:bg-gray-50 cursor-pointer ${selectedRecord?.id === record.id ? "bg-blue-50" : ""} ${record.isRepeatedDefect ? "bg-red-50/30" : ""}`}
         onClick={() => loadRecordDetails(record.id)}
       >
-        <td className="px-4 py-3 text-sm">
-          <div className="font-mono">{record.yadroTicketNumber || "—"}</div>
-          <div className="text-xs text-gray-500">#{record.id}</div>
+        {/* 1. Заявка */}
+        <td className="px-3 py-2 text-sm">
+          <div className="font-mono text-blue-600">{record.yadroTicketNumber || "—"}</div>
+          <div className="text-xs text-gray-400">#{record.id}</div>
         </td>
-        <td className="px-4 py-3 text-sm">
+        
+        {/* 2. Сервер */}
+        <td className="px-3 py-2 text-sm">
           <div className="font-medium">{record.server?.apkSerialNumber || `#${record.serverId}`}</div>
-          {record.clusterCode && (
-            <div className="text-xs text-gray-500">Кластер: {record.clusterCode}</div>
+        </td>
+        
+        {/* 3. СПиСИ */}
+        <td className="px-3 py-2 text-sm text-center">
+          {record.hasSPISI ? (
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">Да</span>
+          ) : (
+            <span className="text-gray-400">—</span>
           )}
         </td>
-        <td className="px-4 py-3 text-sm">
-          <div className="line-clamp-2">{record.problemDescription}</div>
+        
+        {/* 4. Кластер */}
+        <td className="px-3 py-2 text-sm">
+          {record.clusterCode ? (
+            <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{record.clusterCode}</span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
         </td>
-        <td className="px-4 py-3 text-sm">
+        
+        {/* 5. Проблема */}
+        <td className="px-3 py-2 text-sm max-w-[200px]">
+          <div className="line-clamp-2" title={record.problemDescription}>{record.problemDescription}</div>
+        </td>
+        
+        {/* 6. Деталь */}
+        <td className="px-3 py-2 text-sm">
           {record.repairPartType ? (
             <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">
               {PART_TYPE_LABELS[record.repairPartType]}
             </span>
-          ) : "—"}
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
         </td>
-        <td className="px-4 py-3">
+        
+        {/* 7. S/N брак (Ядро + производитель) */}
+        <td className="px-3 py-2 text-xs">
+          {record.defectPartSerialYadro || record.defectPartSerialManuf ? (
+            <div className="space-y-0.5">
+              {record.defectPartSerialYadro && (
+                <div className="font-mono text-red-600" title="S/N Ядро">{record.defectPartSerialYadro}</div>
+              )}
+              {record.defectPartSerialManuf && (
+                <div className="font-mono text-gray-500" title="S/N производителя">{record.defectPartSerialManuf}</div>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        
+        {/* 8. S/N замена (Ядро + производитель) */}
+        <td className="px-3 py-2 text-xs">
+          {record.replacementPartSerialYadro || record.replacementPartSerialManuf ? (
+            <div className="space-y-0.5">
+              {record.replacementPartSerialYadro && (
+                <div className="font-mono text-green-600" title="S/N Ядро">{record.replacementPartSerialYadro}</div>
+              )}
+              {record.replacementPartSerialManuf && (
+                <div className="font-mono text-gray-500" title="S/N производителя">{record.replacementPartSerialManuf}</div>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        
+        {/* 9. Статус */}
+        <td className="px-3 py-2">
           <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${statusConfig.bg} ${statusConfig.color}`}>
             {statusConfig.icon}
             {statusConfig.label}
@@ -215,13 +285,52 @@ const DefectRecordsTab: React.FC = () => {
             </div>
           )}
         </td>
-        <td className="px-4 py-3 text-sm text-gray-500">
+        
+        {/* 10. Дата */}
+        <td className="px-3 py-2 text-sm text-gray-500">
           {formatDate(record.detectedAt)}
         </td>
-        <td className="px-4 py-3 text-sm">
+        
+        {/* 11. Диагност */}
+        <td className="px-3 py-2 text-sm">
           {record.diagnostician ? (
-            `${record.diagnostician.name || ""} ${record.diagnostician.surname || ""}`.trim() || record.diagnostician.login
-          ) : "—"}
+            <span title={`${record.diagnostician.name || ""} ${record.diagnostician.surname || ""}`}>
+              {record.diagnostician.surname || ""} {record.diagnostician.name?.[0] || ""}.
+            </span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        
+        {/* 12. Ядро (отправка/возврат) */}
+        <td className="px-3 py-2 text-xs">
+          {record.sentToYadroAt ? (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1 text-indigo-600" title="Отправлен">
+                <Truck size={12} />
+                {formatDate(record.sentToYadroAt)}
+              </div>
+              {record.returnedFromYadroAt && (
+                <div className="flex items-center gap-1 text-green-600" title="Возвращён">
+                  <Package size={12} />
+                  {formatDate(record.returnedFromYadroAt)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        
+        {/* 13. Подмена */}
+        <td className="px-3 py-2 text-xs">
+          {record.substituteServerSerial ? (
+            <span className="font-mono bg-yellow-100 px-1.5 py-0.5 rounded text-yellow-800">
+              {record.substituteServerSerial}
+            </span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
         </td>
       </tr>
     );
@@ -369,29 +478,38 @@ const DefectRecordsTab: React.FC = () => {
       )}
       
       <div className="flex gap-4">
-        {/* Таблица */}
+        {/* Таблица - РАСШИРЕННАЯ НА 13 КОЛОНОК */}
         <div className="flex-1 bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Заявка</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Сервер</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Проблема</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Деталь</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Статус</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Дата</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Диагност</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Заявка</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Сервер</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">СПиСИ</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Кластер</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Проблема</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Деталь</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">S/N брак</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">S/N замена</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Статус</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Дата</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Диагност</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Ядро</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Подмена</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Загрузка...</td>
+                    <td colSpan={13} className="px-4 py-8 text-center text-gray-500">
+                      <RefreshCw className="animate-spin mx-auto mb-2" size={24} />
+                      Загрузка...
+                    </td>
                   </tr>
                 ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Записи не найдены</td>
+                    <td colSpan={13} className="px-4 py-8 text-center text-gray-500">Записи не найдены</td>
                   </tr>
                 ) : (
                   records.map(record => <RecordRow key={record.id} record={record} />)
@@ -412,7 +530,7 @@ const DefectRecordsTab: React.FC = () => {
                   disabled={page === 1}
                   className="px-3 py-1 border rounded disabled:opacity-50"
                 >
-                  ←
+                  <ChevronLeft size={16} />
                 </button>
                 <span className="px-3 py-1">{page} / {totalPages}</span>
                 <button
@@ -420,7 +538,7 @@ const DefectRecordsTab: React.FC = () => {
                   disabled={page === totalPages}
                   className="px-3 py-1 border rounded disabled:opacity-50"
                 >
-                  →
+                  <ChevronRight size={16} />
                 </button>
               </div>
             </div>
@@ -524,6 +642,11 @@ const RecordDetails: React.FC<{
   const statusConfig = STATUS_CONFIG[record.status];
   const [uploading, setUploading] = useState(false);
   
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("ru-RU");
+  };
+  
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -603,7 +726,21 @@ const RecordDetails: React.FC<{
       </div>
       
       {/* Информация */}
-      <div className="p-4 space-y-3 text-sm">
+      <div className="p-4 space-y-3 text-sm max-h-[calc(100vh-400px)] overflow-y-auto">
+        {/* СПиСИ и Кластер */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="text-gray-500">СПиСИ:</div>
+            <div>{record.hasSPISI ? <span className="text-green-600 font-medium">Да</span> : "Нет"}</div>
+          </div>
+          {record.clusterCode && (
+            <div>
+              <div className="text-gray-500">Кластер:</div>
+              <div className="font-mono">{record.clusterCode}</div>
+            </div>
+          )}
+        </div>
+        
         <div>
           <div className="text-gray-500">Проблема:</div>
           <div>{record.problemDescription}</div>
@@ -616,17 +753,36 @@ const RecordDetails: React.FC<{
           </div>
         )}
         
-        {record.defectPartSerialYadro && (
-          <div>
-            <div className="text-gray-500">S/N бракованной (Ядро):</div>
-            <div className="font-mono">{record.defectPartSerialYadro}</div>
+        {/* S/N бракованной детали */}
+        {(record.defectPartSerialYadro || record.defectPartSerialManuf) && (
+          <div className="p-2 bg-red-50 rounded border border-red-100">
+            <div className="text-red-600 font-medium text-xs mb-1">S/N бракованной детали</div>
+            {record.defectPartSerialYadro && (
+              <div className="font-mono text-sm">Ядро: {record.defectPartSerialYadro}</div>
+            )}
+            {record.defectPartSerialManuf && (
+              <div className="font-mono text-sm text-gray-600">Произв.: {record.defectPartSerialManuf}</div>
+            )}
           </div>
         )}
         
-        {record.replacementPartSerialYadro && (
+        {/* S/N замены */}
+        {(record.replacementPartSerialYadro || record.replacementPartSerialManuf) && (
+          <div className="p-2 bg-green-50 rounded border border-green-100">
+            <div className="text-green-600 font-medium text-xs mb-1">S/N замены</div>
+            {record.replacementPartSerialYadro && (
+              <div className="font-mono text-sm">Ядро: {record.replacementPartSerialYadro}</div>
+            )}
+            {record.replacementPartSerialManuf && (
+              <div className="font-mono text-sm text-gray-600">Произв.: {record.replacementPartSerialManuf}</div>
+            )}
+          </div>
+        )}
+        
+        {record.diagnosisResult && (
           <div>
-            <div className="text-gray-500">S/N замены (Ядро):</div>
-            <div className="font-mono">{record.replacementPartSerialYadro}</div>
+            <div className="text-gray-500">Результат диагностики:</div>
+            <div>{record.diagnosisResult}</div>
           </div>
         )}
         
@@ -634,6 +790,13 @@ const RecordDetails: React.FC<{
           <div>
             <div className="text-gray-500">Детали ремонта:</div>
             <div>{record.repairDetails}</div>
+          </div>
+        )}
+        
+        {record.notes && (
+          <div>
+            <div className="text-gray-500">Примечания:</div>
+            <div>{record.notes}</div>
           </div>
         )}
         
@@ -646,17 +809,29 @@ const RecordDetails: React.FC<{
             {record.repeatedDefectReason && (
               <div className="text-sm mt-1">{record.repeatedDefectReason}</div>
             )}
+            {record.repeatedDefectDate && (
+              <div className="text-xs text-gray-500 mt-1">Дата: {formatDate(record.repeatedDefectDate)}</div>
+            )}
           </div>
         )}
         
         {record.sentToYadroRepair && (
           <div className="p-2 bg-indigo-50 rounded border border-indigo-200">
-            <div className="text-indigo-600 font-medium">Отправлен в Ядро</div>
+            <div className="text-indigo-600 font-medium flex items-center gap-1">
+              <Truck size={14} />
+              Отправлен в Ядро
+            </div>
             {record.sentToYadroAt && (
-              <div className="text-xs">{new Date(record.sentToYadroAt).toLocaleDateString()}</div>
+              <div className="text-xs mt-1">Отправлен: {formatDate(record.sentToYadroAt)}</div>
+            )}
+            {record.returnedFromYadroAt && (
+              <div className="text-xs text-green-600">Возвращён: {formatDate(record.returnedFromYadroAt)}</div>
             )}
             {record.substituteServerSerial && (
-              <div className="text-xs">Подменный: {record.substituteServerSerial}</div>
+              <div className="text-xs mt-1">
+                <span className="text-gray-500">Подменный:</span>{" "}
+                <span className="font-mono">{record.substituteServerSerial}</span>
+              </div>
             )}
           </div>
         )}
@@ -725,7 +900,7 @@ const RecordDetails: React.FC<{
 };
 
 // ============================================
-// МОДАЛЬНОЕ ОКНО СОЗДАНИЯ
+// МОДАЛЬНОЕ ОКНО СОЗДАНИЯ - РАСШИРЕННОЕ
 // ============================================
 
 const CreateRecordModal: React.FC<{
@@ -745,7 +920,16 @@ const CreateRecordModal: React.FC<{
     repairPartType: "" as RepairPartType | "",
     defectPartSerialYadro: "",
     defectPartSerialManuf: "",
-    notes: ""
+    replacementPartSerialYadro: "",
+    replacementPartSerialManuf: "",
+    diagnosisResult: "",
+    notes: "",
+    isRepeatedDefect: false,
+    repeatedDefectReason: "",
+    repeatedDefectDate: "",
+    substituteServerSerial: "",
+    sentToYadroAt: "",
+    returnedFromYadroAt: ""
   });
   const [saving, setSaving] = useState(false);
   const [serverSearch, setServerSearch] = useState("");
@@ -755,6 +939,34 @@ const CreateRecordModal: React.FC<{
     s.apkSerialNumber?.toLowerCase().includes(serverSearch.toLowerCase()) ||
     s.hostname?.toLowerCase().includes(serverSearch.toLowerCase())
   );
+  
+  // Сброс формы при открытии
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        serverId: 0,
+        problemDescription: "",
+        yadroTicketNumber: "",
+        hasSPISI: false,
+        clusterCode: "",
+        diagnosticianId: null,
+        repairPartType: "",
+        defectPartSerialYadro: "",
+        defectPartSerialManuf: "",
+        replacementPartSerialYadro: "",
+        replacementPartSerialManuf: "",
+        diagnosisResult: "",
+        notes: "",
+        isRepeatedDefect: false,
+        repeatedDefectReason: "",
+        repeatedDefectDate: "",
+        substituteServerSerial: "",
+        sentToYadroAt: "",
+        returnedFromYadroAt: ""
+      });
+      setServerSearch("");
+    }
+  }, [isOpen]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -773,7 +985,12 @@ const CreateRecordModal: React.FC<{
       await createDefectRecord({
         ...form,
         repairPartType: form.repairPartType || undefined,
-        diagnosticianId: form.diagnosticianId || undefined
+        diagnosticianId: form.diagnosticianId || undefined,
+        sentToYadroAt: form.sentToYadroAt ? new Date(form.sentToYadroAt).toISOString() : undefined,
+        sentToYadroRepair: !!form.sentToYadroAt,
+        returnedFromYadroAt: form.returnedFromYadroAt ? new Date(form.returnedFromYadroAt).toISOString() : undefined,
+        returnedFromYadro: !!form.returnedFromYadroAt,
+        repeatedDefectDate: form.repeatedDefectDate ? new Date(form.repeatedDefectDate).toISOString() : undefined
       });
       toast.success("Запись создана");
       onSuccess();
@@ -785,129 +1002,261 @@ const CreateRecordModal: React.FC<{
   };
   
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Добавить запись о браке">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Выбор сервера */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Сервер *</label>
-          <input
-            type="text"
-            placeholder="Поиск по S/N, hostname..."
-            value={serverSearch}
-            onChange={(e) => setServerSearch(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg mb-2"
-          />
-          <div className="max-h-32 overflow-y-auto border rounded-lg">
-            {filteredServers.slice(0, 10).map(server => (
-              <div
-                key={server.id}
-                className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
-                onClick={() => setForm({ ...form, serverId: server.id })}
-              >
-                <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
-                <div className="text-xs text-gray-500">{server.hostname}</div>
+    <Modal isOpen={isOpen} onClose={onClose} title="Добавить запись о браке" size="xl">
+      <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+        <div className="grid grid-cols-2 gap-6">
+          {/* ЛЕВАЯ КОЛОНКА */}
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-700 border-b pb-2">Основная информация</h4>
+            
+            {/* Выбор сервера */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Сервер *</label>
+              <input
+                type="text"
+                placeholder="Поиск по S/N, hostname..."
+                value={serverSearch}
+                onChange={(e) => setServerSearch(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg mb-2"
+              />
+              <div className="max-h-28 overflow-y-auto border rounded-lg">
+                {filteredServers.slice(0, 10).map(server => (
+                  <div
+                    key={server.id}
+                    className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
+                    onClick={() => setForm({ ...form, serverId: server.id })}
+                  >
+                    <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
+                    <div className="text-xs text-gray-500">{server.hostname}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Описание проблемы *</label>
+              <textarea
+                value={form.problemDescription}
+                onChange={(e) => setForm({ ...form, problemDescription: e.target.value })}
+                rows={3}
+                placeholder="ECC Error, не работает вентилятор..."
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Заявка Ядро</label>
+                <input
+                  type="text"
+                  value={form.yadroTicketNumber}
+                  onChange={(e) => setForm({ ...form, yadroTicketNumber: e.target.value })}
+                  placeholder="INC553187"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Код кластера</label>
+                <input
+                  type="text"
+                  value={form.clusterCode}
+                  onChange={(e) => setForm({ ...form, clusterCode: e.target.value })}
+                  placeholder="240008"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Тип детали</label>
+                <select
+                  value={form.repairPartType}
+                  onChange={(e) => setForm({ ...form, repairPartType: e.target.value as RepairPartType | "" })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">— Выберите —</option>
+                  {Object.entries(PART_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Диагност</label>
+                <select
+                  value={form.diagnosticianId || ""}
+                  onChange={(e) => setForm({ ...form, diagnosticianId: e.target.value ? parseInt(e.target.value) : null })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">— Выберите —</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.surname} {user.name} ({user.login})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="hasSPISI"
+                checked={form.hasSPISI}
+                onChange={(e) => setForm({ ...form, hasSPISI: e.target.checked })}
+              />
+              <label htmlFor="hasSPISI" className="text-sm">Наличие СПиСИ</label>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Примечания</label>
+              <textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+          </div>
+          
+          {/* ПРАВАЯ КОЛОНКА */}
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-700 border-b pb-2">Детали ремонта</h4>
+            
+            {/* S/N бракованной детали */}
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <div className="text-sm font-medium text-red-700 mb-2">S/N бракованной детали</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N Ядро</label>
+                  <input
+                    type="text"
+                    value={form.defectPartSerialYadro}
+                    onChange={(e) => setForm({ ...form, defectPartSerialYadro: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N производителя</label>
+                  <input
+                    type="text"
+                    value={form.defectPartSerialManuf}
+                    onChange={(e) => setForm({ ...form, defectPartSerialManuf: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* S/N замены */}
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="text-sm font-medium text-green-700 mb-2">S/N замены</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N Ядро</label>
+                  <input
+                    type="text"
+                    value={form.replacementPartSerialYadro}
+                    onChange={(e) => setForm({ ...form, replacementPartSerialYadro: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N производителя</label>
+                  <input
+                    type="text"
+                    value={form.replacementPartSerialManuf}
+                    onChange={(e) => setForm({ ...form, replacementPartSerialManuf: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Результат диагностики</label>
+              <textarea
+                value={form.diagnosisResult}
+                onChange={(e) => setForm({ ...form, diagnosisResult: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            {/* Повторный брак */}
+            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={form.isRepeatedDefect}
+                  onChange={(e) => setForm({ ...form, isRepeatedDefect: e.target.checked })}
+                />
+                <span className="text-sm font-medium text-orange-700">Повторный брак</span>
+              </label>
+              {form.isRepeatedDefect && (
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Причина</label>
+                    <input
+                      type="text"
+                      value={form.repeatedDefectReason}
+                      onChange={(e) => setForm({ ...form, repeatedDefectReason: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Дата</label>
+                    <input
+                      type="date"
+                      value={form.repeatedDefectDate}
+                      onChange={(e) => setForm({ ...form, repeatedDefectDate: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Подмена */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Сервер для подмены (S/N)</label>
+              <input
+                type="text"
+                value={form.substituteServerSerial}
+                onChange={(e) => setForm({ ...form, substituteServerSerial: e.target.value })}
+                placeholder="Серийный номер подменного сервера"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            {/* Ядро */}
+            <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+              <div className="text-sm font-medium text-indigo-700 mb-2">Отправка в Ядро</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Дата отправки</label>
+                  <input
+                    type="date"
+                    value={form.sentToYadroAt}
+                    onChange={(e) => setForm({ ...form, sentToYadroAt: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Дата возврата</label>
+                  <input
+                    type="date"
+                    value={form.returnedFromYadroAt}
+                    onChange={(e) => setForm({ ...form, returnedFromYadroAt: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
-        <div>
-          <label className="block text-sm font-medium mb-1">Описание проблемы *</label>
-          <textarea
-            value={form.problemDescription}
-            onChange={(e) => setForm({ ...form, problemDescription: e.target.value })}
-            rows={3}
-            placeholder="ECC Error, не работает вентилятор..."
-            className="w-full px-3 py-2 border rounded-lg"
-          />
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Заявка Ядро</label>
-            <input
-              type="text"
-              value={form.yadroTicketNumber}
-              onChange={(e) => setForm({ ...form, yadroTicketNumber: e.target.value })}
-              placeholder="INC553187"
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Код кластера</label>
-            <input
-              type="text"
-              value={form.clusterCode}
-              onChange={(e) => setForm({ ...form, clusterCode: e.target.value })}
-              placeholder="240008"
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Тип детали</label>
-            <select
-              value={form.repairPartType}
-              onChange={(e) => setForm({ ...form, repairPartType: e.target.value as RepairPartType | "" })}
-              className="w-full px-3 py-2 border rounded-lg"
-            >
-              <option value="">— Выберите —</option>
-              {Object.entries(PART_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Диагност</label>
-            <select
-              value={form.diagnosticianId || ""}
-              onChange={(e) => setForm({ ...form, diagnosticianId: e.target.value ? parseInt(e.target.value) : null })}
-              className="w-full px-3 py-2 border rounded-lg"
-            >
-              <option value="">— Выберите —</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.name} {user.surname} ({user.login})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">S/N бракованной (Ядро)</label>
-            <input
-              type="text"
-              value={form.defectPartSerialYadro}
-              onChange={(e) => setForm({ ...form, defectPartSerialYadro: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">S/N бракованной (произв.)</label>
-            <input
-              type="text"
-              value={form.defectPartSerialManuf}
-              onChange={(e) => setForm({ ...form, defectPartSerialManuf: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="hasSPISI"
-            checked={form.hasSPISI}
-            onChange={(e) => setForm({ ...form, hasSPISI: e.target.checked })}
-          />
-          <label htmlFor="hasSPISI" className="text-sm">Наличие СПиСИ</label>
-        </div>
-        
-        <div className="flex justify-end gap-3 pt-4">
+        <div className="flex justify-end gap-3 pt-4 border-t">
           <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
             Отмена
           </button>
@@ -925,7 +1274,7 @@ const CreateRecordModal: React.FC<{
 };
 
 // ============================================
-// МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ
+// МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ - РАСШИРЕННОЕ
 // ============================================
 
 const EditRecordModal: React.FC<{
@@ -936,11 +1285,18 @@ const EditRecordModal: React.FC<{
   onClose: () => void;
   onSuccess: () => void;
 }> = ({ isOpen, record, servers, users, onClose, onSuccess }) => {
-  const [form, setForm] = useState({ ...record });
+  const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   
   useEffect(() => {
-    setForm({ ...record });
+    if (record) {
+      setForm({
+        ...record,
+        sentToYadroAt: record.sentToYadroAt ? record.sentToYadroAt.split("T")[0] : "",
+        returnedFromYadroAt: record.returnedFromYadroAt ? record.returnedFromYadroAt.split("T")[0] : "",
+        repeatedDefectDate: record.repeatedDefectDate ? record.repeatedDefectDate.split("T")[0] : ""
+      });
+    }
   }, [record]);
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -948,7 +1304,14 @@ const EditRecordModal: React.FC<{
     
     try {
       setSaving(true);
-      await updateDefectRecord(record.id, form);
+      await updateDefectRecord(record.id, {
+        ...form,
+        sentToYadroAt: form.sentToYadroAt ? new Date(form.sentToYadroAt).toISOString() : null,
+        sentToYadroRepair: !!form.sentToYadroAt,
+        returnedFromYadroAt: form.returnedFromYadroAt ? new Date(form.returnedFromYadroAt).toISOString() : null,
+        returnedFromYadro: !!form.returnedFromYadroAt,
+        repeatedDefectDate: form.repeatedDefectDate ? new Date(form.repeatedDefectDate).toISOString() : null
+      });
       toast.success("Запись обновлена");
       onSuccess();
     } catch (error: any) {
@@ -959,75 +1322,239 @@ const EditRecordModal: React.FC<{
   };
   
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Редактировать запись">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Описание проблемы</label>
-          <textarea
-            value={form.problemDescription}
-            onChange={(e) => setForm({ ...form, problemDescription: e.target.value })}
-            rows={3}
-            className="w-full px-3 py-2 border rounded-lg"
-          />
+    <Modal isOpen={isOpen} onClose={onClose} title="Редактировать запись" size="xl">
+      <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+        <div className="grid grid-cols-2 gap-6">
+          {/* ЛЕВАЯ КОЛОНКА */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Описание проблемы</label>
+              <textarea
+                value={form.problemDescription || ""}
+                onChange={(e) => setForm({ ...form, problemDescription: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Заявка Ядро</label>
+                <input
+                  type="text"
+                  value={form.yadroTicketNumber || ""}
+                  onChange={(e) => setForm({ ...form, yadroTicketNumber: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Код кластера</label>
+                <input
+                  type="text"
+                  value={form.clusterCode || ""}
+                  onChange={(e) => setForm({ ...form, clusterCode: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Тип детали</label>
+                <select
+                  value={form.repairPartType || ""}
+                  onChange={(e) => setForm({ ...form, repairPartType: e.target.value as RepairPartType })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">— Выберите —</option>
+                  {Object.entries(PART_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Диагност</label>
+                <select
+                  value={form.diagnosticianId || ""}
+                  onChange={(e) => setForm({ ...form, diagnosticianId: e.target.value ? parseInt(e.target.value) : null })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">— Выберите —</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.surname} {user.name} ({user.login})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="editHasSPISI"
+                checked={form.hasSPISI || false}
+                onChange={(e) => setForm({ ...form, hasSPISI: e.target.checked })}
+              />
+              <label htmlFor="editHasSPISI" className="text-sm">Наличие СПиСИ</label>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Примечания</label>
+              <textarea
+                value={form.notes || ""}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Детали ремонта</label>
+              <textarea
+                value={form.repairDetails || ""}
+                onChange={(e) => setForm({ ...form, repairDetails: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+          </div>
+          
+          {/* ПРАВАЯ КОЛОНКА */}
+          <div className="space-y-4">
+            {/* S/N бракованной */}
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <div className="text-sm font-medium text-red-700 mb-2">S/N бракованной детали</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N Ядро</label>
+                  <input
+                    type="text"
+                    value={form.defectPartSerialYadro || ""}
+                    onChange={(e) => setForm({ ...form, defectPartSerialYadro: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N производителя</label>
+                  <input
+                    type="text"
+                    value={form.defectPartSerialManuf || ""}
+                    onChange={(e) => setForm({ ...form, defectPartSerialManuf: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* S/N замены */}
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="text-sm font-medium text-green-700 mb-2">S/N замены</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N Ядро</label>
+                  <input
+                    type="text"
+                    value={form.replacementPartSerialYadro || ""}
+                    onChange={(e) => setForm({ ...form, replacementPartSerialYadro: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">S/N производителя</label>
+                  <input
+                    type="text"
+                    value={form.replacementPartSerialManuf || ""}
+                    onChange={(e) => setForm({ ...form, replacementPartSerialManuf: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Результат диагностики</label>
+              <textarea
+                value={form.diagnosisResult || ""}
+                onChange={(e) => setForm({ ...form, diagnosisResult: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            {/* Повторный брак */}
+            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={form.isRepeatedDefect || false}
+                  onChange={(e) => setForm({ ...form, isRepeatedDefect: e.target.checked })}
+                />
+                <span className="text-sm font-medium text-orange-700">Повторный брак</span>
+              </label>
+              {form.isRepeatedDefect && (
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Причина</label>
+                    <input
+                      type="text"
+                      value={form.repeatedDefectReason || ""}
+                      onChange={(e) => setForm({ ...form, repeatedDefectReason: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Дата</label>
+                    <input
+                      type="date"
+                      value={form.repeatedDefectDate || ""}
+                      onChange={(e) => setForm({ ...form, repeatedDefectDate: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Подмена */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Сервер для подмены (S/N)</label>
+              <input
+                type="text"
+                value={form.substituteServerSerial || ""}
+                onChange={(e) => setForm({ ...form, substituteServerSerial: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            {/* Ядро */}
+            <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+              <div className="text-sm font-medium text-indigo-700 mb-2">Отправка в Ядро</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Дата отправки</label>
+                  <input
+                    type="date"
+                    value={form.sentToYadroAt || ""}
+                    onChange={(e) => setForm({ ...form, sentToYadroAt: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Дата возврата</label>
+                  <input
+                    type="date"
+                    value={form.returnedFromYadroAt || ""}
+                    onChange={(e) => setForm({ ...form, returnedFromYadroAt: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Заявка Ядро</label>
-            <input
-              type="text"
-              value={form.yadroTicketNumber || ""}
-              onChange={(e) => setForm({ ...form, yadroTicketNumber: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Тип детали</label>
-            <select
-              value={form.repairPartType || ""}
-              onChange={(e) => setForm({ ...form, repairPartType: e.target.value as RepairPartType })}
-              className="w-full px-3 py-2 border rounded-lg"
-            >
-              <option value="">— Выберите —</option>
-              {Object.entries(PART_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">S/N бракованной (Ядро)</label>
-            <input
-              type="text"
-              value={form.defectPartSerialYadro || ""}
-              onChange={(e) => setForm({ ...form, defectPartSerialYadro: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">S/N замены (Ядро)</label>
-            <input
-              type="text"
-              value={form.replacementPartSerialYadro || ""}
-              onChange={(e) => setForm({ ...form, replacementPartSerialYadro: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
-          </div>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium mb-1">Детали ремонта</label>
-          <textarea
-            value={form.repairDetails || ""}
-            onChange={(e) => setForm({ ...form, repairDetails: e.target.value })}
-            rows={2}
-            className="w-full px-3 py-2 border rounded-lg"
-          />
-        </div>
-        
-        <div className="flex justify-end gap-3 pt-4">
+        <div className="flex justify-end gap-3 pt-4 border-t">
           <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
             Отмена
           </button>

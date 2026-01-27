@@ -1,7 +1,7 @@
 const Router = require("express");
 const router = new Router();
-const multer = require("multer"); // <--- Добавлено для дефектов
-const path = require("path");     // <--- Добавлено для дефектов
+const multer = require("multer");
+const path = require("path");
 
 const beryllController = require("../controllers/beryll");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -18,18 +18,16 @@ const protect = [authMiddleware, syncUserMiddleware];
 // ============================================
 const defectStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Папка должна существовать или создаваться автоматически (см. FileController или DefectMonitoringController)
     cb(null, path.join(__dirname, "../uploads/beryll/defects"));
   },
   filename: (req, file, cb) => {
-    // Уникальное имя: TIMESTAMP-RANDOM-ORIGINAL_NAME
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + "-" + file.originalname);
   }
 });
 const defectUpload = multer({ 
   storage: defectStorage, 
-  limits: { fileSize: 10 * 1024 * 1024 } // Лимит 10 МБ
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 // ============================================
@@ -47,7 +45,6 @@ router.post(
 // СЕРВЕРЫ
 // ============================================
 
-// Получить все серверы
 router.get(
   "/servers",
   ...protect,
@@ -55,7 +52,6 @@ router.get(
   beryllController.getServers
 );
 
-// Получить статистику
 router.get(
   "/stats",
   ...protect,
@@ -63,7 +59,6 @@ router.get(
   beryllController.getStats
 );
 
-// Получить аналитику
 router.get(
   "/analytics",
   ...protect,
@@ -71,7 +66,6 @@ router.get(
   beryllController.getAnalytics
 );
 
-// Получить один сервер
 router.get(
   "/servers/:id",
   ...protect,
@@ -79,7 +73,6 @@ router.get(
   beryllController.getServerById
 );
 
-// Взять в работу
 router.post(
   "/servers/:id/take",
   ...protect,
@@ -87,7 +80,6 @@ router.post(
   beryllController.takeServer
 );
 
-// Освободить (снять с себя)
 router.post(
   "/servers/:id/release",
   ...protect,
@@ -95,7 +87,6 @@ router.post(
   beryllController.releaseServer
 );
 
-// Изменить статус
 router.put(
   "/servers/:id/status",
   ...protect,
@@ -103,7 +94,6 @@ router.put(
   beryllController.updateStatus
 );
 
-// Обновить примечания
 router.put(
   "/servers/:id/notes",
   ...protect,
@@ -111,7 +101,6 @@ router.put(
   beryllController.updateNotes
 );
 
-// Удалить сервер (только админ)
 router.delete(
   "/servers/:id",
   ...protect,
@@ -123,7 +112,6 @@ router.delete(
 // ЧЕК-ЛИСТЫ СЕРВЕРА
 // ============================================
 
-// Переключить пункт чек-листа
 router.put(
   "/servers/:serverId/checklist/:checklistId",
   ...protect,
@@ -135,7 +123,6 @@ router.put(
 // ПАРТИИ (BATCHES)
 // ============================================
 
-// Получить все партии
 router.get(
   "/batches",
   ...protect,
@@ -143,7 +130,6 @@ router.get(
   beryllController.getBatches
 );
 
-// Получить одну партию
 router.get(
   "/batches/:id",
   ...protect,
@@ -151,7 +137,6 @@ router.get(
   beryllController.getBatchById
 );
 
-// Создать партию
 router.post(
   "/batches",
   ...protect,
@@ -159,7 +144,6 @@ router.post(
   beryllController.createBatch
 );
 
-// Обновить партию
 router.put(
   "/batches/:id",
   ...protect,
@@ -167,7 +151,6 @@ router.put(
   beryllController.updateBatch
 );
 
-// Удалить партию
 router.delete(
   "/batches/:id",
   ...protect,
@@ -175,7 +158,6 @@ router.delete(
   beryllController.deleteBatch
 );
 
-// Привязать серверы к партии
 router.post(
   "/batches/:id/assign",
   ...protect,
@@ -183,7 +165,6 @@ router.post(
   beryllController.assignServersToBatch
 );
 
-// Отвязать серверы от партии
 router.post(
   "/batches/:id/remove",
   ...protect,
@@ -195,7 +176,6 @@ router.post(
 // ИСТОРИЯ (AUDIT TRAIL)
 // ============================================
 
-// Получить историю
 router.get(
   "/history",
   ...protect,
@@ -207,7 +187,6 @@ router.get(
 // ШАБЛОНЫ ЧЕК-ЛИСТОВ
 // ============================================
 
-// Получить все шаблоны
 router.get(
   "/checklists/templates",
   ...protect,
@@ -215,7 +194,6 @@ router.get(
   beryllController.getChecklistTemplates
 );
 
-// Создать шаблон
 router.post(
   "/checklists/templates",
   ...protect,
@@ -223,7 +201,6 @@ router.post(
   beryllController.createChecklistTemplate
 );
 
-// Обновить шаблон
 router.put(
   "/checklists/templates/:id",
   ...protect,
@@ -231,7 +208,6 @@ router.put(
   beryllController.updateChecklistTemplate
 );
 
-// Удалить/деактивировать шаблон
 router.delete(
   "/checklists/templates/:id",
   ...protect,
@@ -243,7 +219,6 @@ router.delete(
 // АРХИВ
 // ============================================
 
-// Получить архивные серверы
 router.get(
   "/archive",
   ...protect,
@@ -251,7 +226,6 @@ router.get(
   beryllController.getArchivedServers
 );
 
-// Восстановить сервер из архива
 router.post(
   "/servers/:id/unarchive",
   ...protect,
@@ -259,7 +233,6 @@ router.post(
   beryllController.unarchiveServer
 );
 
-// Перенести сервер в архив
 router.post(
   "/servers/:id/archive",
   ...protect,
@@ -271,7 +244,6 @@ router.post(
 // СЕРИЙНЫЙ НОМЕР АПК
 // ============================================
 
-// Присвоить серийный номер АПК
 router.put(
   "/servers/:id/apk-serial",
   ...protect,
@@ -283,7 +255,6 @@ router.put(
 // ФАЙЛЫ
 // ============================================
 
-// Загрузить файл к пункту чек-листа
 router.post(
   "/servers/:serverId/checklist/:checklistId/file",
   ...protect,
@@ -291,7 +262,6 @@ router.post(
   beryllController.uploadChecklistFile
 );
 
-// Получить все файлы сервера
 router.get(
   "/servers/:serverId/files",
   ...protect,
@@ -299,7 +269,6 @@ router.get(
   beryllController.getServerFiles
 );
 
-// Скачать файл
 router.get(
   "/files/:fileId",
   ...protect,
@@ -311,7 +280,6 @@ router.get(
 // ГЕНЕРАЦИЯ ПАСПОРТА
 // ============================================
 
-// Сгенерировать Excel паспорт
 router.get(
   "/servers/:id/passport",
   ...protect,
@@ -323,44 +291,174 @@ router.get(
 // МОНИТОРИНГ
 // ============================================
 
-router.get("/monitoring/stats", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getMonitoringStats);
-router.get("/monitoring/status", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getCachedStatus);
-router.get("/monitoring/ping/:id", ...protect, checkAbility("beryll.view"), DefectMonitoringController.pingServer);
-router.post("/monitoring/ping-all", ...protect, checkAbility("beryll.work"), DefectMonitoringController.pingAllServers);
-router.get("/monitoring/servers/online", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getOnlineServers);
-router.get("/monitoring/servers/offline", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getOfflineServers);
-router.post("/monitoring/clear-cache", ...protect, checkAbility("beryll.manage"), DefectMonitoringController.clearCache);
+router.get(
+  "/monitoring/stats",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getMonitoringStats
+);
+
+router.get(
+  "/monitoring/status",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getCachedStatus
+);
+
+router.get(
+  "/monitoring/ping/:id",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.pingServer
+);
+
+router.post(
+  "/monitoring/ping-all",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.pingAllServers
+);
+
+router.get(
+  "/monitoring/servers/online",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getOnlineServers
+);
+
+router.get(
+  "/monitoring/servers/offline",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getOfflineServers
+);
+
+router.post(
+  "/monitoring/clear-cache",
+  ...protect,
+  checkAbility("beryll.manage"),
+  DefectMonitoringController.clearCache
+);
 
 // ============================================
 // ДЕФЕКТЫ (Учёт брака)
 // ============================================
 
-// Получить дефекты конкретного сервера
-router.get("/servers/:serverId/defects", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getServerDefects);
-// Статистика по дефектам
-router.get("/defects/stats", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getDefectStats);
-// Создать дефект
-router.post("/servers/:serverId/defects", ...protect, checkAbility("beryll.work"), DefectMonitoringController.createDefect);
-// Получить дефект по ID
-router.get("/defects/:id", ...protect, checkAbility("beryll.view"), DefectMonitoringController.getDefectById);
-// Обновить дефект (текст, категорию)
-router.put("/defects/:id", ...protect, checkAbility("beryll.work"), DefectMonitoringController.updateDefect);
-// Удалить дефект
-router.delete("/defects/:id", ...protect, checkAbility("beryll.work"), DefectMonitoringController.deleteDefect);
-// Отметить дефект исправленным (RESOLVED)
-router.post("/defects/:id/resolve", ...protect, checkAbility("beryll.work"), DefectMonitoringController.resolveDefect);
-// Загрузить файл к дефекту
-router.post("/defects/:id/files", ...protect, checkAbility("beryll.work"), defectUpload.single("file"), DefectMonitoringController.uploadDefectFile); // Исправлено имя метода
-// Скачать файл дефекта
-router.get("/defect-files/:id/download", ...protect, checkAbility("beryll.view"), DefectMonitoringController.downloadDefectFile); // Исправлено имя метода
-// Удалить файл дефекта
-router.delete("/defect-files/:id", ...protect, checkAbility("beryll.work"), DefectMonitoringController.deleteDefectFile); // Исправлено имя метода
-// === КОМПЛЕКТУЮЩИЕ (BMC) ===
-router.get("/servers/:id/bmc/check", ...protect, checkAbility("beryll.view"), ComponentsController.checkBMC);
-router.post("/servers/:id/components/fetch", ...protect, checkAbility("beryll.work"), ComponentsController.fetchComponents);
-router.get("/servers/:id/components", ...protect, checkAbility("beryll.view"), ComponentsController.getComponents);
-router.delete("/servers/:id/components", ...protect, checkAbility("beryll.manage"), ComponentsController.deleteComponents);
-router.get("/components/:id", ...protect, checkAbility("beryll.view"), ComponentsController.getComponentById);
-router.put("/servers/:id/bmc-address", ...protect, checkAbility("beryll.work"), ComponentsController.updateBMCAddress);
+router.get(
+  "/servers/:serverId/defects",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getServerDefects
+);
+
+router.get(
+  "/defects/stats",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getDefectStats
+);
+
+router.post(
+  "/servers/:serverId/defects",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.createDefect
+);
+
+router.get(
+  "/defects/:id",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.getDefectById
+);
+
+router.put(
+  "/defects/:id",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.updateDefect
+);
+
+router.delete(
+  "/defects/:id",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.deleteDefect
+);
+
+router.post(
+  "/defects/:id/resolve",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.resolveDefect
+);
+
+router.post(
+  "/defects/:id/files",
+  ...protect,
+  checkAbility("beryll.work"),
+  defectUpload.single("file"),
+  DefectMonitoringController.uploadDefectFile
+);
+
+router.get(
+  "/defect-files/:id/download",
+  ...protect,
+  checkAbility("beryll.view"),
+  DefectMonitoringController.downloadDefectFile
+);
+
+router.delete(
+  "/defect-files/:id",
+  ...protect,
+  checkAbility("beryll.work"),
+  DefectMonitoringController.deleteDefectFile
+);
+
+// ============================================
+// КОМПЛЕКТУЮЩИЕ (BMC)
+// ============================================
+
+router.get(
+  "/servers/:id/bmc/check",
+  ...protect,
+  checkAbility("beryll.view"),
+  ComponentsController.checkBMC
+);
+
+router.post(
+  "/servers/:id/components/fetch",
+  ...protect,
+  checkAbility("beryll.work"),
+  ComponentsController.fetchComponents
+);
+
+router.get(
+  "/servers/:id/components",
+  ...protect,
+  checkAbility("beryll.view"),
+  ComponentsController.getComponents
+);
+
+router.delete(
+  "/servers/:id/components",
+  ...protect,
+  checkAbility("beryll.manage"),
+  ComponentsController.deleteComponents
+);
+
+router.get(
+  "/components/:id",
+  ...protect,
+  checkAbility("beryll.view"),
+  ComponentsController.getComponentById
+);
+
+router.put(
+  "/servers/:id/bmc-address",
+  ...protect,
+  checkAbility("beryll.work"),
+  ComponentsController.updateBMCAddress
+);
 
 module.exports = router;

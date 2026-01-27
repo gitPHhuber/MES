@@ -40,6 +40,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/components/beryll/DefectComments.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/MonitoringDashboard.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/ServerComponents.tsx
+- MES-Kryptonit-Client-main/src/components/beryll/ServerComponentsManager.tsx
 - MES-Kryptonit-Client-main/src/components/common/Preloader.tsx
 - MES-Kryptonit-Client-main/src/components/common/PreloaderMini.tsx
 - MES-Kryptonit-Client-main/src/components/widgets/ProductionWidget.tsx
@@ -98,6 +99,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/pages/AssemblyRecipes/RecipeConstructorPage.tsx
 - MES-Kryptonit-Client-main/src/pages/AssemblyRecipes/RecipeExecutionPage.tsx
 - MES-Kryptonit-Client-main/src/pages/AssemblyRecipes/components/ProductPassportModal.tsx
+- MES-Kryptonit-Client-main/src/pages/Beryll/BeryllMonitoringPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/BeryllPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/pages/BatchDetailPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/pages/ServerDetailPage.tsx
@@ -263,6 +265,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/assemblyController.js
 - MES-Kryptonit-Server-master/controllers/assemblyRecipeController.js
 - MES-Kryptonit-Server-master/controllers/auditController.js
+- MES-Kryptonit-Server-master/controllers/beryll/ComponentsExtendedController.js
 - MES-Kryptonit-Server-master/controllers/beryll/config/beryll.config.js
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/ArchiveController.js
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/BatchController.js
@@ -517,7 +520,13 @@ FILE: MES-Kryptonit-Client-main/src/App.css
   width: 300px;
   height: 300px;
 }
-
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/App.tsx
 ================================================================================
@@ -779,7 +788,7 @@ const App = observer(() => {
         }}
       />
       <Header />
-      <main className="flex-1 overflow-auto pb-4">
+      <main className="flex-1 overflow-auto pb-4 pt-14">
         <AppRouter />
       </main>
     </div>
@@ -1678,7 +1687,10 @@ FILE: MES-Kryptonit-Client-main/src/api/beryll/componentsAPI.ts
 ================================================================================
 
 /**
- * API для работы с комплектующими серверов
+ * componentsAPI.ts
+ * 
+ * Расширенный API для работы с комплектующими серверов
+ * Включает: добавление, редактирование, замену, удаление
  * 
  * Положить в: src/api/beryll/componentsAPI.ts
  */
@@ -1692,6 +1704,10 @@ import type {
 } from "../../types/beryll/components";
 
 const BASE_URL = "/api/beryll";
+
+// ============================================
+// БАЗОВЫЕ ОПЕРАЦИИ
+// ============================================
 
 /**
  * Проверить доступность BMC
@@ -1744,6 +1760,320 @@ export async function updateBMCAddress(
   return data;
 }
 
+// ============================================
+// ДОБАВЛЕНИЕ КОМПЛЕКТУЮЩИХ
+// ============================================
+
+export interface AddComponentData {
+  componentType: string;
+  name: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: string;
+  capacity?: number;
+  speed?: string;
+  firmwareVersion?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Добавить новое комплектующее к серверу
+ */
+export async function addServerComponent(
+  serverId: number, 
+  componentData: AddComponentData
+): Promise<{ success: boolean; component: ServerComponent; message: string }> {
+  const { data } = await $authHost.post(
+    `${BASE_URL}/servers/${serverId}/components`,
+    componentData
+  );
+  return data;
+}
+
+/**
+ * Добавить несколько комплектующих за раз
+ */
+export async function addServerComponentsBatch(
+  serverId: number, 
+  components: AddComponentData[]
+): Promise<{ success: boolean; components: ServerComponent[]; count: number }> {
+  const { data } = await $authHost.post(
+    `${BASE_URL}/servers/${serverId}/components/batch`,
+    { components }
+  );
+  return data;
+}
+
+// ============================================
+// РЕДАКТИРОВАНИЕ КОМПЛЕКТУЮЩИХ
+// ============================================
+
+export interface UpdateComponentData {
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: string;
+  firmwareVersion?: string;
+  capacity?: number;
+  speed?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Обновить комплектующее
+ */
+export async function updateServerComponent(
+  componentId: number, 
+  updates: UpdateComponentData
+): Promise<{ success: boolean; component: ServerComponent; message: string }> {
+  const { data } = await $authHost.put(
+    `${BASE_URL}/components/${componentId}`,
+    updates
+  );
+  return data;
+}
+
+/**
+ * Обновить только серийные номера комплектующего
+ */
+export async function updateComponentSerials(
+  componentId: number, 
+  serials: { serialNumber?: string; serialNumberYadro?: string }
+): Promise<{ success: boolean; component: ServerComponent }> {
+  const { data } = await $authHost.patch(
+    `${BASE_URL}/components/${componentId}/serials`,
+    serials
+  );
+  return data;
+}
+
+// ============================================
+// ЗАМЕНА КОМПЛЕКТУЮЩИХ
+// ============================================
+
+export interface ReplaceComponentData {
+  newSerialNumber?: string;
+  newSerialNumberYadro?: string;
+  newManufacturer?: string;
+  newModel?: string;
+  newPartNumber?: string;
+  reason?: string;
+  defectRecordId?: number;
+  inventoryComponentId?: number;
+}
+
+/**
+ * Заменить комплектующее
+ * Создаёт запись в истории о замене
+ */
+export async function replaceServerComponent(
+  componentId: number, 
+  replacementData: ReplaceComponentData
+): Promise<{ 
+  success: boolean; 
+  oldComponent: ServerComponent;
+  newComponent: ServerComponent;
+  historyId: number;
+  message: string 
+}> {
+  const { data } = await $authHost.post(
+    `${BASE_URL}/components/${componentId}/replace`,
+    replacementData
+  );
+  return data;
+}
+
+// ============================================
+// УДАЛЕНИЕ КОМПЛЕКТУЮЩИХ
+// ============================================
+
+/**
+ * Удалить одно комплектующее
+ */
+export async function deleteComponent(
+  componentId: number,
+  reason?: string
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await $authHost.delete(
+    `${BASE_URL}/components/${componentId}`,
+    { data: { reason } }
+  );
+  return data;
+}
+
+// ============================================
+// ПОИСК И СКАНИРОВАНИЕ
+// ============================================
+
+export interface ComponentSearchParams {
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  componentType?: string;
+  serverId?: number;
+}
+
+/**
+ * Найти комплектующее по серийному номеру
+ */
+export async function findComponentBySerial(
+  params: ComponentSearchParams
+): Promise<{ found: boolean; component?: ServerComponent; server?: any }> {
+  const { data } = await $authHost.get(`${BASE_URL}/components/search`, { params });
+  return data;
+}
+
+/**
+ * Сканировать серийный номер Yadro
+ * Используется для быстрого поиска при сканировании штрих-кода
+ */
+export async function scanYadroSerial(
+  serialNumberYadro: string
+): Promise<{ 
+  found: boolean; 
+  component?: ServerComponent; 
+  server?: { id: number; apkSerialNumber: string; hostname?: string };
+  suggestions?: ServerComponent[];
+}> {
+  const { data } = await $authHost.get(
+    `${BASE_URL}/components/scan`,
+    { params: { serialNumberYadro } }
+  );
+  return data;
+}
+
+// ============================================
+// ИСТОРИЯ ИЗМЕНЕНИЙ
+// ============================================
+
+export interface ComponentHistoryEntry {
+  id: number;
+  action: 'ADDED' | 'UPDATED' | 'REPLACED' | 'REMOVED' | 'SERIAL_CHANGED';
+  componentId: number;
+  serverId: number;
+  userId: number;
+  userName?: string;
+  oldValue?: Record<string, any>;
+  newValue?: Record<string, any>;
+  reason?: string;
+  performedAt: string;
+}
+
+/**
+ * Получить историю изменений комплектующего
+ */
+export async function getComponentHistory(
+  componentId: number
+): Promise<{ history: ComponentHistoryEntry[] }> {
+  const { data } = await $authHost.get(`${BASE_URL}/components/${componentId}/history`);
+  return data;
+}
+
+/**
+ * Получить историю изменений комплектующих сервера
+ */
+export async function getServerComponentsHistory(
+  serverId: number,
+  params?: { from?: string; to?: string; limit?: number }
+): Promise<{ history: ComponentHistoryEntry[] }> {
+  const { data } = await $authHost.get(
+    `${BASE_URL}/servers/${serverId}/components/history`,
+    { params }
+  );
+  return data;
+}
+
+// ============================================
+// ВАЛИДАЦИЯ И ПРОВЕРКИ
+// ============================================
+
+/**
+ * Проверить уникальность серийного номера
+ */
+export async function checkSerialUniqueness(
+  serialNumber: string,
+  serialNumberYadro?: string,
+  excludeComponentId?: number
+): Promise<{ 
+  unique: boolean; 
+  conflictsWith?: { componentId: number; serverId: number; serverSerial: string } 
+}> {
+  const { data } = await $authHost.post(`${BASE_URL}/components/check-serial`, {
+    serialNumber,
+    serialNumberYadro,
+    excludeComponentId
+  });
+  return data;
+}
+
+/**
+ * Валидация комплектующего перед добавлением
+ */
+export async function validateComponent(
+  serverId: number,
+  componentData: AddComponentData
+): Promise<{ 
+  valid: boolean; 
+  errors?: string[]; 
+  warnings?: string[] 
+}> {
+  const { data } = await $authHost.post(
+    `${BASE_URL}/servers/${serverId}/components/validate`,
+    componentData
+  );
+  return data;
+}
+
+// ============================================
+// ИМПОРТ / ЭКСПОРТ
+// ============================================
+
+/**
+ * Импортировать комплектующие из Excel
+ */
+export async function importComponentsFromExcel(
+  serverId: number,
+  file: File,
+  options?: { skipExisting?: boolean; dryRun?: boolean }
+): Promise<{ 
+  success: boolean;
+  imported: number;
+  skipped: number;
+  errors: { row: number; error: string }[];
+  dryRun: boolean;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options?.skipExisting) formData.append('skipExisting', 'true');
+  if (options?.dryRun) formData.append('dryRun', 'true');
+
+  const { data } = await $authHost.post(
+    `${BASE_URL}/servers/${serverId}/components/import`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
+}
+
+/**
+ * Экспортировать комплектующие в Excel
+ */
+export async function exportComponentsToExcel(
+  serverId: number
+): Promise<Blob> {
+  const { data } = await $authHost.get(
+    `${BASE_URL}/servers/${serverId}/components/export`,
+    { responseType: 'blob' }
+  );
+  return data;
+}
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/api/beryll/defectsAndMonitoringAPI.ts
 ================================================================================
@@ -5315,7 +5645,18 @@ export const DateTimeDisplay = () => {
 FILE: MES-Kryptonit-Client-main/src/components/Header/Header.tsx
 ================================================================================
 
-import React, { useContext, Fragment } from "react";
+/**
+ * Header.tsx (обновлённый)
+ * 
+ * Изменения:
+ * 1. Добавлено плавное скрытие при скролле вниз
+ * 2. Header появляется обратно при скролле вверх
+ * 3. Добавлен отступ через CSS переменную для координации с контентом
+ * 
+ * Заменить: src/components/Header/Header.tsx
+ */
+
+import React, { useContext, Fragment, useState, useEffect, useRef } from "react";
 import Logo from "assets/images/logo.svg";
 import { NavLink, useLocation } from "react-router-dom";
 import { observer } from "mobx-react-lite";
@@ -5333,11 +5674,8 @@ import {
   ChevronDown, PackageCheck, Cpu, Radio, Activity,
   BarChart3, Trophy, PieChart, MonitorPlay, FileText,
   Menu as MenuIcon, CircuitBoard, LineChart,
-  // --- ДОБАВЛЕНО: Иконка Сервера ---
   Server,
-  // --- ДОБАВЛЕНО: Иконка для Учёта брака ---
   AlertTriangle,
-  // --- ДОБАВЛЕНО: Иконка для Производства ---
   Factory
 } from "lucide-react";
 
@@ -5351,12 +5689,9 @@ import {
   FIRMWARE_OLD_ROUTE, FIRMWARE_FC_ROUTE, FIRMWARE_915_002_ROUTE,
   FIRMWARE_915_019_ROUTE, FIRMWARE_2_4_ROUTE, FIRMWARE_Coral_B_ROUTE,
   MQTT_CHECK_FC_ROUTE, MQTT_CHECK_ESC_ROUTE, PROFILE_ROUTE, RANKINGS_CHARTS_ROUTE,
-  // --- ДОБАВЛЕНО ---
   BERYLL_ROUTE,
   BERYLL_MONITORING_ROUTE,
-  // --- ДОБАВЛЕНО: Учёт брака ---
   DEFECTS_ROUTE,
-  // --- ДОБАВЛЕНО: Производство ---
   PRODUCTION_ROUTE
 } from "src/utils/consts";
 
@@ -5368,6 +5703,9 @@ type NavItem = {
   children?: { label: string; to: string; icon?: React.ElementType }[];
 };
 
+// Высота хедера в пикселях (h-14 = 56px)
+export const HEADER_HEIGHT = 56;
+
 export const Header: React.FC = observer(() => {
   const auth = useAuth();
   const context = useContext(Context);
@@ -5375,6 +5713,41 @@ export const Header: React.FC = observer(() => {
 
   if (!context) throw new Error("Context required");
   const { user } = context;
+
+  // --- ЛОГИКА СКРЫТИЯ ХЕДЕРА ПРИ СКРОЛЛЕ ---
+  const [isVisible, setIsVisible] = useState(true);
+  const [isAtTop, setIsAtTop] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollThreshold = 10; // Минимальный скролл для срабатывания
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Определяем, находимся ли мы вверху страницы
+      setIsAtTop(currentScrollY < 5);
+      
+      // Определяем направление скролла
+      const scrollDiff = currentScrollY - lastScrollY.current;
+      
+      if (Math.abs(scrollDiff) < scrollThreshold) {
+        return; // Игнорируем маленькие скроллы
+      }
+      
+      if (scrollDiff > 0 && currentScrollY > HEADER_HEIGHT) {
+        // Скролл вниз - скрываем
+        setIsVisible(false);
+      } else {
+        // Скролл вверх - показываем
+        setIsVisible(true);
+      }
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // --- ЛОГИКА ВЫХОДА ---
   const logOut = async () => {
@@ -5417,14 +5790,14 @@ export const Header: React.FC = observer(() => {
       ]
     },
 
-    // --- ДОБАВЛЕНО: Производство (Учёт выработки) ---
+    // Производство (Учёт выработки)
     {
       label: "Производство",
       icon: Factory,
       to: PRODUCTION_ROUTE,
     },
 
-    // --- ОБНОВЛЕНО: АПК Берилл с подменю ---
+    // АПК Берилл с подменю
     {
       label: "АПК Берилл",
       icon: Server,
@@ -5435,7 +5808,7 @@ export const Header: React.FC = observer(() => {
       ]
     },
 
-    // --- ДОБАВЛЕНО: Учёт брака (Дефекты) ---
+    // Учёт брака (Дефекты)
     {
       label: "Учёт брака",
       icon: AlertTriangle,
@@ -5492,7 +5865,17 @@ export const Header: React.FC = observer(() => {
   });
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 h-14 shadow-sm">
+    <div 
+      className={clsx(
+        "fixed top-0 left-0 right-0 z-50 h-14",
+        "bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm",
+        "transition-transform duration-300 ease-in-out",
+        // Скрываем при скролле вниз
+        !isVisible && "-translate-y-full",
+        // Убираем тень когда вверху страницы
+        isAtTop && "shadow-none"
+      )}
+    >
       <div className="max-w-[1920px] mx-auto px-4 h-full flex justify-between items-center">
         
         {/* ЛЕВАЯ ЧАСТЬ: Лого */}
@@ -5599,47 +5982,56 @@ export const Header: React.FC = observer(() => {
                 </Menu.Button>
                 
                 <Transition
-                    as={Fragment}
-                    enter="transition ease-[cubic-bezier(0.16,1,0.3,1)] duration-200"
-                    enterFrom="transform opacity-0 scale-95 -translate-y-2"
-                    enterTo="transform opacity-100 scale-100 translate-y-0"
-                    leave="transition ease-in duration-150"
-                    leaveFrom="transform opacity-100 scale-100 translate-y-0"
-                    leaveTo="transform opacity-0 scale-95 -translate-y-2"
+                  as={Fragment}
+                  enter="transition ease-out duration-100"
+                  enterFrom="transform opacity-0 scale-95"
+                  enterTo="transform opacity-100 scale-100"
+                  leave="transition ease-in duration-75"
+                  leaveFrom="transform opacity-100 scale-100"
+                  leaveTo="transform opacity-0 scale-95"
                 >
-                    <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-gray-100 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                        <div className="p-1">
-                            <Menu.Item>
-                                {({ active }) => (
-                                    <NavLink to={PROFILE_ROUTE} className={clsx("flex w-full items-center rounded-md px-2 py-2 text-sm", active ? "bg-slate-100 text-indigo-700" : "text-slate-700 hover:bg-slate-50")}>
-                                        <User className="mr-2 h-4 w-4" /> Профиль
-                                    </NavLink>
-                                )}
-                            </Menu.Item>
-                        </div>
-                        <div className="p-1">
-                            <Menu.Item>
-                                {({ active }) => (
-                                    <button onClick={logOut} className={clsx("flex w-full items-center rounded-md px-2 py-2 text-sm", active ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-slate-50")}>
-                                        <LogOut className="mr-2 h-4 w-4" /> Выйти
-                                    </button>
-                                )}
-                            </Menu.Item>
-                        </div>
-                    </Menu.Items>
+                  <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-gray-100 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                    <div className="p-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <NavLink
+                            to={PROFILE_ROUTE}
+                            className={clsx(
+                              "flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm",
+                              active ? "bg-slate-100 text-indigo-700" : "text-slate-700"
+                            )}
+                          >
+                            <User size={14} />
+                            Профиль
+                          </NavLink>
+                        )}
+                      </Menu.Item>
+                    </div>
+                    <div className="p-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            onClick={logOut}
+                            className={clsx(
+                              "flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm",
+                              active ? "bg-red-50 text-red-700" : "text-slate-700"
+                            )}
+                          >
+                            <LogOut size={14} />
+                            Выйти
+                          </button>
+                        )}
+                      </Menu.Item>
+                    </div>
+                  </Menu.Items>
                 </Transition>
             </Menu>
-          ) : (
-            <button onClick={() => auth.signinRedirect()} className="bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-emerald-700 transition">
-              Войти
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
 });
-
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/Modal/ConfirmModal.tsx
 ================================================================================
@@ -6162,12 +6554,6 @@ export default DefectComments;
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/beryll/MonitoringDashboard.tsx
 ================================================================================
-
-/**
- * MonitoringDashboard.tsx
- * 
- * Положить в: src/components/beryll/MonitoringDashboard.tsx
- */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -6950,6 +7336,1345 @@ const Detail: React.FC<DetailProps> = ({ label, value, copyable, onCopy }) => {
 };
 
 export default ServerComponents;
+================================================================================
+FILE: MES-Kryptonit-Client-main/src/components/beryll/ServerComponentsManager.tsx
+================================================================================
+
+/**
+ * ServerComponentsManager.tsx
+ * 
+ * Расширенный компонент для управления комплектующими сервера:
+ * - Просмотр комплектующих с двумя серийными номерами (Yadro и производителя)
+ * - Добавление новых комплектующих
+ * - Замена комплектующих
+ * - Сканирование/ввод серийного номера Yadro
+ * - Редактирование серийных номеров
+ * 
+ * Положить в: src/components/beryll/ServerComponentsManager.tsx
+ */
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Cpu, MemoryStick, HardDrive, Network, CircuitBoard, Zap, Server,
+  RefreshCw, Download, ChevronDown, ChevronUp, Copy, AlertCircle,
+  CheckCircle, AlertTriangle, HelpCircle, Trash2, Settings, Plus,
+  Edit2, X, Save, ScanLine, ArrowRightLeft, Search, Package
+} from 'lucide-react';
+import clsx from 'clsx';
+import toast from 'react-hot-toast';
+
+import { $authHost } from '../../api/index';
+
+// ============================================
+// API ФУНКЦИИ
+// ============================================
+
+const BASE_URL = "/api/beryll";
+
+async function checkBMC(serverId: number) {
+  const { data } = await $authHost.get(`${BASE_URL}/servers/${serverId}/bmc/check`);
+  return data;
+}
+
+async function fetchComponentsFromBMC(serverId: number) {
+  const { data } = await $authHost.post(`${BASE_URL}/servers/${serverId}/components/fetch`);
+  return data;
+}
+
+async function getServerComponents(serverId: number) {
+  const { data } = await $authHost.get(`${BASE_URL}/servers/${serverId}/components`);
+  return data;
+}
+
+async function addServerComponent(serverId: number, componentData: any) {
+  const { data } = await $authHost.post(`${BASE_URL}/servers/${serverId}/components`, componentData);
+  return data;
+}
+
+async function updateServerComponent(componentId: number, updates: any) {
+  const { data } = await $authHost.put(`${BASE_URL}/components/${componentId}`, updates);
+  return data;
+}
+
+async function updateComponentSerials(componentId: number, serials: { serialNumber?: string; serialNumberYadro?: string }) {
+  const { data } = await $authHost.patch(`${BASE_URL}/components/${componentId}/serials`, serials);
+  return data;
+}
+
+async function replaceServerComponent(componentId: number, replacementData: any) {
+  const { data } = await $authHost.post(`${BASE_URL}/components/${componentId}/replace`, replacementData);
+  return data;
+}
+
+async function deleteComponent(componentId: number, reason?: string) {
+  const { data } = await $authHost.delete(`${BASE_URL}/components/${componentId}`, { data: { reason } });
+  return data;
+}
+
+// ============================================
+// ТИПЫ И КОНСТАНТЫ
+// ============================================
+
+type ComponentType = 'CPU' | 'RAM' | 'HDD' | 'SSD' | 'NVME' | 'NIC' | 'MOTHERBOARD' | 'PSU' | 'GPU' | 'RAID' | 'BMC' | 'OTHER';
+type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'REPLACED';
+
+interface ServerComponent {
+  id: number;
+  serverId: number;
+  componentType: ComponentType;
+  name: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  capacity?: number;
+  speed?: string;
+  status: ComponentStatus;
+  healthPercent?: number;
+  firmwareVersion?: string;
+  metadata?: any;
+}
+
+interface ComponentsResponse {
+  server: any;
+  summary: {
+    totalRAMBytes: number;
+    totalStorageBytes: number;
+    totalRAM: string;
+    totalStorage: string;
+    cpuCores: number;
+    cpuThreads: number;
+    totalComponents: number;
+  };
+  grouped: any;
+  components: ServerComponent[];
+}
+
+interface Props {
+  serverId: number;
+  serverIp?: string;
+  apkSerialNumber?: string;
+  readOnly?: boolean;
+}
+
+const COMPONENT_TYPES: { value: ComponentType; label: string }[] = [
+  { value: 'CPU', label: 'Процессор' },
+  { value: 'RAM', label: 'Оперативная память' },
+  { value: 'HDD', label: 'Жёсткий диск' },
+  { value: 'SSD', label: 'Твердотельный накопитель' },
+  { value: 'NVME', label: 'NVMe накопитель' },
+  { value: 'NIC', label: 'Сетевая карта' },
+  { value: 'MOTHERBOARD', label: 'Материнская плата' },
+  { value: 'PSU', label: 'Блок питания' },
+  { value: 'GPU', label: 'Видеокарта' },
+  { value: 'RAID', label: 'RAID-контроллер' },
+  { value: 'BMC', label: 'BMC' },
+  { value: 'OTHER', label: 'Прочее' }
+];
+
+const COMPONENT_STATUS_LABELS: Record<ComponentStatus, string> = {
+  OK: 'Исправен',
+  WARNING: 'Предупреждение',
+  CRITICAL: 'Критическое',
+  UNKNOWN: 'Неизвестно',
+  REPLACED: 'Заменён'
+};
+
+const COMPONENT_STATUS_COLORS: Record<ComponentStatus, string> = {
+  OK: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  WARNING: 'bg-amber-100 text-amber-700 border-amber-300',
+  CRITICAL: 'bg-red-100 text-red-700 border-red-300',
+  UNKNOWN: 'bg-slate-100 text-slate-500 border-slate-300',
+  REPLACED: 'bg-violet-100 text-violet-700 border-violet-300'
+};
+
+// Иконки по типам
+const TypeIcon: Record<ComponentType, React.FC<{ className?: string; size?: number }>> = {
+  CPU: Cpu,
+  RAM: MemoryStick,
+  SSD: HardDrive,
+  HDD: HardDrive,
+  NVME: HardDrive,
+  NIC: Network,
+  MOTHERBOARD: CircuitBoard,
+  PSU: Zap,
+  GPU: CircuitBoard,
+  RAID: HardDrive,
+  BMC: Server,
+  OTHER: Settings
+};
+
+// Статус иконки
+const StatusIcon: React.FC<{ status: ComponentStatus; className?: string }> = ({ status, className }) => {
+  switch (status) {
+    case 'OK': return <CheckCircle className={clsx('text-emerald-500', className)} size={18} />;
+    case 'WARNING': return <AlertTriangle className={clsx('text-amber-500', className)} size={18} />;
+    case 'CRITICAL': return <AlertCircle className={clsx('text-red-500', className)} size={18} />;
+    case 'REPLACED': return <ArrowRightLeft className={clsx('text-violet-500', className)} size={18} />;
+    default: return <HelpCircle className={clsx('text-slate-400', className)} size={18} />;
+  }
+};
+
+// Утилита форматирования байт
+function formatBytes(bytes: number | string | null | undefined): string {
+  if (!bytes) return '—';
+  const b = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+  if (isNaN(b) || b === 0) return '—';
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return `${(b / Math.pow(1024, i)).toFixed(i > 2 ? 1 : 0)} ${units[i]}`;
+}
+
+// Placeholder-ы для разных типов комплектующих
+const TYPE_PLACEHOLDERS: Record<ComponentType, {
+  manufacturer: string;
+  model: string;
+  name: string;
+  slot: string;
+  capacity: string;
+  speed: string;
+}> = {
+  CPU: {
+    manufacturer: 'Intel, AMD',
+    model: 'Xeon Gold 6348',
+    name: 'Intel Xeon Gold 6348 2.6GHz',
+    slot: 'CPU_1, CPU_2',
+    capacity: 'Ядра: 28',
+    speed: '2.6 GHz'
+  },
+  RAM: {
+    manufacturer: 'Samsung, Micron, SK Hynix',
+    model: 'M393A8G40BB4-CWE',
+    name: 'Samsung 64GB DDR4',
+    slot: 'DIMM_A1, DIMM_B1',
+    capacity: '64',
+    speed: '3200 MT/s'
+  },
+  SSD: {
+    manufacturer: 'Samsung, Intel, Micron',
+    model: 'MZQL21T9HCJR',
+    name: 'Samsung PM9A3 1.92TB',
+    slot: 'SSD_1, SSD_2',
+    capacity: '1920',
+    speed: '6800 MB/s'
+  },
+  HDD: {
+    manufacturer: 'Seagate, WD, Toshiba',
+    model: 'ST18000NM000J',
+    name: 'Seagate Exos X18 18TB',
+    slot: 'HDD_1, HDD_2',
+    capacity: '18000',
+    speed: '7200 RPM'
+  },
+  NVME: {
+    manufacturer: 'Samsung, Intel, Micron',
+    model: 'MZQL21T9HCJR',
+    name: 'Samsung PM9A3 NVMe 1.92TB',
+    slot: 'NVME_1, M.2_1',
+    capacity: '1920',
+    speed: '6800 MB/s'
+  },
+  NIC: {
+    manufacturer: 'Intel, Mellanox, Broadcom',
+    model: 'E810-XXVDA2',
+    name: 'Intel E810 25GbE',
+    slot: 'PCI_1, OCP_1',
+    capacity: '',
+    speed: '25 Gbps'
+  },
+  MOTHERBOARD: {
+    manufacturer: 'Supermicro, ASUS, Dell',
+    model: 'X12SPL-F',
+    name: 'Supermicro X12SPL-F',
+    slot: '',
+    capacity: '',
+    speed: ''
+  },
+  PSU: {
+    manufacturer: 'Delta, Lite-On, FSP',
+    model: 'DPS-1200FB',
+    name: 'Delta 1200W Platinum',
+    slot: 'PSU_1, PSU_2',
+    capacity: '1200',
+    speed: ''
+  },
+  GPU: {
+    manufacturer: 'NVIDIA, AMD',
+    model: 'A100-SXM4-80GB',
+    name: 'NVIDIA A100 80GB',
+    slot: 'GPU_1, PCI_1',
+    capacity: '80',
+    speed: ''
+  },
+  RAID: {
+    manufacturer: 'Broadcom, LSI, Dell',
+    model: '9460-16i',
+    name: 'Broadcom MegaRAID 9460-16i',
+    slot: 'PCI_1, RAID_1',
+    capacity: '',
+    speed: '12 Gbps'
+  },
+  BMC: {
+    manufacturer: 'ASPEED, Nuvoton',
+    model: 'AST2600',
+    name: 'ASPEED AST2600 BMC',
+    slot: '',
+    capacity: '',
+    speed: ''
+  },
+  OTHER: {
+    manufacturer: 'Производитель',
+    model: 'Модель',
+    name: 'Название компонента',
+    slot: 'Слот',
+    capacity: '',
+    speed: ''
+  }
+};
+
+// ============================================
+// МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ
+// ============================================
+
+interface ComponentFormData {
+  componentType: ComponentType;
+  name: string;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  serialNumberYadro: string;
+  partNumber: string;
+  slot: string;
+  status: ComponentStatus;
+  capacity?: string;
+  speed?: string;
+}
+
+interface ComponentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: ComponentFormData) => Promise<void>;
+  initialData?: Partial<ComponentFormData>;
+  title: string;
+  isReplacement?: boolean;
+}
+
+const ComponentModal: React.FC<ComponentModalProps> = ({
+  isOpen, onClose, onSave, initialData, title, isReplacement
+}) => {
+  const [formData, setFormData] = useState<ComponentFormData>({
+    componentType: 'RAM',
+    name: '',
+    manufacturer: '',
+    model: '',
+    serialNumber: '',
+    serialNumberYadro: '',
+    partNumber: '',
+    slot: '',
+    status: 'OK',
+    capacity: '',
+    speed: ''
+  });
+  const [saving, setSaving] = useState(false);
+  const yadroInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(prev => ({ ...prev, ...initialData }));
+    } else {
+      setFormData({
+        componentType: 'RAM',
+        name: '',
+        manufacturer: '',
+        model: '',
+        serialNumber: '',
+        serialNumberYadro: '',
+        partNumber: '',
+        slot: '',
+        status: 'OK',
+        capacity: '',
+        speed: ''
+      });
+    }
+  }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && yadroInputRef.current) {
+      setTimeout(() => yadroInputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  const handleChange = (field: keyof ComponentFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.componentType) {
+      toast.error('Выберите тип комплектующего');
+      return;
+    }
+    
+    if (!formData.serialNumberYadro && !formData.serialNumber) {
+      toast.error('Укажите хотя бы один серийный номер');
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (err) {
+      console.error('Save error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-violet-600">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isReplacement ? (
+                <ArrowRightLeft className="text-white/90" size={22} />
+              ) : (
+                <Plus className="text-white/90" size={22} />
+              )}
+              <h2 className="text-lg font-semibold text-white">{title}</h2>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+              <X className="text-white" size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* Yadro Serial - приоритетное поле для сканирования */}
+          <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
+            <label className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
+              <ScanLine size={18} />
+              Серийный номер Yadro (наклейка)
+            </label>
+            <input
+              ref={yadroInputRef}
+              type="text"
+              value={formData.serialNumberYadro}
+              onChange={(e) => handleChange('serialNumberYadro', e.target.value)}
+              className="w-full px-4 py-3 bg-white border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-lg font-mono"
+              placeholder="Отсканируйте или введите S/N Yadro"
+              autoComplete="off"
+            />
+            <p className="mt-1.5 text-xs text-amber-600">
+              Сканируйте штрих-код с наклейки Yadro на комплектующем
+            </p>
+          </div>
+
+          {/* Row: Type + Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Тип комплектующего *</label>
+              <select
+                value={formData.componentType}
+                onChange={(e) => handleChange('componentType', e.target.value as ComponentType)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={isReplacement}
+              >
+                {COMPONENT_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Статус</label>
+              <select
+                value={formData.status}
+                onChange={(e) => handleChange('status', e.target.value as ComponentStatus)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="OK">Исправен</option>
+                <option value="WARNING">Предупреждение</option>
+                <option value="CRITICAL">Критическое</option>
+                <option value="UNKNOWN">Неизвестно</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row: Manufacturer S/N + Slot */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Серийный номер производителя</label>
+              <input
+                type="text"
+                value={formData.serialNumber}
+                onChange={(e) => handleChange('serialNumber', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                placeholder="Заводской S/N"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Слот / Позиция</label>
+              <input
+                type="text"
+                value={formData.slot}
+                onChange={(e) => handleChange('slot', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.slot || 'Слот'}
+              />
+            </div>
+          </div>
+
+          {/* Row: Manufacturer + Model */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Производитель</label>
+              <input
+                type="text"
+                value={formData.manufacturer}
+                onChange={(e) => handleChange('manufacturer', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.manufacturer || 'Производитель'}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Модель</label>
+              <input
+                type="text"
+                value={formData.model}
+                onChange={(e) => handleChange('model', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.model || 'Модель'}
+              />
+            </div>
+          </div>
+
+          {/* Row: Part Number + Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Part Number (P/N)</label>
+              <input
+                type="text"
+                value={formData.partNumber}
+                onChange={(e) => handleChange('partNumber', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                placeholder="Артикул"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Название</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.name || 'Название'}
+              />
+            </div>
+          </div>
+
+          {/* Row: Capacity + Speed */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Объём (GB)</label>
+              <input
+                type="text"
+                value={formData.capacity}
+                onChange={(e) => handleChange('capacity', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.capacity || 'Объём'}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Частота / Скорость</label>
+              <input
+                type="text"
+                value={formData.speed}
+                onChange={(e) => handleChange('speed', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={TYPE_PLACEHOLDERS[formData.componentType]?.speed || 'Скорость'}
+              />
+            </div>
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-5 py-2.5 text-white bg-gradient-to-r from-indigo-600 to-violet-600 rounded-lg hover:from-indigo-700 hover:to-violet-700 transition-all font-medium flex items-center gap-2 disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Сохранение...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                {isReplacement ? 'Заменить' : 'Сохранить'}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// МОДАЛЬНОЕ ОКНО БЫСТРОГО РЕДАКТИРОВАНИЯ S/N
+// ============================================
+
+interface EditSerialsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (serials: { serialNumber: string; serialNumberYadro: string }) => Promise<void>;
+  component: ServerComponent;
+}
+
+const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
+  isOpen, onClose, onSave, component
+}) => {
+  const [serialNumber, setSerialNumber] = useState(component.serialNumber || '');
+  const [serialNumberYadro, setSerialNumberYadro] = useState(component.serialNumberYadro || '');
+  const [saving, setSaving] = useState(false);
+  const yadroInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSerialNumber(component.serialNumber || '');
+    setSerialNumberYadro(component.serialNumberYadro || '');
+  }, [component]);
+
+  useEffect(() => {
+    if (isOpen && yadroInputRef.current) {
+      setTimeout(() => yadroInputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!serialNumber && !serialNumberYadro) {
+      toast.error('Укажите хотя бы один серийный номер');
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      await onSave({ serialNumber, serialNumberYadro });
+      onClose();
+    } catch (err) {
+      console.error('Save serials error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-600 to-teal-600">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ScanLine className="text-white/90" size={22} />
+              <div>
+                <h2 className="text-lg font-semibold text-white">Изменить серийные номера</h2>
+                <p className="text-sm text-white/70">{component.name}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+              <X className="text-white" size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Info */}
+          <div className="p-3 bg-slate-50 rounded-lg text-sm">
+            <p className="text-slate-600">
+              <span className="font-medium">Тип:</span> {COMPONENT_TYPES.find(t => t.value === component.componentType)?.label || component.componentType}
+              {component.slot && <span className="ml-3"><span className="font-medium">Слот:</span> {component.slot}</span>}
+            </p>
+          </div>
+
+          {/* Yadro S/N */}
+          <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
+            <label className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
+              <ScanLine size={18} />
+              S/N Yadro (наклейка)
+            </label>
+            <input
+              ref={yadroInputRef}
+              type="text"
+              value={serialNumberYadro}
+              onChange={(e) => setSerialNumberYadro(e.target.value)}
+              className="w-full px-4 py-3 bg-white border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-lg font-mono"
+              placeholder="Отсканируйте или введите"
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Manufacturer S/N */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              S/N производителя (заводской)
+            </label>
+            <input
+              type="text"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+              placeholder="Заводской серийный номер"
+            />
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-5 py-2.5 text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all font-medium flex items-center gap-2 disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Сохранение...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                Сохранить
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// КАРТОЧКА КОМПЛЕКТУЮЩЕГО
+// ============================================
+
+interface ComponentCardProps {
+  component: ServerComponent;
+  onEdit: (component: ServerComponent) => void;
+  onEditSerials: (component: ServerComponent) => void;
+  onReplace: (component: ServerComponent) => void;
+  onDelete: (component: ServerComponent) => void;
+  readOnly?: boolean;
+}
+
+const ComponentCard: React.FC<ComponentCardProps> = ({
+  component, onEdit, onEditSerials, onReplace, onDelete, readOnly
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = TypeIcon[component.componentType] || Settings;
+
+  const copySerial = (serial: string, type: string) => {
+    navigator.clipboard.writeText(serial);
+    toast.success(`${type} скопирован`);
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-50"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <StatusIcon status={component.status} className="flex-shrink-0" />
+          <Icon className="text-slate-500 flex-shrink-0" size={20} />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-slate-900 truncate">
+              {component.name || `${component.manufacturer || ''} ${component.model || ''}`}
+            </div>
+            <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+              {component.slot && (
+                <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">
+                  {component.slot}
+                </span>
+              )}
+              {component.serialNumberYadro && (
+                <span className="text-amber-600 font-mono">Yadro: {component.serialNumberYadro}</span>
+              )}
+              {component.serialNumber && component.serialNumber !== component.serialNumberYadro && (
+                <span className="font-mono">S/N: {component.serialNumber}</span>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {component.serialNumberYadro && (
+            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-lg flex items-center gap-1">
+              <Package size={12} />
+              Yadro
+            </span>
+          )}
+          <span className={clsx(
+            'px-2 py-1 text-xs font-medium rounded-lg border',
+            COMPONENT_STATUS_COLORS[component.status]
+          )}>
+            {COMPONENT_STATUS_LABELS[component.status]}
+          </span>
+          {expanded ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 py-4 border-t border-slate-100 bg-slate-50/50">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+            {/* Yadro S/N - выделенное поле */}
+            <div className="col-span-2 lg:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <label className="text-xs font-medium text-amber-700 flex items-center gap-1 mb-1">
+                <Package size={12} />
+                S/N Yadro (наклейка)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-amber-900 text-base">
+                  {component.serialNumberYadro || '— не указан —'}
+                </span>
+                {component.serialNumberYadro && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); copySerial(component.serialNumberYadro!, 'S/N Yadro'); }}
+                    className="p-1 hover:bg-amber-100 rounded"
+                    title="Копировать"
+                  >
+                    <Copy size={14} className="text-amber-600" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Производитель</label>
+              <p className="font-medium text-slate-800">{component.manufacturer || '—'}</p>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Модель</label>
+              <p className="font-medium text-slate-800">{component.model || '—'}</p>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">S/N производителя</label>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-slate-800">{component.serialNumber || '—'}</span>
+                {component.serialNumber && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); copySerial(component.serialNumber!, 'S/N'); }}
+                    className="p-1 hover:bg-slate-100 rounded"
+                  >
+                    <Copy size={12} className="text-slate-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">P/N</label>
+              <p className="font-mono text-slate-800">{component.partNumber || '—'}</p>
+            </div>
+            {component.capacity && (
+              <div>
+                <label className="text-xs text-slate-500">Объём</label>
+                <p className="font-medium text-slate-800">{formatBytes(component.capacity)}</p>
+              </div>
+            )}
+            {component.speed && (
+              <div>
+                <label className="text-xs text-slate-500">Частота</label>
+                <p className="font-medium text-slate-800">{component.speed}</p>
+              </div>
+            )}
+            {component.metadata?.rank && (
+              <div>
+                <label className="text-xs text-slate-500">Ранг</label>
+                <p className="font-medium text-slate-800">{component.metadata.rank}</p>
+              </div>
+            )}
+            {component.metadata?.memoryType && (
+              <div>
+                <label className="text-xs text-slate-500">Тип памяти</label>
+                <p className="font-medium text-slate-800">{component.metadata.memoryType}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          {!readOnly && (
+            <div className="flex flex-wrap justify-end gap-2 mt-4 pt-3 border-t border-slate-200">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditSerials(component); }}
+                className="px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg flex items-center gap-1.5 transition-colors"
+                title="Быстрое изменение серийных номеров"
+              >
+                <ScanLine size={14} />
+                Изменить S/N
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(component); }}
+                className="px-3 py-1.5 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center gap-1.5 transition-colors"
+              >
+                <Edit2 size={14} />
+                Редактировать
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onReplace(component); }}
+                className="px-3 py-1.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg flex items-center gap-1.5 transition-colors"
+              >
+                <ArrowRightLeft size={14} />
+                Замена
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(component); }}
+                className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 size={14} />
+                Удалить
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ============================================
+
+const ServerComponentsManager: React.FC<Props> = ({
+  serverId, serverIp, apkSerialNumber, readOnly = false
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ComponentsResponse | null>(null);
+  const [fetchingFromBmc, setFetchingFromBmc] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingComponent, setEditingComponent] = useState<ServerComponent | null>(null);
+  const [editingSerialsComponent, setEditingSerialsComponent] = useState<ServerComponent | null>(null);
+  const [replacingComponent, setReplacingComponent] = useState<ServerComponent | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ServerComponent | null>(null);
+
+  // Фильтрация по типам
+  const [typeFilter, setTypeFilter] = useState<ComponentType | 'ALL'>('ALL');
+
+  // Загрузка данных
+  const loadComponents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await getServerComponents(serverId);
+      setData(response);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка загрузки комплектующих');
+    } finally {
+      setLoading(false);
+    }
+  }, [serverId]);
+
+  useEffect(() => {
+    loadComponents();
+  }, [loadComponents]);
+
+  // Выгрузка с BMC
+  const handleFetchFromBmc = async () => {
+    setFetchingFromBmc(true);
+    try {
+      const result = await fetchComponentsFromBMC(serverId);
+      toast.success(result.message || 'Комплектующие выгружены');
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка выгрузки с BMC');
+    } finally {
+      setFetchingFromBmc(false);
+    }
+  };
+
+  // Добавление нового комплектующего
+  const handleAddComponent = async (formData: ComponentFormData) => {
+    try {
+      await addServerComponent(serverId, {
+        componentType: formData.componentType,
+        name: formData.name || `${formData.manufacturer || ''} ${formData.model || formData.componentType}`.trim(),
+        manufacturer: formData.manufacturer,
+        model: formData.model,
+        serialNumber: formData.serialNumber,
+        serialNumberYadro: formData.serialNumberYadro,
+        partNumber: formData.partNumber,
+        slot: formData.slot,
+        status: formData.status,
+        capacity: formData.capacity ? parseInt(formData.capacity) * 1024 * 1024 * 1024 : undefined,
+        speed: formData.speed
+      });
+      toast.success('Комплектующее добавлено');
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка добавления');
+      throw err;
+    }
+  };
+
+  // Редактирование комплектующего
+  const handleEditComponent = async (formData: ComponentFormData) => {
+    if (!editingComponent) return;
+    
+    try {
+      await updateServerComponent(editingComponent.id, {
+        name: formData.name,
+        manufacturer: formData.manufacturer,
+        model: formData.model,
+        serialNumber: formData.serialNumber,
+        serialNumberYadro: formData.serialNumberYadro,
+        partNumber: formData.partNumber,
+        slot: formData.slot,
+        status: formData.status
+      });
+      toast.success('Комплектующее обновлено');
+      setEditingComponent(null);
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка обновления');
+      throw err;
+    }
+  };
+
+  // Быстрое редактирование серийных номеров
+  const handleEditSerials = async (serials: { serialNumber: string; serialNumberYadro: string }) => {
+    if (!editingSerialsComponent) return;
+    
+    try {
+      await updateComponentSerials(editingSerialsComponent.id, {
+        serialNumber: serials.serialNumber || undefined,
+        serialNumberYadro: serials.serialNumberYadro || undefined
+      });
+      toast.success('Серийные номера обновлены');
+      setEditingSerialsComponent(null);
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка обновления');
+      throw err;
+    }
+  };
+
+  // Замена комплектующего
+  const handleReplaceComponent = async (formData: ComponentFormData) => {
+    if (!replacingComponent) return;
+    
+    try {
+      await replaceServerComponent(replacingComponent.id, {
+        newSerialNumber: formData.serialNumber,
+        newSerialNumberYadro: formData.serialNumberYadro,
+        newManufacturer: formData.manufacturer,
+        newModel: formData.model,
+        newPartNumber: formData.partNumber,
+        reason: 'Замена комплектующего'
+      });
+      toast.success('Комплектующее заменено');
+      setReplacingComponent(null);
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка замены');
+      throw err;
+    }
+  };
+
+  // Удаление комплектующего
+  const handleDeleteComponent = async () => {
+    if (!confirmDelete) return;
+    
+    try {
+      await deleteComponent(confirmDelete.id);
+      toast.success('Комплектующее удалено');
+      setConfirmDelete(null);
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка удаления');
+    }
+  };
+
+  // Фильтрация компонентов
+  const filteredComponents = data?.components?.filter(c => {
+    const matchesType = typeFilter === 'ALL' || c.componentType === typeFilter;
+    const matchesSearch = !searchQuery || 
+      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.serialNumberYadro?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.manufacturer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.model?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesType && matchesSearch;
+  }) || [];
+
+  // Группировка по типам
+  const groupedComponents = filteredComponents.reduce((acc, c) => {
+    const type = c.componentType;
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(c);
+    return acc;
+  }, {} as Record<string, ServerComponent[]>);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Package className="text-indigo-600" />
+            Комплектующие сервера
+          </h2>
+          {data?.summary && (
+            <p className="text-sm text-slate-500 mt-1">
+              Всего: {data.summary.totalComponents} • 
+              RAM: {data.summary.totalRAM} • 
+              Накопители: {data.summary.totalStorage}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!readOnly && (
+            <>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-lg hover:from-indigo-700 hover:to-violet-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-indigo-200"
+              >
+                <Plus size={18} />
+                Добавить
+              </button>
+              <button
+                onClick={handleFetchFromBmc}
+                disabled={fetchingFromBmc}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                {fetchingFromBmc ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Download size={18} />
+                )}
+                BMC
+              </button>
+            </>
+          )}
+          <button
+            onClick={loadComponents}
+            disabled={loading}
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Обновить"
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Поиск по S/N, модели, производителю..."
+            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as ComponentType | 'ALL')}
+          className="px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="ALL">Все типы</option>
+          {COMPONENT_TYPES.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw size={32} className="text-indigo-600 animate-spin" />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && filteredComponents.length === 0 && (
+        <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+          <Package size={48} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-slate-500 mb-4">
+            {searchQuery ? 'Ничего не найдено' : 'Комплектующие не добавлены'}
+          </p>
+          {!readOnly && !searchQuery && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium inline-flex items-center gap-2"
+            >
+              <Plus size={18} />
+              Добавить комплектующее
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Components list by type */}
+      {!loading && Object.keys(groupedComponents).length > 0 && (
+        <div className="space-y-6">
+          {Object.entries(groupedComponents).map(([type, components]) => {
+            const TypeIconComp = TypeIcon[type as ComponentType] || Settings;
+            const typeLabel = COMPONENT_TYPES.find(t => t.value === type)?.label || type;
+            
+            return (
+              <div key={type}>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-3">
+                  <TypeIconComp size={18} />
+                  {typeLabel}
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-xs">
+                    {components.length}
+                  </span>
+                </h3>
+                <div className="space-y-2">
+                  {components.map(component => (
+                    <ComponentCard
+                      key={component.id}
+                      component={component}
+                      onEdit={setEditingComponent}
+                      onEditSerials={setEditingSerialsComponent}
+                      onReplace={setReplacingComponent}
+                      onDelete={setConfirmDelete}
+                      readOnly={readOnly}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Modal */}
+      <ComponentModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSave={handleAddComponent}
+        title="Добавить комплектующее"
+      />
+
+      {/* Edit Modal */}
+      <ComponentModal
+        isOpen={!!editingComponent}
+        onClose={() => setEditingComponent(null)}
+        onSave={handleEditComponent}
+        initialData={editingComponent ? {
+          componentType: editingComponent.componentType,
+          name: editingComponent.name || '',
+          manufacturer: editingComponent.manufacturer || '',
+          model: editingComponent.model || '',
+          serialNumber: editingComponent.serialNumber || '',
+          serialNumberYadro: editingComponent.serialNumberYadro || '',
+          partNumber: editingComponent.partNumber || '',
+          slot: editingComponent.slot || '',
+          status: editingComponent.status
+        } : undefined}
+        title="Редактировать комплектующее"
+      />
+
+      {/* Replace Modal */}
+      <ComponentModal
+        isOpen={!!replacingComponent}
+        onClose={() => setReplacingComponent(null)}
+        onSave={handleReplaceComponent}
+        initialData={replacingComponent ? {
+          componentType: replacingComponent.componentType,
+          name: '',
+          manufacturer: '',
+          model: '',
+          serialNumber: '',
+          serialNumberYadro: '',
+          partNumber: '',
+          slot: replacingComponent.slot || '',
+          status: 'OK'
+        } : undefined}
+        title={`Замена: ${replacingComponent?.name || ''}`}
+        isReplacement
+      />
+
+      {/* Quick Edit Serials Modal */}
+      {editingSerialsComponent && (
+        <EditSerialsModal
+          isOpen={!!editingSerialsComponent}
+          onClose={() => setEditingSerialsComponent(null)}
+          onSave={handleEditSerials}
+          component={editingSerialsComponent}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <AlertCircle size={24} />
+              <h3 className="text-lg font-semibold">Подтверждение удаления</h3>
+            </div>
+            <p className="text-slate-600 mb-6">
+              Вы уверены, что хотите удалить комплектующее{' '}
+              <strong>{confirmDelete.name}</strong>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleDeleteComponent}
+                className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ServerComponentsManager;
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/common/Preloader.tsx
 ================================================================================
@@ -17407,21 +19132,76 @@ export const ProductPassportModal: React.FC<Props> = ({ processId, onClose }) =>
     );
 };
 ================================================================================
+FILE: MES-Kryptonit-Client-main/src/pages/Beryll/BeryllMonitoringPage.tsx
+================================================================================
+
+/**
+ * BeryllMonitoringPage.tsx
+ * 
+ * Страница мониторинга серверов Beryll
+ * Положить в: src/pages/Beryll/BeryllMonitoringPage.tsx
+ */
+
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Activity } from "lucide-react";
+import { MonitoringDashboard } from "src/components/beryll/MonitoringDashboard";
+import { BERYLL_ROUTE } from "src/utils/consts";
+
+const BeryllMonitoringPage: React.FC = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Заголовок */}
+      <div className="bg-white shadow">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              {/* Кнопка назад */}
+              <button
+                onClick={() => navigate(BERYLL_ROUTE)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Назад к серверам"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              
+              <div className="p-2.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Мониторинг серверов</h1>
+                <p className="text-sm text-gray-500">Статус и доступность серверов в реальном времени</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Контент */}
+      <div className="max-w-full mx-auto p-4 sm:p-6 lg:p-8">
+        <MonitoringDashboard 
+          autoRefresh={true} 
+          refreshInterval={60} 
+        />
+      </div>
+    </div>
+  );
+};
+
+export default BeryllMonitoringPage;
+================================================================================
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/BeryllPage.tsx
 ================================================================================
 
 /**
  * BeryllPage.tsx (обновлённый)
  * 
- * Главная страница APK Beryll с расширенными вкладками:
- * - Серверы (существующая)
- * - Партии (существующая)
- * - Стойки (новая)
- * - Кластеры (новая)
- * - Учёт брака (новая)
- * - Аналитика (существующая)
- * - Архив (существующая)
- * - Настройки (существующая)
+ * Изменения:
+ * 1. Субнавигация теперь sticky с top-0 (Header скрывается при скролле)
+ * 2. Заголовок страницы остаётся скроллящимся
+ * 3. Улучшена анимация переключения табов
  * 
  * Заменить: src/pages/Beryll/BeryllPage.tsx
  */
@@ -17554,7 +19334,7 @@ const BeryllPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Заголовок */}
+      {/* Заголовок - скроллится вместе с контентом */}
       <div className="bg-white shadow">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-4">
@@ -17600,10 +19380,14 @@ const BeryllPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Навигация по вкладкам */}
-      <div className="bg-white border-b">
+      {/* 
+        Навигация по вкладкам - STICKY
+        top-0 когда Header скрыт, при видимом Header контент уже имеет pt-14
+        z-40 чтобы быть под Header (z-50), но над контентом
+      */}
+      <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-1 overflow-x-auto" aria-label="Tabs">
+          <nav className="flex space-x-1 overflow-x-auto scrollbar-hide" aria-label="Tabs">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -17614,18 +19398,21 @@ const BeryllPage: React.FC = () => {
                   onClick={() => handleTabChange(tab.id)}
                   className={`
                     flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap
-                    transition-colors duration-150
+                    transition-all duration-200 ease-out
                     ${isActive
-                      ? "border-indigo-500 text-indigo-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      ? "border-indigo-500 text-indigo-600 bg-indigo-50/50"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50"
                     }
                   `}
                 >
-                  <Icon size={18} />
+                  <Icon 
+                    size={18} 
+                    className={`transition-transform duration-200 ${isActive ? "scale-110" : ""}`} 
+                  />
                   {tab.label}
                   {/* Бейдж для вкладки "Учёт брака" */}
                   {tab.id === "defects" && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full animate-pulse">
                       !
                     </span>
                   )}
@@ -18334,7 +20121,8 @@ import {
 } from "src/api/beryllApi";
 
 import { DefectComments } from '../../../components/beryll/DefectComments';
-import { ServerComponents } from '../../../components/beryll/ServerComponents';
+// ИЗМЕНЕНО: используем новый компонент ServerComponentsManager
+import ServerComponentsManager from '../../../components/beryll/ServerComponentsManager';
 
 
 export const ServerDetailPage: React.FC = observer(() => {
@@ -18867,9 +20655,14 @@ export const ServerDetailPage: React.FC = observer(() => {
             )}
           </div>
 
-          {/* Комплектующие */}
-          <div className="lg:col-span-2">
-            <ServerComponents serverId={server.id} serverIp={server.ipAddress} />
+          {/* ИЗМЕНЕНО: Комплектующие - теперь с новым компонентом */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <ServerComponentsManager 
+              serverId={server.id} 
+              serverIp={server.ipAddress}
+              apkSerialNumber={server.apkSerialNumber}
+              readOnly={server.status === "ARCHIVED"}
+            />
           </div>
 
           {/* Дефекты */}
@@ -46442,6 +48235,7 @@ import { ProductionDashboard } from "./pages/Analytics/ProductionDashboard";
 import BeryllPage from "./pages/Beryll/BeryllPage";
 import { ServerDetailPage } from "./pages/Beryll/pages/ServerDetailPage";
 import { BatchDetailPage } from "./pages/Beryll/pages/BatchDetailPage";
+import BeryllMonitoringPage from "./pages/Beryll/BeryllMonitoringPage";
 
 import { DefectsPage } from "./pages/Defects/DefectsPage";
 import { DefectDetailPage } from "./pages/Defects/DefectDetailPage";
@@ -46498,6 +48292,7 @@ import {
   BERYLL_ROUTE,
   BERYLL_SERVER_ROUTE,
   BERYLL_BATCH_ROUTE,
+  BERYLL_MONITORING_ROUTE,
   DEFECTS_ROUTE,
   DEFECT_DETAIL_ROUTE,
   ADMIN_DEFECT_CATEGORIES_ROUTE,
@@ -46536,6 +48331,8 @@ export const authRoutes = [
   { path: BERYLL_ROUTE, Component: BeryllPage },
   { path: BERYLL_SERVER_ROUTE, Component: ServerDetailPage },
   { path: BERYLL_BATCH_ROUTE, Component: BatchDetailPage },
+  // --- ДОБАВЛЕНО: Маршрут мониторинга ---
+  { path: BERYLL_MONITORING_ROUTE, Component: BeryllMonitoringPage },
   { path: DEFECTS_ROUTE, Component: DefectsPage },
   { path: DEFECT_DETAIL_ROUTE, Component: DefectDetailPage },
   { path: PRODUCTION_ROUTE, Component: ProductionPage },
@@ -48238,16 +50035,23 @@ FILE: MES-Kryptonit-Client-main/src/types/beryll/components.ts
 ================================================================================
 
 /**
- * Типы для комплектующих серверов
+ * components.ts
+ * 
+ * Типы для работы с комплектующими серверов
+ * Включает поддержку двойных серийных номеров (Yadro + производитель)
  * 
  * Положить в: src/types/beryll/components.ts
  */
 
+// ============================================
+// ТИПЫ КОМПОНЕНТОВ
+// ============================================
+
 export type ComponentType = 
   | 'CPU' 
   | 'RAM' 
-  | 'SSD' 
   | 'HDD' 
+  | 'SSD' 
   | 'NVME' 
   | 'NIC' 
   | 'MOTHERBOARD' 
@@ -48257,92 +50061,124 @@ export type ComponentType =
   | 'BMC' 
   | 'OTHER';
 
-export type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN';
+export type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'REPLACED';
+
+export type DataSource = 'BMC' | 'REDFISH' | 'MANUAL' | 'IMPORT' | 'REPLACEMENT';
+
+// ============================================
+// ОСНОВНОЙ ИНТЕРФЕЙС КОМПОНЕНТА
+// ============================================
 
 export interface ServerComponent {
   id: number;
   serverId: number;
+  
+  // Тип и название
   componentType: ComponentType;
-  slot?: string;
+  name: string;
+  
+  // Производитель и модель
   manufacturer?: string;
   model?: string;
-  serialNumber?: string;
-  partNumber?: string;
-  capacity?: string;
-  capacityBytes?: number;
-
-  capacityFormatted?: string;
-  speedFormatted?: string; 
   
+  // Серийные номера
+  serialNumber?: string;          // Заводской S/N производителя
+  serialNumberYadro?: string;     // Внутренний S/N Yadro (наклейка)
+  partNumber?: string;            // Артикул (P/N)
+  
+  // Расположение
+  slot?: string;                  // Слот (например: DIMM_A1, SSD_1, PSU_1)
+  
+  // Характеристики
+  capacity?: number;              // Объём в байтах
+  speed?: string;                 // Частота/скорость (например: 2934 MT/s)
+  firmwareVersion?: string;       // Версия прошивки
+  
+  // Состояние
+  status: ComponentStatus;
+  healthPercent?: number;         // Здоровье в процентах (0-100)
+  
+  // Метаданные
+  dataSource?: DataSource;
+  metadata?: ComponentMetadata;
+  lastUpdatedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  
+  // Связи
+  inventoryId?: number;           // Связь с инвентарём
+  catalogId?: number;             // Связь с каталогом
+  installedById?: number;         // Кто установил
+}
+
+export interface ComponentMetadata {
   // CPU
   cores?: number;
   threads?: number;
-  speedMHz?: number;
   architecture?: string;
   
   // RAM
-  memoryType?: string;
-  speedMT?: number;
+  memoryType?: string;            // DDR4, DDR5
   rank?: number;
   
   // Storage
-  mediaType?: string;
-  interface?: string;
-  firmwareVersion?: string;
+  mediaType?: string;             // SSD, HDD, NVMe
+  interface?: string;             // SATA, NVMe, SAS
   
-  // NIC
+  // Network
   macAddress?: string;
   linkSpeed?: string;
   
-  // Status
-  status: ComponentStatus;
-  health?: string;
-  healthRollup?: string;
-  
-  // Meta
-  rawData?: any;
-  fetchedAt?: string;
+  // Общие
+  health?: string | number;
   fetchedById?: number;
-  createdAt: string;
-  updatedAt: string;
+  
+  // Замена
+  replacedAt?: string;
+  replacedById?: number;
+  reason?: string;
+  replacesComponentId?: number;
+  replacementReason?: string;
+  defectRecordId?: number;
+  inventorySourceId?: number;
 }
 
-export interface ComponentsSummary {
-  totalRAM: number;
-  totalStorage: number;
-  cpuCores: number;
-  cpuThreads: number;
-}
-
-export interface ComponentsGrouped {
-  CPU: ServerComponent[];
-  RAM: ServerComponent[];
-  storage: ServerComponent[];
-  NIC: ServerComponent[];
-  other: ServerComponent[];
-}
+// ============================================
+// API RESPONSES
+// ============================================
 
 export interface ComponentsResponse {
   server: {
     id: number;
-    ipAddress: string;
+    ipAddress?: string;
     hostname?: string;
     apkSerialNumber?: string;
     lastComponentsFetchAt?: string;
   };
-  summary: ComponentsSummary;
-  grouped: ComponentsGrouped;
+  summary: {
+    totalRAMBytes: number;
+    totalStorageBytes: number;
+    totalRAM: string;
+    totalStorage: string;
+    cpuCores: number;
+    cpuThreads: number;
+    totalComponents: number;
+  };
+  grouped: {
+    CPU: ServerComponent[];
+    RAM: ServerComponent[];
+    storage: ServerComponent[];
+    NIC: ServerComponent[];
+    other: ServerComponent[];
+  };
   components: ServerComponent[];
 }
 
 export interface BMCCheckResponse {
-  serverId: number;
-  bmcAddress: string;
-  success: boolean;
-  redfishVersion?: string;
-  name?: string;
-  uuid?: string;
-  error?: string;
+  reachable: boolean;
+  latency?: number;
+  bmcAddress?: string;
+  message?: string;
 }
 
 export interface FetchComponentsResponse {
@@ -48351,70 +50187,225 @@ export interface FetchComponentsResponse {
   components: ServerComponent[];
 }
 
-// Лейблы
+// ============================================
+// КОНСТАНТЫ ДЛЯ UI
+// ============================================
+
 export const COMPONENT_TYPE_LABELS: Record<ComponentType, string> = {
   CPU: 'Процессор',
   RAM: 'Оперативная память',
-  SSD: 'SSD накопитель',
-  HDD: 'HDD накопитель',
+  HDD: 'Жёсткий диск',
+  SSD: 'Твердотельный накопитель',
   NVME: 'NVMe накопитель',
-  NIC: 'Сетевой адаптер',
+  NIC: 'Сетевая карта',
   MOTHERBOARD: 'Материнская плата',
   PSU: 'Блок питания',
   GPU: 'Видеокарта',
-  RAID: 'RAID контроллер',
-  BMC: 'BMC контроллер',
-  OTHER: 'Другое'
+  RAID: 'RAID-контроллер',
+  BMC: 'BMC',
+  OTHER: 'Прочее'
 };
 
 export const COMPONENT_STATUS_LABELS: Record<ComponentStatus, string> = {
   OK: 'Исправен',
   WARNING: 'Предупреждение',
-  CRITICAL: 'Критично',
-  UNKNOWN: 'Неизвестно'
+  CRITICAL: 'Критическое',
+  UNKNOWN: 'Неизвестно',
+  REPLACED: 'Заменён'
 };
 
 export const COMPONENT_STATUS_COLORS: Record<ComponentStatus, string> = {
   OK: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   WARNING: 'bg-amber-100 text-amber-700 border-amber-300',
   CRITICAL: 'bg-red-100 text-red-700 border-red-300',
-  UNKNOWN: 'bg-slate-100 text-slate-600 border-slate-300'
+  UNKNOWN: 'bg-slate-100 text-slate-500 border-slate-300',
+  REPLACED: 'bg-violet-100 text-violet-700 border-violet-300'
 };
 
-// Иконки типов (для lucide-react)
 export const COMPONENT_TYPE_ICONS: Record<ComponentType, string> = {
-  CPU: 'Cpu',
-  RAM: 'MemoryStick',
-  SSD: 'HardDrive',
-  HDD: 'HardDrive',
-  NVME: 'HardDrive',
-  NIC: 'Network',
-  MOTHERBOARD: 'CircuitBoard',
-  PSU: 'Zap',
-  GPU: 'Monitor',
-  RAID: 'Database',
-  BMC: 'Server',
-  OTHER: 'Box'
+  CPU: 'cpu',
+  RAM: 'memory-stick',
+  HDD: 'hard-drive',
+  SSD: 'hard-drive',
+  NVME: 'hard-drive',
+  NIC: 'network',
+  MOTHERBOARD: 'circuit-board',
+  PSU: 'zap',
+  GPU: 'circuit-board',
+  RAID: 'hard-drive',
+  BMC: 'server',
+  OTHER: 'settings'
 };
 
-// Утилиты
-export function formatBytes(bytes: number): string {
+// ============================================
+// ИСТОРИЯ ИЗМЕНЕНИЙ
+// ============================================
+
+export type ComponentHistoryAction = 
+  | 'ADDED' 
+  | 'UPDATED' 
+  | 'REPLACED' 
+  | 'REMOVED' 
+  | 'SERIAL_CHANGED'
+  | 'COMPONENTS_FETCHED'
+  | 'COMPONENTS_BATCH_ADDED';
+
+export interface ComponentHistoryEntry {
+  id: number;
+  action: ComponentHistoryAction;
+  serverId: number;
+  userId: number;
+  userName?: string;
+  comment?: string;
+  metadata?: {
+    componentId?: number;
+    componentType?: string;
+    oldValues?: Record<string, any>;
+    newValues?: Record<string, any>;
+    oldComponent?: Partial<ServerComponent>;
+    newComponentId?: number;
+    reason?: string;
+    count?: number;
+    ids?: number[];
+  };
+  createdAt: string;
+}
+
+// ============================================
+// ФОРМЫ И ВВОД
+// ============================================
+
+export interface ComponentFormData {
+  componentType: ComponentType;
+  name: string;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  serialNumberYadro: string;
+  partNumber: string;
+  slot: string;
+  status: ComponentStatus;
+  capacity?: string;
+  speed?: string;
+}
+
+export interface AddComponentData {
+  componentType: ComponentType;
+  name: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: ComponentStatus;
+  capacity?: number;
+  speed?: string;
+  firmwareVersion?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface UpdateComponentData {
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: ComponentStatus;
+  firmwareVersion?: string;
+  capacity?: number;
+  speed?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ReplaceComponentData {
+  newSerialNumber?: string;
+  newSerialNumberYadro?: string;
+  newManufacturer?: string;
+  newModel?: string;
+  newPartNumber?: string;
+  reason?: string;
+  defectRecordId?: number;
+  inventoryComponentId?: number;
+}
+
+// ============================================
+// ПОИСК И СКАНИРОВАНИЕ
+// ============================================
+
+export interface ComponentSearchParams {
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  componentType?: ComponentType;
+  serverId?: number;
+}
+
+export interface ComponentSearchResult {
+  found: boolean;
+  count?: number;
+  component?: ServerComponent;
+  components?: ServerComponent[];
+  server?: {
+    id: number;
+    apkSerialNumber: string;
+    hostname?: string;
+  };
+  suggestions?: ServerComponent[];
+}
+
+export interface SerialCheckResult {
+  unique: boolean;
+  conflictsWith?: {
+    componentId: number;
+    serverId: number;
+    serverSerial: string;
+  };
+}
+
+// ============================================
+// УТИЛИТЫ
+// ============================================
+
+/**
+ * Форматирование байт в читаемый вид
+ */
+export function formatBytes(bytes: number | string | null | undefined): string {
   if (!bytes) return '—';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1000) {
-    return `${(gb / 1024).toFixed(1)} TB`;
-  }
-  return `${Math.round(gb)} GB`;
+  const b = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+  if (isNaN(b) || b === 0) return '—';
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return `${(b / Math.pow(1024, i)).toFixed(i > 2 ? 1 : 0)} ${units[i]}`;
 }
 
-export function formatMHz(mhz: number): string {
-  if (!mhz) return '—';
-  if (mhz >= 1000) {
-    return `${(mhz / 1000).toFixed(2)} GHz`;
+/**
+ * Генерация имени компонента
+ */
+export function generateComponentName(component: Partial<ServerComponent>): string {
+  if (component.name) return component.name;
+  
+  const parts: string[] = [];
+  if (component.manufacturer) parts.push(component.manufacturer);
+  if (component.model) parts.push(component.model);
+  if (parts.length === 0 && component.componentType) {
+    parts.push(COMPONENT_TYPE_LABELS[component.componentType] || component.componentType);
   }
-  return `${mhz} MHz`;
+  
+  return parts.join(' ').trim() || 'Комплектующее';
 }
 
+/**
+ * Получить полный серийный номер для отображения
+ */
+export function getDisplaySerial(component: ServerComponent): string {
+  if (component.serialNumberYadro && component.serialNumber) {
+    return `${component.serialNumberYadro} / ${component.serialNumber}`;
+  }
+  return component.serialNumberYadro || component.serialNumber || '—';
+}
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/types/beryll/defectsAndMonitoring.ts
 ================================================================================
@@ -55107,6 +57098,909 @@ class AuditController {
 
 module.exports = new AuditController();
 
+================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/ComponentsExtendedController.js
+================================================================================
+
+/**
+ * ComponentsExtendedController.js
+ * 
+ * Расширенный контроллер для управления комплектующими серверов
+ * Включает: добавление, редактирование, замену, историю изменений
+ * 
+ * Положить в: controllers/beryll/ComponentsExtendedController.js
+ */
+
+const ApiError = require("../../error/ApiError");
+const { 
+  BeryllServer, 
+  BeryllServerComponent, 
+  BeryllHistory,
+  User
+} = require("../../models/index");
+const { Op } = require("sequelize");
+const sequelize = require("../../db");
+
+// Константы типов компонентов
+const COMPONENT_TYPES = ['CPU', 'RAM', 'HDD', 'SSD', 'NVME', 'NIC', 'MOTHERBOARD', 'PSU', 'GPU', 'RAID', 'BMC', 'OTHER'];
+const COMPONENT_STATUSES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN', 'REPLACED'];
+
+// ============================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================
+
+/**
+ * Проверка конфликта серийных номеров
+ */
+async function checkSerialConflict(serialNumber, serialNumberYadro, excludeComponentId = null) {
+  if (!serialNumber && !serialNumberYadro) {
+    return null;
+  }
+
+  const whereConditions = [];
+  
+  if (serialNumber) {
+    whereConditions.push({
+      [Op.or]: [
+        { serialNumber },
+        { serialNumberYadro: serialNumber }
+      ]
+    });
+  }
+  
+  if (serialNumberYadro) {
+    whereConditions.push({
+      [Op.or]: [
+        { serialNumber: serialNumberYadro },
+        { serialNumberYadro }
+      ]
+    });
+  }
+
+  const where = {
+    [Op.or]: whereConditions,
+    status: { [Op.ne]: 'REPLACED' }
+  };
+  
+  if (excludeComponentId) {
+    where.id = { [Op.ne]: excludeComponentId };
+  }
+
+  const existing = await BeryllServerComponent.findOne({
+    where,
+    include: [{
+      model: BeryllServer,
+      as: 'server',
+      attributes: ['id', 'ipAddress', 'apkSerialNumber']
+    }]
+  });
+
+  return existing;
+}
+
+/**
+ * Запись в историю Beryll
+ */
+async function logHistory(serverId, userId, action, details, transaction = null) {
+  try {
+    await BeryllHistory.create({
+      serverId,
+      userId,
+      action,
+      comment: typeof details === 'string' ? details : JSON.stringify(details),
+      metadata: typeof details === 'object' ? details : null
+    }, { transaction });
+  } catch (err) {
+    console.error('[ComponentsExtended] History log error:', err.message);
+  }
+}
+
+// ============================================
+// ДОБАВЛЕНИЕ КОМПЛЕКТУЮЩЕГО
+// ============================================
+
+/**
+ * Добавить новое комплектующее к серверу
+ * POST /api/beryll/servers/:id/components
+ */
+async function addComponent(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: serverId } = req.params;
+    const userId = req.user?.id;
+    
+    const {
+      componentType,
+      name,
+      manufacturer,
+      model,
+      serialNumber,
+      serialNumberYadro,
+      partNumber,
+      slot,
+      capacity,
+      speed,
+      status = 'OK'
+    } = req.body;
+
+    // Проверка сервера
+    const server = await BeryllServer.findByPk(serverId, { transaction });
+    if (!server) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Сервер не найден'));
+    }
+
+    // Проверка типа
+    if (!componentType || !COMPONENT_TYPES.includes(componentType)) {
+      await transaction.rollback();
+      return next(ApiError.badRequest(`Неверный тип комплектующего. Допустимые: ${COMPONENT_TYPES.join(', ')}`));
+    }
+
+    // Проверка серийников
+    if (!serialNumber && !serialNumberYadro) {
+      await transaction.rollback();
+      return next(ApiError.badRequest('Укажите хотя бы один серийный номер'));
+    }
+
+    // Проверка уникальности серийников
+    const serialConflict = await checkSerialConflict(serialNumber, serialNumberYadro, null);
+    if (serialConflict) {
+      await transaction.rollback();
+      const conflictServer = serialConflict.server;
+      return next(ApiError.badRequest(
+        `Серийный номер уже используется в компоненте "${serialConflict.name}" ` +
+        `на сервере ${conflictServer?.ipAddress || conflictServer?.apkSerialNumber || serialConflict.serverId}`
+      ));
+    }
+
+    // Создаём комплектующее
+    const component = await BeryllServerComponent.create({
+      serverId: parseInt(serverId),
+      componentType,
+      name: name || `${manufacturer || ''} ${model || componentType}`.trim(),
+      manufacturer,
+      model,
+      serialNumber,
+      serialNumberYadro,
+      partNumber,
+      slot,
+      capacity: capacity ? parseInt(capacity) : null,
+      speed,
+      status,
+      source: 'MANUAL'
+    }, { transaction });
+
+    // Логируем в историю
+    await logHistory(serverId, userId, 'COMPONENT_ADDED', {
+      componentId: component.id,
+      componentType,
+      name: component.name,
+      serialNumber,
+      serialNumberYadro
+    }, transaction);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Комплектующее добавлено',
+      component
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] addComponent error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+/**
+ * Добавить несколько комплектующих (batch)
+ * POST /api/beryll/servers/:id/components/batch
+ */
+async function addComponentsBatch(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: serverId } = req.params;
+    const userId = req.user?.id;
+    const { components } = req.body;
+
+    if (!Array.isArray(components) || components.length === 0) {
+      await transaction.rollback();
+      return next(ApiError.badRequest('Передайте массив комплектующих'));
+    }
+
+    const server = await BeryllServer.findByPk(serverId, { transaction });
+    if (!server) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Сервер не найден'));
+    }
+
+    const created = [];
+    const errors = [];
+
+    for (let i = 0; i < components.length; i++) {
+      const comp = components[i];
+      
+      try {
+        // Проверка конфликтов
+        const conflict = await checkSerialConflict(comp.serialNumber, comp.serialNumberYadro, null);
+        if (conflict) {
+          errors.push({
+            index: i,
+            error: `Серийник уже существует: ${comp.serialNumber || comp.serialNumberYadro}`
+          });
+          continue;
+        }
+
+        const component = await BeryllServerComponent.create({
+          serverId: parseInt(serverId),
+          componentType: comp.componentType,
+          name: comp.name || `${comp.manufacturer || ''} ${comp.model || comp.componentType}`.trim(),
+          manufacturer: comp.manufacturer,
+          model: comp.model,
+          serialNumber: comp.serialNumber,
+          serialNumberYadro: comp.serialNumberYadro,
+          partNumber: comp.partNumber,
+          slot: comp.slot,
+          capacity: comp.capacity ? parseInt(comp.capacity) : null,
+          speed: comp.speed,
+          status: comp.status || 'OK',
+          source: 'MANUAL'
+        }, { transaction });
+
+        created.push(component);
+      } catch (err) {
+        errors.push({ index: i, error: err.message });
+      }
+    }
+
+    if (created.length > 0) {
+      await logHistory(serverId, userId, 'COMPONENTS_BATCH_ADDED', {
+        count: created.length,
+        componentIds: created.map(c => c.id)
+      }, transaction);
+    }
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: `Добавлено ${created.length} из ${components.length} комплектующих`,
+      created,
+      errors
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] addComponentsBatch error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// РЕДАКТИРОВАНИЕ КОМПЛЕКТУЮЩЕГО
+// ============================================
+
+/**
+ * Обновить комплектующее
+ * PUT /api/beryll/components/:id
+ */
+async function updateComponent(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: componentId } = req.params;
+    const userId = req.user?.id;
+    
+    const {
+      name,
+      manufacturer,
+      model,
+      serialNumber,
+      serialNumberYadro,
+      partNumber,
+      slot,
+      capacity,
+      speed,
+      status
+    } = req.body;
+
+    const component = await BeryllServerComponent.findByPk(componentId, {
+      include: [{ model: BeryllServer, as: 'server' }],
+      transaction
+    });
+
+    if (!component) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Комплектующее не найдено'));
+    }
+
+    // Сохраняем старые значения для истории
+    const oldValues = {
+      name: component.name,
+      serialNumber: component.serialNumber,
+      serialNumberYadro: component.serialNumberYadro,
+      manufacturer: component.manufacturer,
+      model: component.model,
+      status: component.status
+    };
+
+    // Проверка уникальности серийников при изменении
+    const newSerial = serialNumber !== undefined ? serialNumber : component.serialNumber;
+    const newYadro = serialNumberYadro !== undefined ? serialNumberYadro : component.serialNumberYadro;
+    
+    if (newSerial !== component.serialNumber || newYadro !== component.serialNumberYadro) {
+      const conflict = await checkSerialConflict(newSerial, newYadro, componentId);
+      if (conflict) {
+        await transaction.rollback();
+        return next(ApiError.badRequest(
+          `Серийный номер уже используется в компоненте "${conflict.name}"`
+        ));
+      }
+    }
+
+    // Обновляем поля
+    if (name !== undefined) component.name = name;
+    if (manufacturer !== undefined) component.manufacturer = manufacturer;
+    if (model !== undefined) component.model = model;
+    if (serialNumber !== undefined) component.serialNumber = serialNumber;
+    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro;
+    if (partNumber !== undefined) component.partNumber = partNumber;
+    if (slot !== undefined) component.slot = slot;
+    if (capacity !== undefined) component.capacity = capacity ? parseInt(capacity) : null;
+    if (speed !== undefined) component.speed = speed;
+    if (status !== undefined && COMPONENT_STATUSES.includes(status)) {
+      component.status = status;
+    }
+
+    await component.save({ transaction });
+
+    // Логируем изменения
+    const newValues = {
+      name: component.name,
+      serialNumber: component.serialNumber,
+      serialNumberYadro: component.serialNumberYadro,
+      manufacturer: component.manufacturer,
+      model: component.model,
+      status: component.status
+    };
+
+    await logHistory(component.serverId, userId, 'COMPONENT_UPDATED', {
+      componentId: component.id,
+      componentType: component.componentType,
+      oldValues,
+      newValues
+    }, transaction);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Комплектующее обновлено',
+      component
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] updateComponent error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+/**
+ * Обновить только серийные номера
+ * PATCH /api/beryll/components/:id/serials
+ */
+async function updateSerials(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: componentId } = req.params;
+    const userId = req.user?.id;
+    const { serialNumber, serialNumberYadro } = req.body;
+
+    if (!serialNumber && !serialNumberYadro) {
+      await transaction.rollback();
+      return next(ApiError.badRequest('Укажите хотя бы один серийный номер'));
+    }
+
+    const component = await BeryllServerComponent.findByPk(componentId, { transaction });
+    if (!component) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Комплектующее не найдено'));
+    }
+
+    const oldSerials = {
+      serialNumber: component.serialNumber,
+      serialNumberYadro: component.serialNumberYadro
+    };
+
+    // Определяем что меняем
+    const serialToCheck = serialNumber !== undefined ? serialNumber : component.serialNumber;
+    const yadroToCheck = serialNumberYadro !== undefined ? serialNumberYadro : component.serialNumberYadro;
+
+    // Проверяем конфликты
+    const conflict = await checkSerialConflict(serialToCheck, yadroToCheck, componentId);
+    if (conflict) {
+      await transaction.rollback();
+      return next(ApiError.badRequest(
+        `Серийный номер уже используется в компоненте "${conflict.name}"`
+      ));
+    }
+
+    // Обновляем
+    if (serialNumber !== undefined) component.serialNumber = serialNumber;
+    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro;
+
+    await component.save({ transaction });
+
+    await logHistory(component.serverId, userId, 'COMPONENT_SERIALS_UPDATED', {
+      componentId: component.id,
+      oldSerials,
+      newSerials: {
+        serialNumber: component.serialNumber,
+        serialNumberYadro: component.serialNumberYadro
+      }
+    }, transaction);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Серийные номера обновлены',
+      component
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] updateSerials error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// ЗАМЕНА КОМПЛЕКТУЮЩЕГО
+// ============================================
+
+/**
+ * Заменить комплектующее
+ * POST /api/beryll/components/:id/replace
+ */
+async function replaceComponent(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: componentId } = req.params;
+    const userId = req.user?.id;
+    
+    const {
+      newSerialNumber,
+      newSerialNumberYadro,
+      newManufacturer,
+      newModel,
+      newPartNumber,
+      reason
+    } = req.body;
+
+    // Находим старый компонент
+    const oldComponent = await BeryllServerComponent.findByPk(componentId, {
+      include: [{ model: BeryllServer, as: 'server' }],
+      transaction
+    });
+
+    if (!oldComponent) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Комплектующее не найдено'));
+    }
+
+    if (!newSerialNumber && !newSerialNumberYadro) {
+      await transaction.rollback();
+      return next(ApiError.badRequest('Укажите серийный номер нового комплектующего'));
+    }
+
+    // Проверяем конфликты для нового серийника
+    const conflict = await checkSerialConflict(newSerialNumber, newSerialNumberYadro, null);
+    if (conflict) {
+      await transaction.rollback();
+      return next(ApiError.badRequest(
+        `Серийный номер уже используется в компоненте "${conflict.name}"`
+      ));
+    }
+
+    // Помечаем старый компонент как заменённый
+    oldComponent.status = 'REPLACED';
+    oldComponent.metadata = {
+      ...oldComponent.metadata,
+      replacedAt: new Date().toISOString(),
+      replacedBy: userId,
+      replacementReason: reason
+    };
+    await oldComponent.save({ transaction });
+
+    // Создаём новый компонент
+    const newComponent = await BeryllServerComponent.create({
+      serverId: oldComponent.serverId,
+      componentType: oldComponent.componentType,
+      name: `${newManufacturer || oldComponent.manufacturer || ''} ${newModel || oldComponent.model || oldComponent.componentType}`.trim(),
+      manufacturer: newManufacturer || oldComponent.manufacturer,
+      model: newModel || oldComponent.model,
+      serialNumber: newSerialNumber,
+      serialNumberYadro: newSerialNumberYadro,
+      partNumber: newPartNumber || oldComponent.partNumber,
+      slot: oldComponent.slot,
+      capacity: oldComponent.capacity,
+      speed: oldComponent.speed,
+      status: 'OK',
+      source: 'MANUAL',
+      metadata: {
+        replacesComponentId: oldComponent.id,
+        replacedAt: new Date().toISOString()
+      }
+    }, { transaction });
+
+    // Логируем замену
+    await logHistory(oldComponent.serverId, userId, 'COMPONENT_REPLACED', {
+      oldComponentId: oldComponent.id,
+      newComponentId: newComponent.id,
+      componentType: oldComponent.componentType,
+      oldSerial: oldComponent.serialNumber || oldComponent.serialNumberYadro,
+      newSerial: newSerialNumber || newSerialNumberYadro,
+      reason
+    }, transaction);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Комплектующее заменено',
+      oldComponent,
+      newComponent
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] replaceComponent error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// УДАЛЕНИЕ КОМПЛЕКТУЮЩЕГО
+// ============================================
+
+/**
+ * Удалить комплектующее
+ * DELETE /api/beryll/components/:id
+ */
+async function deleteComponent(req, res, next) {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id: componentId } = req.params;
+    const userId = req.user?.id;
+    const { reason } = req.body || {};
+
+    const component = await BeryllServerComponent.findByPk(componentId, { transaction });
+    if (!component) {
+      await transaction.rollback();
+      return next(ApiError.notFound('Комплектующее не найдено'));
+    }
+
+    const componentData = {
+      id: component.id,
+      componentType: component.componentType,
+      name: component.name,
+      serialNumber: component.serialNumber,
+      serialNumberYadro: component.serialNumberYadro
+    };
+
+    await logHistory(component.serverId, userId, 'COMPONENT_DELETED', {
+      ...componentData,
+      reason
+    }, transaction);
+
+    await component.destroy({ transaction });
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Комплектующее удалено',
+      deleted: componentData
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('[ComponentsExtended] deleteComponent error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// ПОИСК КОМПЛЕКТУЮЩИХ
+// ============================================
+
+/**
+ * Поиск комплектующего по серийному номеру
+ * GET /api/beryll/components/search?q=...
+ */
+async function searchComponent(req, res, next) {
+  try {
+    const { q, type, status, serverId, limit = 50 } = req.query;
+
+    if (!q && !type && !status && !serverId) {
+      return next(ApiError.badRequest('Укажите параметры поиска'));
+    }
+
+    const where = {};
+    
+    if (q) {
+      where[Op.or] = [
+        { serialNumber: { [Op.iLike]: `%${q}%` } },
+        { serialNumberYadro: { [Op.iLike]: `%${q}%` } },
+        { name: { [Op.iLike]: `%${q}%` } },
+        { manufacturer: { [Op.iLike]: `%${q}%` } },
+        { model: { [Op.iLike]: `%${q}%` } },
+        { partNumber: { [Op.iLike]: `%${q}%` } }
+      ];
+    }
+    
+    if (type) where.componentType = type;
+    if (status) where.status = status;
+    if (serverId) where.serverId = parseInt(serverId);
+
+    const components = await BeryllServerComponent.findAll({
+      where,
+      include: [{
+        model: BeryllServer,
+        as: 'server',
+        attributes: ['id', 'ipAddress', 'apkSerialNumber', 'status']
+      }],
+      limit: parseInt(limit),
+      order: [['updatedAt', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      count: components.length,
+      components
+    });
+
+  } catch (error) {
+    console.error('[ComponentsExtended] searchComponent error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+/**
+ * Быстрый поиск по S/N Yadro (для сканера)
+ * GET /api/beryll/components/scan?serial=...
+ */
+async function scanYadroSerial(req, res, next) {
+  try {
+    const { serial } = req.query;
+
+    if (!serial) {
+      return next(ApiError.badRequest('Укажите серийный номер'));
+    }
+
+    // Сначала точное совпадение
+    let component = await BeryllServerComponent.findOne({
+      where: {
+        [Op.or]: [
+          { serialNumberYadro: serial },
+          { serialNumber: serial }
+        ]
+      },
+      include: [{
+        model: BeryllServer,
+        as: 'server',
+        attributes: ['id', 'ipAddress', 'apkSerialNumber', 'status']
+      }]
+    });
+
+    // Если не найдено - частичное совпадение
+    if (!component) {
+      component = await BeryllServerComponent.findOne({
+        where: {
+          [Op.or]: [
+            { serialNumberYadro: { [Op.iLike]: `%${serial}%` } },
+            { serialNumber: { [Op.iLike]: `%${serial}%` } }
+          ]
+        },
+        include: [{
+          model: BeryllServer,
+          as: 'server',
+          attributes: ['id', 'ipAddress', 'apkSerialNumber', 'status']
+        }]
+      });
+    }
+
+    if (!component) {
+      return res.json({
+        success: false,
+        found: false,
+        message: 'Комплектующее не найдено'
+      });
+    }
+
+    res.json({
+      success: true,
+      found: true,
+      component
+    });
+
+  } catch (error) {
+    console.error('[ComponentsExtended] scanYadroSerial error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+/**
+ * Проверка уникальности серийного номера
+ * POST /api/beryll/components/check-serial
+ */
+async function checkSerialUniqueness(req, res, next) {
+  try {
+    const { serialNumber, serialNumberYadro, excludeComponentId } = req.body;
+
+    if (!serialNumber && !serialNumberYadro) {
+      return res.json({ unique: true });
+    }
+
+    const conflict = await checkSerialConflict(serialNumber, serialNumberYadro, excludeComponentId);
+
+    if (conflict) {
+      return res.json({
+        unique: false,
+        conflict: {
+          id: conflict.id,
+          name: conflict.name,
+          componentType: conflict.componentType,
+          serialNumber: conflict.serialNumber,
+          serialNumberYadro: conflict.serialNumberYadro,
+          server: conflict.server ? {
+            id: conflict.server.id,
+            ipAddress: conflict.server.ipAddress,
+            apkSerialNumber: conflict.server.apkSerialNumber
+          } : null
+        }
+      });
+    }
+
+    res.json({ unique: true });
+
+  } catch (error) {
+    console.error('[ComponentsExtended] checkSerialUniqueness error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// ИСТОРИЯ ИЗМЕНЕНИЙ
+// ============================================
+
+/**
+ * История изменений комплектующего
+ * GET /api/beryll/components/:id/history
+ */
+async function getComponentHistory(req, res, next) {
+  try {
+    const { id: componentId } = req.params;
+    const { limit = 50 } = req.query;
+
+    const component = await BeryllServerComponent.findByPk(componentId);
+    if (!component) {
+      return next(ApiError.notFound('Комплектующее не найдено'));
+    }
+
+    // Ищем записи где в metadata есть componentId
+    const history = await BeryllHistory.findAll({
+      where: {
+        serverId: component.serverId,
+        [Op.or]: [
+          { action: { [Op.in]: ['COMPONENT_ADDED', 'COMPONENT_UPDATED', 'COMPONENT_REPLACED', 'COMPONENT_DELETED', 'COMPONENT_SERIALS_UPDATED'] } }
+        ]
+      },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'surname']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit)
+    });
+
+    // Фильтруем только записи для этого компонента
+    const filtered = history.filter(h => {
+      try {
+        const meta = h.metadata || (h.comment ? JSON.parse(h.comment) : {});
+        return meta.componentId === parseInt(componentId) || 
+               meta.oldComponentId === parseInt(componentId) ||
+               meta.newComponentId === parseInt(componentId);
+      } catch {
+        return false;
+      }
+    });
+
+    res.json({
+      success: true,
+      componentId: parseInt(componentId),
+      history: filtered
+    });
+
+  } catch (error) {
+    console.error('[ComponentsExtended] getComponentHistory error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+/**
+ * История всех комплектующих сервера
+ * GET /api/beryll/servers/:id/components/history
+ */
+async function getServerComponentsHistory(req, res, next) {
+  try {
+    const { id: serverId } = req.params;
+    const { limit = 100 } = req.query;
+
+    const history = await BeryllHistory.findAll({
+      where: {
+        serverId: parseInt(serverId),
+        action: { 
+          [Op.in]: [
+            'COMPONENT_ADDED', 
+            'COMPONENT_UPDATED', 
+            'COMPONENT_REPLACED', 
+            'COMPONENT_DELETED',
+            'COMPONENT_SERIALS_UPDATED',
+            'COMPONENTS_BATCH_ADDED',
+            'COMPONENTS_FETCHED'
+          ] 
+        }
+      },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'surname']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit)
+    });
+
+    res.json({
+      success: true,
+      serverId: parseInt(serverId),
+      count: history.length,
+      history
+    });
+
+  } catch (error) {
+    console.error('[ComponentsExtended] getServerComponentsHistory error:', error);
+    next(ApiError.internal(error.message));
+  }
+}
+
+// ============================================
+// ЭКСПОРТ
+// ============================================
+
+module.exports = {
+  addComponent,
+  addComponentsBatch,
+  updateComponent,
+  updateSerials,
+  replaceComponent,
+  deleteComponent,
+  searchComponent,
+  scanYadroSerial,
+  checkSerialUniqueness,
+  getComponentHistory,
+  getServerComponentsHistory
+};
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/config/beryll.config.js
 ================================================================================
@@ -77895,6 +80789,19 @@ const RackController = require("../controllers/beryll/controllers/RackController
 const ClusterController = require("../controllers/beryll/controllers/ClusterController");
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
+const {
+  addComponent,
+  addComponentsBatch,
+  updateComponent,
+  updateSerials,
+  replaceComponent,
+  deleteComponent,
+  searchComponent,
+  scanYadroSerial,
+  checkSerialUniqueness,
+  getComponentHistory,
+  getServerComponentsHistory
+} = require("../controllers/beryll/ComponentsExtendedController");
 
 const protect = [authMiddleware, syncUserMiddleware];
 
@@ -77943,6 +80850,27 @@ router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
 router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+
+// ============================================
+// КОМПЛЕКТУЮЩИЕ СЕРВЕРОВ (COMPONENTS)
+// ============================================
+
+// Поиск и сканирование комплектующих
+router.get("/components/search", ...protect, checkAbility("beryll.view"), searchComponent);
+router.get("/components/scan", ...protect, checkAbility("beryll.view"), scanYadroSerial);
+router.post("/components/check-serial", ...protect, checkAbility("beryll.view"), checkSerialUniqueness);
+
+// Комплектующие конкретного сервера
+router.post("/servers/:id/components", ...protect, checkAbility("beryll.work"), addComponent);
+router.post("/servers/:id/components/batch", ...protect, checkAbility("beryll.work"), addComponentsBatch);
+router.get("/servers/:id/components/history", ...protect, checkAbility("beryll.view"), getServerComponentsHistory);
+
+// Операции с отдельными комплектующими
+router.put("/components/:id", ...protect, checkAbility("beryll.work"), updateComponent);
+router.patch("/components/:id/serials", ...protect, checkAbility("beryll.work"), updateSerials);
+router.post("/components/:id/replace", ...protect, checkAbility("beryll.work"), replaceComponent);
+router.delete("/components/:id", ...protect, checkAbility("beryll.work"), deleteComponent);
+router.get("/components/:id/history", ...protect, checkAbility("beryll.view"), getComponentHistory);
 
 // ============================================
 // УЧЁТ БРАКА (DEFECT RECORDS)
@@ -78697,11 +81625,6 @@ module.exports = router;
 FILE: MES-Kryptonit-Server-master/routes/index.js
 ================================================================================
 
-/**
- * routes/index.js - Главный файл маршрутизации API
- * 
- * ОБНОВЛЕНО: Добавлен productionOutputRouter для учёта выработки
- */
 
 const Router = require("express");
 const router = new Router();
@@ -78745,7 +81668,7 @@ const defectRouter_CoralB = require("./defectRouterCoralB");
 
 // --- Beryll (АПК серверы) ---
 const beryllRouter = require("./beryllRouter");
-const beryllExtendedRouter = require("./beryllExtendedRouter");
+const beryllExtendedRouter = require("./beryllExtendedRouter"); // Включает роуты комплектующих
 
 // --- Система дефектов (Учёт брака) ---
 const defectSystemRouter = require("./defectSystemRouter");
@@ -78754,6 +81677,7 @@ const defectSystemRouter = require("./defectSystemRouter");
 // НОВОЕ: Учёт выработки (Production Output)
 // =========================================================================
 const productionOutputRouter = require("./productionOutputRouter");
+
 
 // =========================================================================
 // РЕГИСТРАЦИЯ МАРШРУТОВ
@@ -78794,7 +81718,7 @@ router.use("/defects-Coral-B", defectRouter_CoralB);
 
 // --- Beryll (АПК серверы) ---
 router.use("/beryll", beryllRouter);
-router.use("/beryll", beryllExtendedRouter);
+router.use("/beryll", beryllExtendedRouter); // Уже включает роуты комплектующих (components)
 
 // --- Система дефектов (Учёт брака) ---
 router.use("/defects", defectSystemRouter);
@@ -78806,7 +81730,6 @@ router.use("/defects", defectSystemRouter);
 router.use("/production", productionOutputRouter);
 
 module.exports = router;
-
 ================================================================================
 FILE: MES-Kryptonit-Server-master/routes/pcRouter.js
 ================================================================================

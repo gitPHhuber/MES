@@ -26,6 +26,43 @@ const COMPONENT_STATUSES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN', 'REPLACED'];
 // ============================================
 
 /**
+ * Санитизация числовых полей - преобразует пустые строки в null
+ * Решает ошибку PostgreSQL: "неверный синтаксис для типа integer: """
+ * 
+ * @param {Object} data - входные данные
+ * @returns {Object} - данные с преобразованными числовыми полями
+ */
+function sanitizeNumericFields(data) {
+  const integerFields = ['capacity', 'speed', 'healthPercent', 'temperature', 'catalogId', 'inventoryId', 'installedById'];
+  
+  const sanitized = { ...data };
+  
+  integerFields.forEach(field => {
+    if (sanitized[field] === '' || sanitized[field] === undefined) {
+      sanitized[field] = null;
+    } else if (sanitized[field] !== null && typeof sanitized[field] === 'string') {
+      // Пытаемся преобразовать строку в число
+      const parsed = parseInt(sanitized[field], 10);
+      sanitized[field] = isNaN(parsed) ? null : parsed;
+    }
+  });
+  
+  // Также обрабатываем metadata - должен быть объектом, не строкой
+  if (typeof sanitized.metadata === 'string') {
+    try {
+      sanitized.metadata = sanitized.metadata ? JSON.parse(sanitized.metadata) : {};
+    } catch (e) {
+      sanitized.metadata = {};
+    }
+  }
+  if (sanitized.metadata === '' || sanitized.metadata === undefined) {
+    sanitized.metadata = null;
+  }
+  
+  return sanitized;
+}
+
+/**
  * Проверка конфликта серийных номеров
  */
 async function checkSerialConflict(serialNumber, serialNumberYadro, excludeComponentId = null) {
@@ -106,6 +143,9 @@ async function addComponent(req, res, next) {
     const { id: serverId } = req.params;
     const userId = req.user?.id;
     
+    // Санитизируем входные данные для преобразования пустых строк в null
+    const sanitizedBody = sanitizeNumericFields(req.body);
+    
     const {
       componentType,
       name,
@@ -117,8 +157,10 @@ async function addComponent(req, res, next) {
       slot,
       capacity,
       speed,
-      status = 'OK'
-    } = req.body;
+      status = 'OK',
+      metadata,
+      notes
+    } = sanitizedBody;
 
     // Проверка сервера
     const server = await BeryllServer.findByPk(serverId, { transaction });
@@ -155,16 +197,19 @@ async function addComponent(req, res, next) {
       serverId: parseInt(serverId),
       componentType,
       name: name || `${manufacturer || ''} ${model || componentType}`.trim(),
-      manufacturer,
-      model,
-      serialNumber,
-      serialNumberYadro,
-      partNumber,
-      slot,
-      capacity: capacity ? parseInt(capacity) : null,
-      speed,
+      manufacturer: manufacturer || null,
+      model: model || null,
+      serialNumber: serialNumber || null,
+      serialNumberYadro: serialNumberYadro || null,
+      partNumber: partNumber || null,
+      slot: slot || null,
+      capacity,  // Уже санитизировано - null или число
+      speed,     // Уже санитизировано - null или число
       status,
-      source: 'MANUAL'
+      metadata: metadata || null,
+      notes: notes || null,
+      dataSource: 'MANUAL',
+      installedById: userId
     }, { transaction });
 
     // Логируем в историю
@@ -218,7 +263,8 @@ async function addComponentsBatch(req, res, next) {
     const errors = [];
 
     for (let i = 0; i < components.length; i++) {
-      const comp = components[i];
+      // Санитизируем каждый компонент
+      const comp = sanitizeNumericFields(components[i]);
       
       try {
         // Проверка конфликтов
@@ -235,16 +281,18 @@ async function addComponentsBatch(req, res, next) {
           serverId: parseInt(serverId),
           componentType: comp.componentType,
           name: comp.name || `${comp.manufacturer || ''} ${comp.model || comp.componentType}`.trim(),
-          manufacturer: comp.manufacturer,
-          model: comp.model,
-          serialNumber: comp.serialNumber,
-          serialNumberYadro: comp.serialNumberYadro,
-          partNumber: comp.partNumber,
-          slot: comp.slot,
-          capacity: comp.capacity ? parseInt(comp.capacity) : null,
-          speed: comp.speed,
+          manufacturer: comp.manufacturer || null,
+          model: comp.model || null,
+          serialNumber: comp.serialNumber || null,
+          serialNumberYadro: comp.serialNumberYadro || null,
+          partNumber: comp.partNumber || null,
+          slot: comp.slot || null,
+          capacity: comp.capacity,  // Уже санитизировано
+          speed: comp.speed,        // Уже санитизировано
           status: comp.status || 'OK',
-          source: 'MANUAL'
+          metadata: comp.metadata || null,
+          dataSource: 'MANUAL',
+          installedById: userId
         }, { transaction });
 
         created.push(component);
@@ -291,6 +339,9 @@ async function updateComponent(req, res, next) {
     const { id: componentId } = req.params;
     const userId = req.user?.id;
     
+    // Санитизируем входные данные
+    const sanitizedBody = sanitizeNumericFields(req.body);
+    
     const {
       name,
       manufacturer,
@@ -301,8 +352,10 @@ async function updateComponent(req, res, next) {
       slot,
       capacity,
       speed,
-      status
-    } = req.body;
+      status,
+      metadata,
+      notes
+    } = sanitizedBody;
 
     const component = await BeryllServerComponent.findByPk(componentId, {
       include: [{ model: BeryllServer, as: 'server' }],
@@ -321,7 +374,9 @@ async function updateComponent(req, res, next) {
       serialNumberYadro: component.serialNumberYadro,
       manufacturer: component.manufacturer,
       model: component.model,
-      status: component.status
+      status: component.status,
+      capacity: component.capacity,
+      speed: component.speed
     };
 
     // Проверка уникальности серийников при изменении
@@ -339,18 +394,20 @@ async function updateComponent(req, res, next) {
     }
 
     // Обновляем поля
-    if (name !== undefined) component.name = name;
-    if (manufacturer !== undefined) component.manufacturer = manufacturer;
-    if (model !== undefined) component.model = model;
-    if (serialNumber !== undefined) component.serialNumber = serialNumber;
-    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro;
-    if (partNumber !== undefined) component.partNumber = partNumber;
-    if (slot !== undefined) component.slot = slot;
-    if (capacity !== undefined) component.capacity = capacity ? parseInt(capacity) : null;
-    if (speed !== undefined) component.speed = speed;
+    if (name !== undefined) component.name = name || null;
+    if (manufacturer !== undefined) component.manufacturer = manufacturer || null;
+    if (model !== undefined) component.model = model || null;
+    if (serialNumber !== undefined) component.serialNumber = serialNumber || null;
+    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro || null;
+    if (partNumber !== undefined) component.partNumber = partNumber || null;
+    if (slot !== undefined) component.slot = slot || null;
+    if (capacity !== undefined) component.capacity = capacity;  // Уже санитизировано
+    if (speed !== undefined) component.speed = speed;           // Уже санитизировано
     if (status !== undefined && COMPONENT_STATUSES.includes(status)) {
       component.status = status;
     }
+    if (metadata !== undefined) component.metadata = metadata;
+    if (notes !== undefined) component.notes = notes || null;
 
     await component.save({ transaction });
 
@@ -361,7 +418,9 @@ async function updateComponent(req, res, next) {
       serialNumberYadro: component.serialNumberYadro,
       manufacturer: component.manufacturer,
       model: component.model,
-      status: component.status
+      status: component.status,
+      capacity: component.capacity,
+      speed: component.speed
     };
 
     await logHistory(component.serverId, userId, 'COMPONENT_UPDATED', {
@@ -428,8 +487,8 @@ async function updateSerials(req, res, next) {
     }
 
     // Обновляем
-    if (serialNumber !== undefined) component.serialNumber = serialNumber;
-    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro;
+    if (serialNumber !== undefined) component.serialNumber = serialNumber || null;
+    if (serialNumberYadro !== undefined) component.serialNumberYadro = serialNumberYadro || null;
 
     await component.save({ transaction });
 
@@ -472,6 +531,9 @@ async function replaceComponent(req, res, next) {
     const { id: componentId } = req.params;
     const userId = req.user?.id;
     
+    // Санитизируем входные данные
+    const sanitizedBody = sanitizeNumericFields(req.body);
+    
     const {
       newSerialNumber,
       newSerialNumberYadro,
@@ -479,7 +541,7 @@ async function replaceComponent(req, res, next) {
       newModel,
       newPartNumber,
       reason
-    } = req.body;
+    } = sanitizedBody;
 
     // Находим старый компонент
     const oldComponent = await BeryllServerComponent.findByPk(componentId, {
@@ -523,14 +585,15 @@ async function replaceComponent(req, res, next) {
       name: `${newManufacturer || oldComponent.manufacturer || ''} ${newModel || oldComponent.model || oldComponent.componentType}`.trim(),
       manufacturer: newManufacturer || oldComponent.manufacturer,
       model: newModel || oldComponent.model,
-      serialNumber: newSerialNumber,
-      serialNumberYadro: newSerialNumberYadro,
+      serialNumber: newSerialNumber || null,
+      serialNumberYadro: newSerialNumberYadro || null,
       partNumber: newPartNumber || oldComponent.partNumber,
       slot: oldComponent.slot,
       capacity: oldComponent.capacity,
       speed: oldComponent.speed,
       status: 'OK',
-      source: 'MANUAL',
+      dataSource: 'MANUAL',
+      installedById: userId,
       metadata: {
         replacesComponentId: oldComponent.id,
         replacedAt: new Date().toISOString()
@@ -885,15 +948,25 @@ async function getServerComponentsHistory(req, res, next) {
 // ============================================
 
 module.exports = {
+  // Вспомогательные функции (для использования в других модулях)
+  sanitizeNumericFields,
+  checkSerialConflict,
+  logHistory,
+  
+  // CRUD операции
   addComponent,
   addComponentsBatch,
   updateComponent,
   updateSerials,
   replaceComponent,
   deleteComponent,
+  
+  // Поиск
   searchComponent,
   scanYadroSerial,
   checkSerialUniqueness,
+  
+  // История
   getComponentHistory,
   getServerComponentsHistory
 };

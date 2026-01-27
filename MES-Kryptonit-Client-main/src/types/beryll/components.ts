@@ -1,14 +1,14 @@
 /**
  * components.ts
  * 
- * Типы для работы с комплектующими серверов
- * Включает поддержку двойных серийных номеров (Yadro + производитель)
+ * Типы для работы с комплектующими серверов Beryll
+ * Включает: компоненты, BMC синхронизация, история изменений
  * 
  * Положить в: src/types/beryll/components.ts
  */
 
 // ============================================
-// ТИПЫ КОМПОНЕНТОВ
+// БАЗОВЫЕ ТИПЫ
 // ============================================
 
 export type ComponentType = 
@@ -22,12 +22,20 @@ export type ComponentType =
   | 'PSU' 
   | 'GPU' 
   | 'RAID' 
-  | 'BMC' 
+  | 'BMC'
+  | 'FAN'
+  | 'CHASSIS'
   | 'OTHER';
 
 export type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'REPLACED';
 
 export type DataSource = 'BMC' | 'REDFISH' | 'MANUAL' | 'IMPORT' | 'REPLACEMENT';
+
+export type BMCDiscrepancyReason = 
+  | 'NOT_FOUND_IN_BMC'
+  | 'REMOVED_FROM_BMC'
+  | 'DATA_MISMATCH'
+  | 'SERIAL_CHANGED';
 
 // ============================================
 // ОСНОВНОЙ ИНТЕРФЕЙС КОМПОНЕНТА
@@ -46,21 +54,21 @@ export interface ServerComponent {
   model?: string;
   
   // Серийные номера
-  serialNumber?: string;          // Заводской S/N производителя
-  serialNumberYadro?: string;     // Внутренний S/N Yadro (наклейка)
-  partNumber?: string;            // Артикул (P/N)
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
   
   // Расположение
-  slot?: string;                  // Слот (например: DIMM_A1, SSD_1, PSU_1)
+  slot?: string;
   
   // Характеристики
-  capacity?: number;              // Объём в байтах
-  speed?: string;                 // Частота/скорость (например: 2934 MT/s)
-  firmwareVersion?: string;       // Версия прошивки
+  capacity?: number;
+  speed?: string;
+  firmwareVersion?: string;
   
   // Состояние
   status: ComponentStatus;
-  healthPercent?: number;         // Здоровье в процентах (0-100)
+  healthPercent?: number;
   
   // Метаданные
   dataSource?: DataSource;
@@ -70,9 +78,13 @@ export interface ServerComponent {
   updatedAt?: string;
   
   // Связи
-  inventoryId?: number;           // Связь с инвентарём
-  catalogId?: number;             // Связь с каталогом
-  installedById?: number;         // Кто установил
+  inventoryId?: number;
+  catalogId?: number;
+  installedById?: number;
+  
+  // BMC расхождения
+  bmcDiscrepancy?: boolean;
+  bmcDiscrepancyReason?: BMCDiscrepancyReason;
 }
 
 export interface ComponentMetadata {
@@ -82,12 +94,12 @@ export interface ComponentMetadata {
   architecture?: string;
   
   // RAM
-  memoryType?: string;            // DDR4, DDR5
+  memoryType?: string;
   rank?: number;
   
   // Storage
-  mediaType?: string;             // SSD, HDD, NVMe
-  interface?: string;             // SATA, NVMe, SAS
+  mediaType?: string;
+  interface?: string;
   
   // Network
   macAddress?: string;
@@ -108,7 +120,7 @@ export interface ComponentMetadata {
 }
 
 // ============================================
-// API RESPONSES
+// API RESPONSES - БАЗОВЫЕ
 // ============================================
 
 export interface ComponentsResponse {
@@ -136,19 +148,250 @@ export interface ComponentsResponse {
     other: ServerComponent[];
   };
   components: ServerComponent[];
+  discrepancyCount?: number;
 }
 
 export interface BMCCheckResponse {
-  reachable: boolean;
-  latency?: number;
+  success: boolean;
+  redfishVersion?: string;
   bmcAddress?: string;
-  message?: string;
+  error?: string;
 }
 
 export interface FetchComponentsResponse {
   success: boolean;
   message: string;
   components: ServerComponent[];
+}
+
+// ============================================
+// BMC СИНХРОНИЗАЦИЯ
+// ============================================
+
+export type SyncMode = 'compare' | 'force' | 'merge';
+
+export interface BMCComponent {
+  componentType: ComponentType;
+  name?: string;
+  slot?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  partNumber?: string;
+  firmwareVersion?: string;
+  status?: string;
+  capacityBytes?: number;
+  speedMHz?: number;
+  speedMT?: number;
+  speed?: number;
+  cores?: number;
+  threads?: number;
+  architecture?: string;
+  memoryType?: string;
+  rank?: string;
+  mediaType?: string;
+  interface?: string;
+  macAddress?: string;
+  linkSpeed?: string;
+  health?: number | string;
+}
+
+export interface ComponentDifference {
+  field: string;
+  db: string | null;
+  bmc: string | null;
+}
+
+export interface ComparisonMatchedItem {
+  dbComponent: ServerComponent;
+  bmcComponent: BMCComponent;
+}
+
+export interface ComparisonMissingItem {
+  dbComponent: ServerComponent;
+  isManual: boolean;
+  reason: string;
+}
+
+export interface ComparisonNewItem {
+  bmcComponent: BMCComponent;
+  reason: string;
+}
+
+export interface ComparisonMismatchItem {
+  dbComponent: ServerComponent;
+  bmcComponent: BMCComponent;
+  differences: ComponentDifference[];
+}
+
+export interface ComparisonDetails {
+  matched: ComparisonMatchedItem[];
+  missingInBmc: ComparisonMissingItem[];
+  newInBmc: ComparisonNewItem[];
+  mismatches: ComparisonMismatchItem[];
+}
+
+export interface ComparisonSummary {
+  total: {
+    inDb: number;
+    inBmc: number;
+  };
+  matched: number;
+  missingInBmc: number;
+  newInBmc: number;
+  mismatches: number;
+}
+
+export interface BMCCompareResponse {
+  success: boolean;
+  mode: 'compare';
+  hasDiscrepancies: boolean;
+  summary: ComparisonSummary;
+  details: ComparisonDetails;
+  message?: string;
+}
+
+export interface BMCForceResponse {
+  success: boolean;
+  mode: 'force';
+  message: string;
+  manualPreserved: number;
+  components: ServerComponent[];
+}
+
+export interface BMCMergeActions {
+  updated: Array<{
+    id: number;
+    serialNumber: string | null;
+    changes: ComponentDifference[];
+  }>;
+  added: ServerComponent[];
+  preserved: ServerComponent[];
+  flaggedForReview: Array<{
+    id: number;
+    serialNumber: string | null;
+    reason: string;
+  }>;
+}
+
+export interface BMCMergeResponse {
+  success: boolean;
+  mode: 'merge';
+  message: string;
+  actions: BMCMergeActions;
+}
+
+export type BMCSyncResponse = BMCCompareResponse | BMCForceResponse | BMCMergeResponse;
+
+export interface BMCSyncRequest {
+  mode: SyncMode;
+  preserveManual?: boolean;
+}
+
+export interface ResolveDiscrepancyRequest {
+  resolution: 'keep' | 'delete';
+}
+
+export interface ResolveDiscrepancyResponse {
+  success: boolean;
+  action: 'kept' | 'deleted';
+  component?: ServerComponent;
+}
+
+// ============================================
+// ДОБАВЛЕНИЕ/РЕДАКТИРОВАНИЕ
+// ============================================
+
+export interface AddComponentData {
+  componentType: string;
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: string;
+  capacity?: number;
+  speed?: string;
+  firmwareVersion?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface UpdateComponentData {
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  partNumber?: string;
+  slot?: string;
+  status?: string;
+  firmwareVersion?: string;
+  capacity?: number;
+  speed?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ReplaceComponentData {
+  newSerialNumber?: string;
+  newSerialNumberYadro?: string;
+  newManufacturer?: string;
+  newModel?: string;
+  newPartNumber?: string;
+  reason?: string;
+  defectRecordId?: number;
+  inventoryComponentId?: number;
+}
+
+// ============================================
+// ИСТОРИЯ ИЗМЕНЕНИЙ
+// ============================================
+
+export type ComponentHistoryAction = 
+  | 'ADDED' 
+  | 'UPDATED' 
+  | 'REPLACED' 
+  | 'REMOVED' 
+  | 'SERIAL_CHANGED'
+  | 'COMPONENTS_FETCHED'
+  | 'COMPONENTS_MERGED'
+  | 'DISCREPANCY_RESOLVED';
+
+export interface ComponentHistoryEntry {
+  id: number;
+  action: ComponentHistoryAction;
+  componentId: number;
+  serverId: number;
+  userId: number;
+  userName?: string;
+  oldValue?: Record<string, any>;
+  newValue?: Record<string, any>;
+  reason?: string;
+  performedAt: string;
+}
+
+// ============================================
+// ПОИСК
+// ============================================
+
+export interface ComponentSearchParams {
+  serialNumber?: string;
+  serialNumberYadro?: string;
+  componentType?: string;
+  serverId?: number;
+}
+
+export interface ComponentSearchResult {
+  found: boolean;
+  component?: ServerComponent;
+  server?: {
+    id: number;
+    apkSerialNumber: string;
+    hostname?: string;
+    ipAddress?: string;
+  };
+  suggestions?: ServerComponent[];
 }
 
 // ============================================
@@ -167,6 +410,8 @@ export const COMPONENT_TYPE_LABELS: Record<ComponentType, string> = {
   GPU: 'Видеокарта',
   RAID: 'RAID-контроллер',
   BMC: 'BMC',
+  FAN: 'Вентилятор',
+  CHASSIS: 'Корпус',
   OTHER: 'Прочее'
 };
 
@@ -198,175 +443,36 @@ export const COMPONENT_TYPE_ICONS: Record<ComponentType, string> = {
   GPU: 'circuit-board',
   RAID: 'hard-drive',
   BMC: 'server',
+  FAN: 'fan',
+  CHASSIS: 'box',
   OTHER: 'settings'
 };
 
-// ============================================
-// ИСТОРИЯ ИЗМЕНЕНИЙ
-// ============================================
-
-export type ComponentHistoryAction = 
-  | 'ADDED' 
-  | 'UPDATED' 
-  | 'REPLACED' 
-  | 'REMOVED' 
-  | 'SERIAL_CHANGED'
-  | 'COMPONENTS_FETCHED'
-  | 'COMPONENTS_BATCH_ADDED';
-
-export interface ComponentHistoryEntry {
-  id: number;
-  action: ComponentHistoryAction;
-  serverId: number;
-  userId: number;
-  userName?: string;
-  comment?: string;
-  metadata?: {
-    componentId?: number;
-    componentType?: string;
-    oldValues?: Record<string, any>;
-    newValues?: Record<string, any>;
-    oldComponent?: Partial<ServerComponent>;
-    newComponentId?: number;
-    reason?: string;
-    count?: number;
-    ids?: number[];
-  };
-  createdAt: string;
-}
-
-// ============================================
-// ФОРМЫ И ВВОД
-// ============================================
-
-export interface ComponentFormData {
-  componentType: ComponentType;
-  name: string;
-  manufacturer: string;
-  model: string;
-  serialNumber: string;
-  serialNumberYadro: string;
-  partNumber: string;
-  slot: string;
-  status: ComponentStatus;
-  capacity?: string;
-  speed?: string;
-}
-
-export interface AddComponentData {
-  componentType: ComponentType;
-  name: string;
-  manufacturer?: string;
-  model?: string;
-  serialNumber?: string;
-  serialNumberYadro?: string;
-  partNumber?: string;
-  slot?: string;
-  status?: ComponentStatus;
-  capacity?: number;
-  speed?: string;
-  firmwareVersion?: string;
-  metadata?: Record<string, any>;
-}
-
-export interface UpdateComponentData {
-  name?: string;
-  manufacturer?: string;
-  model?: string;
-  serialNumber?: string;
-  serialNumberYadro?: string;
-  partNumber?: string;
-  slot?: string;
-  status?: ComponentStatus;
-  firmwareVersion?: string;
-  capacity?: number;
-  speed?: string;
-  metadata?: Record<string, any>;
-}
-
-export interface ReplaceComponentData {
-  newSerialNumber?: string;
-  newSerialNumberYadro?: string;
-  newManufacturer?: string;
-  newModel?: string;
-  newPartNumber?: string;
-  reason?: string;
-  defectRecordId?: number;
-  inventoryComponentId?: number;
-}
-
-// ============================================
-// ПОИСК И СКАНИРОВАНИЕ
-// ============================================
-
-export interface ComponentSearchParams {
-  serialNumber?: string;
-  serialNumberYadro?: string;
-  componentType?: ComponentType;
-  serverId?: number;
-}
-
-export interface ComponentSearchResult {
-  found: boolean;
-  count?: number;
-  component?: ServerComponent;
-  components?: ServerComponent[];
-  server?: {
-    id: number;
-    apkSerialNumber: string;
-    hostname?: string;
-  };
-  suggestions?: ServerComponent[];
-}
-
-export interface SerialCheckResult {
-  unique: boolean;
-  conflictsWith?: {
-    componentId: number;
-    serverId: number;
-    serverSerial: string;
-  };
-}
+export const BMC_DISCREPANCY_LABELS: Record<BMCDiscrepancyReason, string> = {
+  NOT_FOUND_IN_BMC: 'Не найден в BMC',
+  REMOVED_FROM_BMC: 'Удалён из BMC',
+  DATA_MISMATCH: 'Данные отличаются',
+  SERIAL_CHANGED: 'Изменён S/N'
+};
 
 // ============================================
 // УТИЛИТЫ
 // ============================================
 
-/**
- * Форматирование байт в читаемый вид
- */
-export function formatBytes(bytes: number | string | null | undefined): string {
-  if (!bytes) return '—';
-  const b = typeof bytes === 'string' ? parseInt(bytes) : bytes;
-  if (isNaN(b) || b === 0) return '—';
+export function formatBytes(bytes: number | undefined | null): string {
+  if (!bytes || bytes === 0) return '0 B';
   
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(b) / Math.log(1024));
-  return `${(b / Math.pow(1024, i)).toFixed(i > 2 ? 1 : 0)} ${units[i]}`;
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-/**
- * Генерация имени компонента
- */
-export function generateComponentName(component: Partial<ServerComponent>): string {
-  if (component.name) return component.name;
-  
-  const parts: string[] = [];
-  if (component.manufacturer) parts.push(component.manufacturer);
-  if (component.model) parts.push(component.model);
-  if (parts.length === 0 && component.componentType) {
-    parts.push(COMPONENT_TYPE_LABELS[component.componentType] || component.componentType);
-  }
-  
-  return parts.join(' ').trim() || 'Комплектующее';
+export function isStorageComponent(type: ComponentType): boolean {
+  return ['HDD', 'SSD', 'NVME'].includes(type);
 }
 
-/**
- * Получить полный серийный номер для отображения
- */
-export function getDisplaySerial(component: ServerComponent): string {
-  if (component.serialNumberYadro && component.serialNumber) {
-    return `${component.serialNumberYadro} / ${component.serialNumber}`;
-  }
-  return component.serialNumberYadro || component.serialNumber || '—';
+export function getStatusColor(status: ComponentStatus): string {
+  return COMPONENT_STATUS_COLORS[status] || COMPONENT_STATUS_COLORS.UNKNOWN;
 }

@@ -2,7 +2,7 @@
  * componentsAPI.ts
  * 
  * Расширенный API для работы с комплектующими серверов
- * Включает: добавление, редактирование, замену, удаление
+ * Включает: добавление, редактирование, замену, удаление, BMC синхронизация
  * 
  * Положить в: src/api/beryll/componentsAPI.ts
  */
@@ -30,7 +30,8 @@ export async function checkBMC(serverId: number): Promise<BMCCheckResponse> {
 }
 
 /**
- * Выгрузить комплектующие с BMC
+ * Выгрузить комплектующие с BMC (старый метод - простая перезапись)
+ * @deprecated Используйте syncComponentsWithBMC с режимами
  */
 export async function fetchComponents(serverId: number): Promise<FetchComponentsResponse> {
   const { data } = await $authHost.post(`${BASE_URL}/servers/${serverId}/components/fetch`);
@@ -73,12 +74,126 @@ export async function updateBMCAddress(
 }
 
 // ============================================
+// BMC СИНХРОНИЗАЦИЯ (НОВОЕ)
+// ============================================
+
+export type SyncMode = 'compare' | 'force' | 'merge';
+
+export interface BMCCompareResponse {
+  success: boolean;
+  mode: 'compare';
+  hasDiscrepancies: boolean;
+  summary: {
+    total: { inDb: number; inBmc: number };
+    matched: number;
+    missingInBmc: number;
+    newInBmc: number;
+    mismatches: number;
+  };
+  details: {
+    matched: Array<{ dbComponent: ServerComponent; bmcComponent: any }>;
+    missingInBmc: Array<{ dbComponent: ServerComponent; isManual: boolean; reason: string }>;
+    newInBmc: Array<{ bmcComponent: any; reason: string }>;
+    mismatches: Array<{ 
+      dbComponent: ServerComponent; 
+      bmcComponent: any; 
+      differences: Array<{ field: string; db: string | null; bmc: string | null }>;
+    }>;
+  };
+  message?: string;
+}
+
+export interface BMCForceResponse {
+  success: boolean;
+  mode: 'force';
+  message: string;
+  manualPreserved: number;
+  components: ServerComponent[];
+}
+
+export interface BMCMergeResponse {
+  success: boolean;
+  mode: 'merge';
+  message: string;
+  actions: {
+    updated: Array<{ id: number; serialNumber: string | null; changes: any[] }>;
+    added: ServerComponent[];
+    preserved: ServerComponent[];
+    flaggedForReview: Array<{ id: number; serialNumber: string | null; reason: string }>;
+  };
+}
+
+export type BMCSyncResponse = BMCCompareResponse | BMCForceResponse | BMCMergeResponse;
+
+/**
+ * Сравнить компоненты с BMC (только чтение, без изменений)
+ */
+export async function compareWithBMC(serverId: number): Promise<BMCCompareResponse> {
+  const { data } = await $authHost.get(`${BASE_URL}/servers/${serverId}/components/compare`);
+  return data;
+}
+
+/**
+ * Синхронизировать компоненты с BMC
+ * 
+ * @param serverId - ID сервера
+ * @param mode - Режим синхронизации:
+ *   - 'compare' - только сравнение, без изменений (по умолчанию)
+ *   - 'force' - полная перезапись данными с BMC
+ *   - 'merge' - умное слияние (обновление существующих, добавление новых)
+ * @param preserveManual - сохранять ли компоненты, добавленные вручную (только для mode='force')
+ */
+export async function syncComponentsWithBMC(
+  serverId: number, 
+  mode: SyncMode = 'compare',
+  preserveManual: boolean = true
+): Promise<BMCSyncResponse> {
+  const { data } = await $authHost.post<BMCSyncResponse>(
+    `${BASE_URL}/servers/${serverId}/components/fetch`,
+    { mode, preserveManual }
+  );
+  return data;
+}
+
+/**
+ * Разрешить расхождение для компонента
+ * 
+ * @param serverId - ID сервера
+ * @param componentId - ID компонента
+ * @param resolution - Действие: 'keep' - оставить компонент, 'delete' - удалить
+ */
+export async function resolveDiscrepancy(
+  serverId: number,
+  componentId: number,
+  resolution: 'keep' | 'delete'
+): Promise<{ success: boolean; action: 'kept' | 'deleted'; component?: ServerComponent }> {
+  const { data } = await $authHost.put(
+    `${BASE_URL}/servers/${serverId}/components/${componentId}/resolve-discrepancy`,
+    { resolution }
+  );
+  return data;
+}
+
+// Хелперы для определения типа ответа
+export function isCompareResponse(response: BMCSyncResponse): response is BMCCompareResponse {
+  return response.mode === 'compare';
+}
+
+export function isMergeResponse(response: BMCSyncResponse): response is BMCMergeResponse {
+  return response.mode === 'merge';
+}
+
+export function isForceResponse(response: BMCSyncResponse): response is BMCForceResponse {
+  return response.mode === 'force';
+}
+
+// ============================================
 // ДОБАВЛЕНИЕ КОМПЛЕКТУЮЩИХ
 // ============================================
 
 export interface AddComponentData {
   componentType: string;
-  name: string;
+  name?: string;
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
