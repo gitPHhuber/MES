@@ -1,5 +1,5 @@
 const { BeryllServer, BeryllBatch, BeryllHistory, BeryllServerChecklist, User } = require("../../../models/index");
-const { SERVER_STATUSES, HISTORY_ACTIONS } = require("../../../models/definitions/Beryll");
+const { SERVER_STATUSES, HISTORY_ACTIONS, BeryllChecklistTemplate, BeryllChecklistFile } = require("../../../models/definitions/Beryll");
 const { Op } = require("sequelize");
 const { calculateDuration } = require("../utils/helpers");
 const HistoryService = require("./HistoryService");
@@ -59,8 +59,16 @@ class ServerService {
           model: BeryllServerChecklist,
           as: "checklists",
           include: [
-            { model: require("../../../models/definitions/Beryll").BeryllChecklistTemplate, as: "template" },
-            { model: User, as: "completedBy", attributes: ["id", "login", "name", "surname"] }
+            { model: BeryllChecklistTemplate, as: "template" },
+            { model: User, as: "completedBy", attributes: ["id", "login", "name", "surname"] },
+            // ✅ Добавлено: загружаем файлы для каждого пункта чек-листа
+            { 
+              model: BeryllChecklistFile, 
+              as: "files",
+              include: [
+                { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
+              ]
+            }
           ]
         },
         {

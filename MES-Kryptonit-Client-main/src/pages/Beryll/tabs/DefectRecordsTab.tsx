@@ -1,16 +1,3 @@
-/**
- * DefectRecordsTab.tsx
- * 
- * Вкладка "Учёт брака" для APK Beryll
- * Журнал дефектов серверов с отслеживанием ремонта
- * 
- * ОБНОВЛЕНО: 
- * - Добавлены все колонки из Excel (13 колонок в таблице)
- * - Добавлена кнопка экспорта в Excel
- * 
- * Положить в: src/pages/Beryll/tabs/DefectRecordsTab.tsx
- */
-
 import React, { useState, useEffect, useCallback } from "react";
 import { 
   AlertTriangle, Plus, Search, Filter, FileText, Download,
@@ -46,7 +33,7 @@ interface DefectExportParams {
 }
 
 const exportDefectsToExcel = async (params: DefectExportParams = {}): Promise<Blob> => {
-  const response = await $authHost.get("api/beryll/extended/defect/export", {
+  const response = await $authHost.get("api/beryll/defect-records/export", {
     params,
     responseType: "blob"
   });
@@ -54,7 +41,7 @@ const exportDefectsToExcel = async (params: DefectExportParams = {}): Promise<Bl
 };
 
 const exportDefectStatsToExcel = async (): Promise<Blob> => {
-  const response = await $authHost.get("api/beryll/extended/defect/export/stats", {
+  const response = await $authHost.get("api/beryll/defect-records/export/stats", {
     responseType: "blob"
   });
   return response.data;

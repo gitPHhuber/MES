@@ -1,471 +1,633 @@
 /**
- * DefectExportService.js
+ * ChecklistService.js - Сервис для работы с чек-листами
  * 
- * Сервис экспорта записей о браке (дефектов) в Excel
- * Формирует таблицу со всеми инцидентами по структуре:
- * - Заявка из Ядра
- * - Серийный номер сервера
- * - Номер в составе АПК Берилл (кластер)
- * - Вид комплектующего
- * - Проделанные шаги (история workflow)
- * - Комментарий
- * - Ответственный
+ * Функции:
+ * - Управление шаблонами (CRUD, изменение порядка, восстановление)
+ * - Выполнение пунктов чек-листа с валидацией requiresFile
+ * - Работа с файлами доказательств (загрузка, удаление, получение)
  * 
- * Положить в: MES-Kryptonit-Server-master/services/beryll/DefectExportService.js
+ * Путь: controllers/beryll/services/ChecklistService.js
  */
 
-const ExcelJS = require("exceljs");
+// Импортируем модели Beryll из definitions
+const { 
+  BeryllChecklistTemplate, 
+  BeryllServerChecklist,
+  BeryllChecklistFile,
+  BeryllServer,
+  HISTORY_ACTIONS
+} = require("../../../models/definitions/Beryll");
+
+// User из основного index.js
+const { User } = require("../../../models/index");
+
+const HistoryService = require("./HistoryService");
+const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
-const { Op } = require("sequelize");
 
-// Статусы для отображения в истории
-const STATUS_LABELS = {
-    NEW: "Новая",
-    DIAGNOSING: "Диагностика",
-    WAITING_PARTS: "Ожидание запчастей",
-    REPAIRING: "Ремонт",
-    SENT_TO_YADRO: "Отправлено в Ядро",
-    RETURNED: "Возврат из Ядро",
-    RESOLVED: "Решено",
-    REPEATED: "Повторный брак",
-    CLOSED: "Закрыто"
-};
+// Директория для загрузки файлов
+const UPLOAD_DIR = path.join(__dirname, "../../../uploads/beryll");
 
-// Типы деталей для отображения
-const PART_TYPE_LABELS = {
-    RAM: "ОЗУ",
-    HDD: "HDD",
-    SSD: "SSD",
-    MOTHERBOARD: "Материнская плата",
-    CPU: "Процессор",
-    PSU: "Блок питания",
-    FAN: "Вентилятор",
-    NIC: "Сетевая карта",
-    RAID: "RAID контроллер",
-    GPU: "Видеокарта",
-    OTHER: "Прочее"
-};
+// ============================================
+// УТИЛИТЫ
+// ============================================
 
-class DefectExportService {
-    /**
-     * Экспорт всех дефектов в Excel
-     * @param {Object} options - Параметры фильтрации
-     * @returns {Buffer} - Excel файл в виде буфера
-     */
-    static async exportToExcel(options = {}) {
-        const {
-            status,
-            dateFrom,
-            dateTo,
-            serverId,
-            search
-        } = options;
-        
-        // Получаем модели
-        const {
-            BeryllDefectRecord,
-            BeryllServer,
-            BeryllCluster,
-            User,
-            UserAlias
-        } = require("../../models/index");
-        
-        // Формируем условия фильтрации
-        const where = {};
-        
-        if (status) {
-            where.status = status;
-        }
-        
-        if (dateFrom || dateTo) {
-            where.detectedAt = {};
-            if (dateFrom) where.detectedAt[Op.gte] = new Date(dateFrom);
-            if (dateTo) where.detectedAt[Op.lte] = new Date(dateTo);
-        }
-        
-        if (serverId) {
-            where.serverId = serverId;
-        }
-        
-        if (search) {
-            where[Op.or] = [
-                { yadroTicketNumber: { [Op.iLike]: `%${search}%` } },
-                { problemDescription: { [Op.iLike]: `%${search}%` } },
-                { notes: { [Op.iLike]: `%${search}%` } }
-            ];
-        }
-        
-        // Получаем записи
-        const records = await BeryllDefectRecord.findAll({
-            where,
-            include: [
-                {
-                    model: BeryllServer,
-                    as: "server",
-                    include: [
-                        {
-                            model: BeryllCluster,
-                            as: "cluster",
-                            required: false
-                        }
-                    ]
-                },
-                { model: User, as: "detectedBy", attributes: ["id", "name", "surname"] },
-                { model: User, as: "diagnostician", attributes: ["id", "name", "surname"] },
-                { model: User, as: "resolvedBy", attributes: ["id", "name", "surname"] },
-                { 
-                    model: BeryllServer, 
-                    as: "substituteServer", 
-                    attributes: ["id", "apkSerialNumber", "hostname"],
-                    required: false 
-                }
-            ],
-            order: [["detectedAt", "DESC"]]
-        });
-        
-        // Создаем Excel файл
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = "MES Kryptonit";
-        workbook.created = new Date();
-        
-        const sheet = workbook.addWorksheet("Брак серверов", {
-            pageSetup: {
-                paperSize: 9, // A4
-                orientation: "landscape"
-            }
-        });
-        
-        // Определяем колонки
-        sheet.columns = [
-            { header: "№", key: "num", width: 5 },
-            { header: "Номер заявки в Ядре", key: "yadroTicket", width: 18 },
-            { header: "Серийный номер сервера", key: "serverSerial", width: 20 },
-            { header: "Наличие СПиСИ", key: "hasSPISI", width: 12 },
-            { header: "Кластер", key: "cluster", width: 15 },
-            { header: "Заявленная проблема", key: "problem", width: 45 },
-            { header: "Дата обнаруж.", key: "detectedAt", width: 14 },
-            { header: "Занимался диагностикой", key: "diagnostician", width: 22 },
-            { header: "Детали ремонта", key: "partType", width: 18 },
-            { header: "s/n yadro (брак)", key: "defectSnYadro", width: 22 },
-            { header: "s/n плашки (брак)", key: "defectSnManuf", width: 18 },
-            { header: "s/n yadro (замена)", key: "replacementSnYadro", width: 22 },
-            { header: "s/n плашки (замена)", key: "replacementSnManuf", width: 18 },
-            { header: "Примечания", key: "notes", width: 35 },
-            { header: "Повторно забракован", key: "repeated", width: 20 },
-            { header: "Сервер для подмены", key: "substitute", width: 18 },
-            { header: "Отправка в Ядро", key: "sentToYadro", width: 14 },
-            { header: "Возврат из Ядро", key: "returnedFromYadro", width: 14 },
-            { header: "Статус", key: "status", width: 15 },
-            { header: "Проделанные шаги", key: "steps", width: 50 },
-            { header: "Ответственный", key: "responsible", width: 20 }
-        ];
-        
-        // Стили для заголовков
-        const headerStyle = {
-            font: { bold: true, color: { argb: "FFFFFFFF" }, size: 11 },
-            fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } },
-            alignment: { horizontal: "center", vertical: "middle", wrapText: true },
-            border: {
-                top: { style: "thin" },
-                left: { style: "thin" },
-                bottom: { style: "thin" },
-                right: { style: "thin" }
-            }
-        };
-        
-        // Применяем стили к заголовкам
-        sheet.getRow(1).height = 35;
-        sheet.getRow(1).eachCell((cell) => {
-            cell.font = headerStyle.font;
-            cell.fill = headerStyle.fill;
-            cell.alignment = headerStyle.alignment;
-            cell.border = headerStyle.border;
-        });
-        
-        // Добавляем данные
-        let rowNum = 1;
-        for (const record of records) {
-            // Формируем историю шагов
-            const steps = this.buildStepsHistory(record);
-            
-            // Определяем ответственного
-            const responsible = this.getResponsiblePerson(record);
-            
-            const row = sheet.addRow({
-                num: rowNum++,
-                yadroTicket: record.yadroTicketNumber || "",
-                serverSerial: record.server?.apkSerialNumber || "",
-                hasSPISI: record.hasSPISI ? "Да" : "Нет",
-                cluster: record.clusterCode || record.server?.cluster?.code || "",
-                problem: record.problemDescription || "",
-                detectedAt: record.detectedAt ? new Date(record.detectedAt) : "",
-                diagnostician: this.formatUserName(record.diagnostician),
-                partType: PART_TYPE_LABELS[record.repairPartType] || record.repairPartType || "",
-                defectSnYadro: record.defectPartSerialYadro || "",
-                defectSnManuf: record.defectPartSerialManuf || "",
-                replacementSnYadro: record.replacementPartSerialYadro || "",
-                replacementSnManuf: record.replacementPartSerialManuf || "",
-                notes: record.notes || "",
-                repeated: record.isRepeatedDefect ? 
-                    `Да: ${record.repeatedDefectReason || "причина не указана"}` : "",
-                substitute: record.substituteServer?.apkSerialNumber || 
-                    record.substituteServerSerial || "",
-                sentToYadro: record.sentToYadroAt ? new Date(record.sentToYadroAt) : "",
-                returnedFromYadro: record.returnedFromYadroAt ? new Date(record.returnedFromYadroAt) : "",
-                status: STATUS_LABELS[record.status] || record.status,
-                steps: steps,
-                responsible: responsible
-            });
-            
-            // Стили для строк данных
-            const rowStyle = {
-                alignment: { vertical: "middle", wrapText: true },
-                border: {
-                    top: { style: "thin" },
-                    left: { style: "thin" },
-                    bottom: { style: "thin" },
-                    right: { style: "thin" }
-                }
-            };
-            
-            row.eachCell((cell) => {
-                cell.alignment = rowStyle.alignment;
-                cell.border = rowStyle.border;
-            });
-            
-            // Форматирование дат
-            const dateColumns = ["detectedAt", "sentToYadro", "returnedFromYadro"];
-            dateColumns.forEach(col => {
-                const cell = row.getCell(col);
-                if (cell.value instanceof Date) {
-                    cell.numFmt = "DD.MM.YYYY";
-                }
-            });
-            
-            // Выделение повторного брака красным
-            if (record.isRepeatedDefect) {
-                row.getCell("repeated").fill = {
-                    type: "pattern",
-                    pattern: "solid",
-                    fgColor: { argb: "FFFF0000" }
-                };
-                row.getCell("repeated").font = { color: { argb: "FFFFFFFF" } };
-            }
-            
-            // Выделение критичных статусов
-            if (record.status === "SENT_TO_YADRO") {
-                row.getCell("status").fill = {
-                    type: "pattern",
-                    pattern: "solid",
-                    fgColor: { argb: "FFFFC000" }
-                };
-            }
-        }
-        
-        // Автофильтр
-        sheet.autoFilter = {
-            from: { row: 1, column: 1 },
-            to: { row: records.length + 1, column: sheet.columns.length }
-        };
-        
-        // Закрепление заголовков
-        sheet.views = [{ state: "frozen", ySplit: 1 }];
-        
-        // Генерируем буфер
-        const buffer = await workbook.xlsx.writeBuffer();
-        return buffer;
+/**
+ * Декодирование имени файла из latin1 в UTF-8
+ * express-fileupload некорректно обрабатывает UTF-8 имена файлов
+ */
+function decodeFileName(name) {
+  if (!name) return name;
+  
+  try {
+    // Проверяем, нужно ли декодирование (есть ли "битые" символы)
+    const hasInvalidChars = /[\u0080-\u00ff]/.test(name);
+    
+    if (hasInvalidChars) {
+      // Декодируем из latin1 (ISO-8859-1) в UTF-8
+      return Buffer.from(name, 'latin1').toString('utf8');
     }
     
-    /**
-     * Формирование истории шагов по записи
-     */
-    static buildStepsHistory(record) {
-        const steps = [];
-        
-        if (record.detectedAt) {
-            steps.push(`${this.formatDate(record.detectedAt)}: Обнаружен дефект`);
-        }
-        
-        if (record.diagnosisStartedAt) {
-            steps.push(`${this.formatDate(record.diagnosisStartedAt)}: Начата диагностика`);
-        }
-        
-        if (record.diagnosisCompletedAt) {
-            steps.push(`${this.formatDate(record.diagnosisCompletedAt)}: Диагностика завершена`);
-        }
-        
-        if (record.repairStartedAt) {
-            steps.push(`${this.formatDate(record.repairStartedAt)}: Начат ремонт`);
-        }
-        
-        if (record.sentToYadroAt) {
-            steps.push(`${this.formatDate(record.sentToYadroAt)}: Отправлено в Ядро`);
-        }
-        
-        if (record.returnedFromYadroAt) {
-            steps.push(`${this.formatDate(record.returnedFromYadroAt)}: Возврат из Ядро`);
-        }
-        
-        if (record.repairCompletedAt) {
-            steps.push(`${this.formatDate(record.repairCompletedAt)}: Ремонт завершен`);
-        }
-        
-        if (record.resolvedAt) {
-            steps.push(`${this.formatDate(record.resolvedAt)}: Решено`);
-        }
-        
-        if (record.repairDetails) {
-            steps.push(`Детали ремонта: ${record.repairDetails}`);
-        }
-        
-        if (record.resolution) {
-            steps.push(`Резолюция: ${record.resolution}`);
-        }
-        
-        return steps.join("\n");
-    }
-    
-    /**
-     * Определение ответственного лица
-     */
-    static getResponsiblePerson(record) {
-        // Приоритет: diagnostician > resolvedBy > detectedBy
-        if (record.diagnostician) {
-            return this.formatUserName(record.diagnostician);
-        }
-        if (record.resolvedBy) {
-            return this.formatUserName(record.resolvedBy);
-        }
-        if (record.detectedBy) {
-            return this.formatUserName(record.detectedBy);
-        }
-        return "";
-    }
-    
-    /**
-     * Форматирование имени пользователя
-     */
-    static formatUserName(user) {
-        if (!user) return "";
-        
-        const surname = user.surname || "";
-        const name = user.name || "";
-        
-        if (surname && name) {
-            // Формат: "Фамилия И."
-            return `${surname} ${name.charAt(0)}.`;
-        }
-        
-        return surname || name || "";
-    }
-    
-    /**
-     * Форматирование даты
-     */
-    static formatDate(date) {
-        if (!date) return "";
-        const d = new Date(date);
-        return d.toLocaleDateString("ru-RU", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric"
-        });
-    }
-    
-    /**
-     * Экспорт статистики по дефектам
-     */
-    static async exportStatsToExcel(options = {}) {
-        const { BeryllDefectRecord, BeryllServer, User } = require("../../models/index");
-        const { Sequelize } = require("sequelize");
-        
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = "MES Kryptonit";
-        
-        // Лист 1: Сводка по статусам
-        const summarySheet = workbook.addWorksheet("Сводка");
-        
-        const statusStats = await BeryllDefectRecord.findAll({
-            attributes: [
-                "status",
-                [Sequelize.fn("COUNT", Sequelize.col("id")), "count"]
-            ],
-            group: ["status"]
-        });
-        
-        summarySheet.columns = [
-            { header: "Статус", key: "status", width: 25 },
-            { header: "Количество", key: "count", width: 15 }
-        ];
-        
-        statusStats.forEach(stat => {
-            summarySheet.addRow({
-                status: STATUS_LABELS[stat.status] || stat.status,
-                count: parseInt(stat.dataValues.count)
-            });
-        });
-        
-        // Лист 2: Сводка по типам деталей
-        const partTypeSheet = workbook.addWorksheet("По типам деталей");
-        
-        const partTypeStats = await BeryllDefectRecord.findAll({
-            attributes: [
-                "repairPartType",
-                [Sequelize.fn("COUNT", Sequelize.col("id")), "count"]
-            ],
-            where: {
-                repairPartType: { [Op.ne]: null }
-            },
-            group: ["repairPartType"]
-        });
-        
-        partTypeSheet.columns = [
-            { header: "Тип детали", key: "partType", width: 25 },
-            { header: "Количество", key: "count", width: 15 }
-        ];
-        
-        partTypeStats.forEach(stat => {
-            partTypeSheet.addRow({
-                partType: PART_TYPE_LABELS[stat.repairPartType] || stat.repairPartType,
-                count: parseInt(stat.dataValues.count)
-            });
-        });
-        
-        // Лист 3: Сводка по диагностам
-        const diagnosticianSheet = workbook.addWorksheet("По диагностам");
-        
-        const diagnosticianStats = await BeryllDefectRecord.findAll({
-            attributes: [
-                "diagnosticianId",
-                [Sequelize.fn("COUNT", Sequelize.col("BeryllDefectRecord.id")), "count"]
-            ],
-            include: [{
-                model: User,
-                as: "diagnostician",
-                attributes: ["name", "surname"]
-            }],
-            where: {
-                diagnosticianId: { [Op.ne]: null }
-            },
-            group: ["diagnosticianId", "diagnostician.id", "diagnostician.name", "diagnostician.surname"]
-        });
-        
-        diagnosticianSheet.columns = [
-            { header: "Диагност", key: "name", width: 30 },
-            { header: "Количество дефектов", key: "count", width: 20 }
-        ];
-        
-        diagnosticianStats.forEach(stat => {
-            diagnosticianSheet.addRow({
-                name: this.formatUserName(stat.diagnostician),
-                count: parseInt(stat.dataValues.count)
-            });
-        });
-        
-        const buffer = await workbook.xlsx.writeBuffer();
-        return buffer;
-    }
+    return name;
+  } catch (e) {
+    console.error("Error decoding filename:", e);
+    return name;
+  }
 }
 
-module.exports = DefectExportService;
+class ChecklistService {
+  
+  // ============================================
+  // ШАБЛОНЫ ЧЕК-ЛИСТОВ
+  // ============================================
+  
+  /**
+   * Инициализация чек-листа для сервера
+   */
+  async initializeServerChecklist(serverId) {
+    try {
+      const templates = await BeryllChecklistTemplate.findAll({
+        where: { isActive: true },
+        order: [["sortOrder", "ASC"]]
+      });
+      
+      for (const template of templates) {
+        await BeryllServerChecklist.findOrCreate({
+          where: { serverId, checklistTemplateId: template.id },
+          defaults: { completed: false }
+        });
+      }
+    } catch (e) {
+      console.error("Error initializing checklist:", e);
+      throw e;
+    }
+  }
+  
+  /**
+   * Получить шаблоны чек-листов (только активные)
+   */
+  async getChecklistTemplates() {
+    const templates = await BeryllChecklistTemplate.findAll({
+      where: { isActive: true },
+      order: [["sortOrder", "ASC"]]
+    });
+    
+    return templates;
+  }
+  
+  /**
+   * Получить все шаблоны (включая неактивные) для админки
+   */
+  async getAllChecklistTemplates(includeInactive = false) {
+    const where = includeInactive ? {} : { isActive: true };
+    
+    const templates = await BeryllChecklistTemplate.findAll({
+      where,
+      order: [["sortOrder", "ASC"]]
+    });
+    
+    return templates;
+  }
+  
+  /**
+   * Создать шаблон чек-листа
+   */
+  async createChecklistTemplate(data) {
+    const { 
+      title, 
+      description, 
+      sortOrder, 
+      isRequired, 
+      estimatedMinutes,
+      groupCode,
+      fileCode,
+      requiresFile
+    } = data;
+    
+    if (!title) {
+      throw new Error("Название обязательно");
+    }
+    
+    // Если sortOrder не указан, ставим в конец
+    let order = sortOrder;
+    if (order === undefined || order === null) {
+      const maxOrder = await BeryllChecklistTemplate.max('sortOrder') || 0;
+      order = maxOrder + 10;
+    }
+    
+    const template = await BeryllChecklistTemplate.create({
+      title,
+      description: description || null,
+      sortOrder: order,
+      isRequired: isRequired !== false,
+      estimatedMinutes: estimatedMinutes || 30,
+      groupCode: groupCode || 'TESTING',
+      fileCode: fileCode || null,
+      requiresFile: requiresFile === true,
+      isActive: true
+    });
+    
+    return template;
+  }
+  
+  /**
+   * Обновить шаблон чек-листа
+   */
+  async updateChecklistTemplate(id, data) {
+    const { 
+      title, 
+      description, 
+      sortOrder, 
+      isRequired, 
+      estimatedMinutes, 
+      isActive,
+      groupCode,
+      fileCode,
+      requiresFile
+    } = data;
+    
+    const template = await BeryllChecklistTemplate.findByPk(id);
+    
+    if (!template) {
+      throw new Error("Шаблон не найден");
+    }
+    
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+    if (isRequired !== undefined) updateData.isRequired = isRequired;
+    if (estimatedMinutes !== undefined) updateData.estimatedMinutes = estimatedMinutes;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (groupCode !== undefined) updateData.groupCode = groupCode;
+    if (fileCode !== undefined) updateData.fileCode = fileCode;
+    if (requiresFile !== undefined) updateData.requiresFile = requiresFile;
+    
+    await template.update(updateData);
+    
+    return template;
+  }
+  
+  /**
+   * Удалить шаблон чек-листа (деактивировать или полное удаление)
+   */
+  async deleteChecklistTemplate(id, hardDelete = false) {
+    const template = await BeryllChecklistTemplate.findByPk(id);
+    
+    if (!template) {
+      throw new Error("Шаблон не найден");
+    }
+    
+    if (hardDelete) {
+      // Проверяем, есть ли связанные записи
+      const usageCount = await BeryllServerChecklist.count({
+        where: { checklistTemplateId: id }
+      });
+      
+      if (usageCount > 0) {
+        throw new Error(`Невозможно удалить: шаблон используется в ${usageCount} серверах. Используйте деактивацию.`);
+      }
+      
+      await template.destroy();
+    } else {
+      // Деактивируем вместо удаления
+      await template.update({ isActive: false });
+    }
+    
+    return { success: true };
+  }
+  
+  /**
+   * Восстановить деактивированный шаблон
+   */
+  async restoreChecklistTemplate(id) {
+    const template = await BeryllChecklistTemplate.findByPk(id);
+    
+    if (!template) {
+      throw new Error("Шаблон не найден");
+    }
+    
+    await template.update({ isActive: true });
+    
+    return template;
+  }
+  
+  /**
+   * Изменить порядок шаблонов (Drag & Drop)
+   */
+  async reorderChecklistTemplates(orderedIds) {
+    const updates = orderedIds.map((id, index) => 
+      BeryllChecklistTemplate.update(
+        { sortOrder: (index + 1) * 10 },
+        { where: { id } }
+      )
+    );
+    
+    await Promise.all(updates);
+    
+    return { success: true };
+  }
+  
+  // ============================================
+  // ЧЕК-ЛИСТ СЕРВЕРА
+  // ============================================
+  
+  /**
+   * Получить чек-лист сервера с файлами
+   */
+  async getServerChecklist(serverId) {
+    // Получаем активные шаблоны
+    const templates = await BeryllChecklistTemplate.findAll({
+      where: { isActive: true },
+      order: [["sortOrder", "ASC"]]
+    });
+    
+    // Получаем записи чек-листа для этого сервера
+    const serverChecklists = await BeryllServerChecklist.findAll({
+      where: { serverId },
+      include: [
+        { 
+          model: BeryllChecklistFile, 
+          as: "files", 
+          include: [
+            { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
+          ]
+        },
+        { model: User, as: "completedBy", attributes: ["id", "login", "name", "surname"] }
+      ]
+    });
+    
+    // Объединяем шаблоны с данными выполнения
+    return templates.map(template => {
+      const serverChecklist = serverChecklists.find(
+        sc => sc.checklistTemplateId === template.id
+      );
+      
+      return {
+        id: serverChecklist?.id || null,
+        serverId: parseInt(serverId),
+        checklistTemplateId: template.id,
+        completed: serverChecklist?.completed || false,
+        completedAt: serverChecklist?.completedAt || null,
+        completedById: serverChecklist?.completedById || null,
+        notes: serverChecklist?.notes || null,
+        template: template.toJSON(),
+        completedBy: serverChecklist?.completedBy || null,
+        files: serverChecklist?.files || []
+      };
+    });
+  }
+  
+  /**
+   * Переключить статус пункта чек-листа с валидацией
+   */
+  async toggleChecklistItem(serverId, checklistTemplateId, completed, notes, userId) {
+    // Находим шаблон
+    const template = await BeryllChecklistTemplate.findByPk(checklistTemplateId);
+    
+    if (!template) {
+      throw new Error("Шаблон чек-листа не найден");
+    }
+    
+    // Находим или создаём запись чек-листа
+    let [checklist, created] = await BeryllServerChecklist.findOrCreate({
+      where: { serverId, checklistTemplateId },
+      defaults: { completed: false }
+    });
+    
+    // Загружаем файлы для валидации
+    const files = await BeryllChecklistFile.findAll({
+      where: { serverChecklistId: checklist.id }
+    });
+    
+    // Валидация: если требуется доказательство и пытаемся отметить выполненным
+    if (completed && template.requiresFile) {
+      if (!files || files.length === 0) {
+        throw new Error("Для выполнения этого этапа необходимо загрузить доказательство (скриншот)");
+      }
+    }
+    
+    // Обновляем статус
+    const updateData = {
+      completed,
+      notes: notes !== undefined ? notes : checklist.notes
+    };
+    
+    if (completed) {
+      updateData.completedById = userId;
+      updateData.completedAt = new Date();
+    } else {
+      updateData.completedById = null;
+      updateData.completedAt = null;
+    }
+    
+    await checklist.update(updateData);
+    
+    // Логируем выполнение
+    if (completed) {
+      try {
+        await HistoryService.logHistory(parseInt(serverId), userId, HISTORY_ACTIONS.CHECKLIST_COMPLETED, {
+          checklistItemId: checklistTemplateId,
+          comment: `Выполнен этап: ${template.title}`
+        });
+      } catch (e) {
+        console.error("Error logging history:", e);
+      }
+    }
+    
+    // Возвращаем обновлённую запись с ассоциациями
+    return await BeryllServerChecklist.findByPk(checklist.id, {
+      include: [
+        { model: BeryllChecklistTemplate, as: "template" },
+        { 
+          model: BeryllChecklistFile, 
+          as: "files",
+          include: [
+            { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
+          ]
+        },
+        { model: User, as: "completedBy", attributes: ["id", "login", "name", "surname"] }
+      ]
+    });
+  }
+  
+  // ============================================
+  // ФАЙЛЫ ДОКАЗАТЕЛЬСТВ
+  // ============================================
+  
+  /**
+   * Загрузить файл доказательства к пункту чек-листа
+   * @param serverId ID сервера
+   * @param checklistTemplateId ID шаблона чек-листа
+   * @param file Объект файла от express-fileupload: { name, data, size, mimetype, mv() }
+   * @param userId ID пользователя
+   */
+  async uploadChecklistFile(serverId, checklistTemplateId, file, userId) {
+    // Проверяем существование шаблона
+    const template = await BeryllChecklistTemplate.findByPk(checklistTemplateId);
+    if (!template) {
+      throw new Error("Шаблон чек-листа не найден");
+    }
+    
+    // Находим или создаём запись чек-листа для сервера
+    let [checklist, created] = await BeryllServerChecklist.findOrCreate({
+      where: { serverId, checklistTemplateId },
+      defaults: { completed: false }
+    });
+    
+    // Создаём директорию для сервера если не существует
+    const serverDir = path.join(UPLOAD_DIR, `server_${serverId}`);
+    if (!fs.existsSync(serverDir)) {
+      fs.mkdirSync(serverDir, { recursive: true });
+    }
+    
+    // ✅ Декодируем имя файла из latin1 в UTF-8
+    const originalName = decodeFileName(file.name);
+    
+    // Генерируем уникальное имя файла
+    const ext = path.extname(file.name);
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const fileName = `checklist_${checklistTemplateId}_${uniqueSuffix}${ext}`;
+    const filePath = path.join(serverDir, fileName);
+    
+    // Сохраняем файл на диск (express-fileupload использует mv())
+    await file.mv(filePath);
+    
+    // Формируем относительный путь для хранения в БД
+    const relativePath = path.join(`server_${serverId}`, fileName);
+    
+    // Создаём запись файла в БД
+    const checklistFile = await BeryllChecklistFile.create({
+      serverChecklistId: checklist.id,
+      fileName: fileName,
+      originalName: originalName,  // ✅ Используем декодированное имя
+      mimetype: file.mimetype,
+      fileSize: file.size,
+      filePath: relativePath,
+      uploadedById: userId
+    });
+    
+    // Логируем
+    try {
+      await HistoryService.logHistory(parseInt(serverId), userId, HISTORY_ACTIONS.FILE_UPLOADED, {
+        checklistItemId: checklistTemplateId,
+        comment: `Загружен файл: ${originalName}`,  // ✅ Используем декодированное имя
+        metadata: { 
+          fileName: fileName, 
+          originalName: originalName,  // ✅ Используем декодированное имя
+          fileSize: file.size 
+        }
+      });
+    } catch (e) {
+      console.error("Error logging history:", e);
+    }
+    
+    // Возвращаем файл с информацией о загрузившем
+    return await BeryllChecklistFile.findByPk(checklistFile.id, {
+      include: [
+        { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
+      ]
+    });
+  }
+  
+  /**
+   * Получить все файлы сервера
+   */
+  async getServerFiles(serverId) {
+    const serverChecklists = await BeryllServerChecklist.findAll({
+      where: { serverId },
+      attributes: ["id"]
+    });
+    
+    const checklistIds = serverChecklists.map(c => c.id);
+    
+    if (checklistIds.length === 0) {
+      return [];
+    }
+    
+    const files = await BeryllChecklistFile.findAll({
+      where: { serverChecklistId: { [Op.in]: checklistIds } },
+      include: [
+        { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] },
+        { 
+          model: BeryllServerChecklist, 
+          as: "checklist",
+          include: [
+            { model: BeryllChecklistTemplate, as: "template", attributes: ["id", "title", "groupCode"] }
+          ]
+        }
+      ],
+      order: [["createdAt", "DESC"]]
+    });
+    
+    return files;
+  }
+  
+  /**
+   * Получить файл по ID (для скачивания)
+   */
+  async getFileById(fileId) {
+    const file = await BeryllChecklistFile.findByPk(fileId);
+    
+    if (!file) {
+      throw new Error("Файл не найден");
+    }
+    
+    // Формируем полный путь к файлу
+    const fullPath = path.join(UPLOAD_DIR, file.filePath);
+    
+    // Проверяем существование файла
+    if (!fs.existsSync(fullPath)) {
+      throw new Error("Файл не найден на диске");
+    }
+    
+    return {
+      id: file.id,
+      fileName: file.fileName,
+      originalName: file.originalName,
+      mimetype: file.mimetype,
+      fileSize: file.fileSize,
+      path: fullPath
+    };
+  }
+  
+  /**
+   * Удалить файл доказательства
+   */
+  async deleteChecklistFile(fileId, userId) {
+    const file = await BeryllChecklistFile.findByPk(fileId, {
+      include: [{
+        model: BeryllServerChecklist,
+        as: "checklist",
+        include: [{ model: BeryllChecklistTemplate, as: "template" }]
+      }]
+    });
+    
+    if (!file) {
+      throw new Error("Файл не найден");
+    }
+    
+    const serverId = file.checklist?.serverId;
+    const checklistId = file.checklist?.id;
+    const templateRequiresFile = file.checklist?.template?.requiresFile;
+    const originalName = file.originalName;
+    
+    // Удаляем физический файл
+    try {
+      const fullPath = path.join(UPLOAD_DIR, file.filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    } catch (e) {
+      console.error("Error deleting physical file:", e);
+    }
+    
+    // Удаляем запись из БД
+    await file.destroy();
+    
+    // Логируем
+    if (serverId) {
+      try {
+        await HistoryService.logHistory(serverId, userId, HISTORY_ACTIONS.FILE_DELETED, {
+          checklistItemId: file.checklist?.checklistTemplateId,
+          comment: `Удалён файл: ${originalName}`,
+          metadata: { fileName: file.fileName, originalName }
+        });
+      } catch (e) {
+        console.error("Error logging history:", e);
+      }
+    }
+    
+    // Если это был последний файл и этап требует доказательство - снимаем отметку выполнения
+    if (templateRequiresFile && checklistId) {
+      const remainingFiles = await BeryllChecklistFile.count({
+        where: { serverChecklistId: checklistId }
+      });
+      
+      if (remainingFiles === 0) {
+        await BeryllServerChecklist.update(
+          {
+            completed: false,
+            completedById: null,
+            completedAt: null
+          },
+          { where: { id: checklistId } }
+        );
+      }
+    }
+    
+    return { success: true };
+  }
+}
+
+// ============================================
+// ИНИЦИАЛИЗАЦИЯ ШАБЛОНОВ
+// ============================================
+
+/**
+ * Инициализация шаблонов чек-листа (вызывается при старте сервера)
+ */
+async function initChecklistTemplates() {
+  try {
+    const count = await BeryllChecklistTemplate.count();
+    if (count > 0) {
+      console.log(`✅ Чек-лист шаблоны уже существуют (${count} шт.)`);
+      return;
+    }
+
+    const templates = [
+      // ГРУППА 1: Визуальный осмотр
+      { groupCode: 'VISUAL', title: 'Визуальный контроль сервера', description: 'Провести визуальный контроль (механические повреждения)', fileCode: null, requiresFile: false, sortOrder: 100, isRequired: true, estimatedMinutes: 10 },
+      
+      // ГРУППА 2: Проверка работоспособности  
+      { groupCode: 'TESTING', title: 'Скрин при включении', description: 'Скриншот при включении сервера', fileCode: 'sn_on2', requiresFile: true, sortOrder: 200, isRequired: true, estimatedMinutes: 5 },
+      { groupCode: 'TESTING', title: 'Тест RAID (cachevault)', description: 'Проверить RAID контроллер и cachevault', fileCode: 'sn_cachevault2', requiresFile: true, sortOrder: 210, isRequired: true, estimatedMinutes: 15 },
+      { groupCode: 'TESTING', title: 'Стресс тест 3 (60 мин)', description: 'Провести стресс-тестирование 60 минут', fileCode: 'sn_gtk32', requiresFile: true, sortOrder: 220, isRequired: true, estimatedMinutes: 60 },
+      { groupCode: 'TESTING', title: 'Тест SSD + скрин RAID', description: 'Протестировать SSD и сделать скриншот RAID', fileCode: 'sn_raid2', requiresFile: true, sortOrder: 230, isRequired: true, estimatedMinutes: 20 },
+      { groupCode: 'TESTING', title: 'Тест HDD, SSD + проверка файлов', description: 'Тестирование HDD и SSD', fileCode: null, requiresFile: false, sortOrder: 240, isRequired: true, estimatedMinutes: 30 },
+      { groupCode: 'TESTING', title: 'Тест модулей памяти (0, 3, 6)', description: 'Тест модулей памяти + скрин', fileCode: 'sn_dimm2', requiresFile: true, sortOrder: 250, isRequired: true, estimatedMinutes: 30 },
+      { groupCode: 'TESTING', title: 'Тест модулей памяти (11, 12)', description: 'Выявление дефекта', fileCode: 'sn_dimm2FAIL2', requiresFile: false, sortOrder: 260, isRequired: false, estimatedMinutes: 20 },
+      { groupCode: 'TESTING', title: 'Проверка результатов тестов', description: 'Проверить наличие результатов', fileCode: null, requiresFile: false, sortOrder: 270, isRequired: true, estimatedMinutes: 5 },
+      { groupCode: 'TESTING', title: 'Выгрузка файлов на общий диск', description: 'Выгрузка файлов тестирования', fileCode: null, requiresFile: false, sortOrder: 280, isRequired: true, estimatedMinutes: 10 },
+      { groupCode: 'TESTING', title: 'Скрин BIOS, BMC [dts, die]', description: 'Включение сервера + скрин', fileCode: 'sn_Bios2', requiresFile: true, sortOrder: 290, isRequired: true, estimatedMinutes: 10 },
+      
+      // ГРУППА 3: Контрольная (ОТК) - первичная
+      { groupCode: 'QC_PRIMARY', title: 'Проверка результатов тестов (ОТК)', description: 'Проверка результатов', fileCode: null, requiresFile: false, sortOrder: 300, isRequired: true, estimatedMinutes: 15 },
+      
+      // ГРУППА 4: Испытательная
+      { groupCode: 'BURN_IN', title: 'Технологический прогон', description: 'Установка на прогон (burn-in)', fileCode: null, requiresFile: false, sortOrder: 400, isRequired: true, estimatedMinutes: 1440 },
+      
+      // ГРУППА 5: Контрольная (ОТК) - финальная
+      { groupCode: 'QC_FINAL', title: 'Проверка результатов прогона (ОТК)', description: 'Проверить результаты прогона', fileCode: null, requiresFile: false, sortOrder: 500, isRequired: true, estimatedMinutes: 10 }
+    ];
+
+    await BeryllChecklistTemplate.bulkCreate(templates);
+    console.log(`✅ Создано ${templates.length} шаблонов чек-листа`);
+  } catch (e) {
+    console.error('❌ Ошибка инициализации шаблонов:', e);
+  }
+}
+
+module.exports = new ChecklistService();
+module.exports.initChecklistTemplates = initChecklistTemplates;

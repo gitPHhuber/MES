@@ -29,6 +29,33 @@ const fs = require("fs");
 // Директория для загрузки файлов
 const UPLOAD_DIR = path.join(__dirname, "../../../uploads/beryll");
 
+// ============================================
+// УТИЛИТЫ
+// ============================================
+
+/**
+ * Декодирование имени файла из latin1 в UTF-8
+ * express-fileupload некорректно обрабатывает UTF-8 имена файлов
+ */
+function decodeFileName(name) {
+  if (!name) return name;
+  
+  try {
+    // Проверяем, нужно ли декодирование (есть ли "битые" символы)
+    const hasInvalidChars = /[\u0080-\u00ff]/.test(name);
+    
+    if (hasInvalidChars) {
+      // Декодируем из latin1 (ISO-8859-1) в UTF-8
+      return Buffer.from(name, 'latin1').toString('utf8');
+    }
+    
+    return name;
+  } catch (e) {
+    console.error("Error decoding filename:", e);
+    return name;
+  }
+}
+
 class ChecklistService {
   
   // ============================================
@@ -375,6 +402,9 @@ class ChecklistService {
       fs.mkdirSync(serverDir, { recursive: true });
     }
     
+    // ✅ Декодируем имя файла из latin1 в UTF-8
+    const originalName = decodeFileName(file.name);
+    
     // Генерируем уникальное имя файла
     const ext = path.extname(file.name);
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -391,7 +421,7 @@ class ChecklistService {
     const checklistFile = await BeryllChecklistFile.create({
       serverChecklistId: checklist.id,
       fileName: fileName,
-      originalName: file.name,
+      originalName: originalName,  // ✅ Используем декодированное имя
       mimetype: file.mimetype,
       fileSize: file.size,
       filePath: relativePath,
@@ -402,10 +432,10 @@ class ChecklistService {
     try {
       await HistoryService.logHistory(parseInt(serverId), userId, HISTORY_ACTIONS.FILE_UPLOADED, {
         checklistItemId: checklistTemplateId,
-        comment: `Загружен файл: ${file.name}`,
+        comment: `Загружен файл: ${originalName}`,  // ✅ Используем декодированное имя
         metadata: { 
           fileName: fileName, 
-          originalName: file.name,
+          originalName: originalName,  // ✅ Используем декодированное имя
           fileSize: file.size 
         }
       });
