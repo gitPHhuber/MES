@@ -9,12 +9,14 @@ const syncUserMiddleware = require("../middleware/syncUserMiddleware");
 const checkAbility = require("../middleware/checkAbilityMiddleware");
 const DefectMonitoringController = require("../controllers/beryll/controllers/DefectMonitoringController");
 const ComponentsController = require("../controllers/beryll/controllers/ComponentsController");
+const ChecklistController = require("../controllers/beryll/controllers/ChecklistController");
 
 // Защита маршрутов
 const protect = [authMiddleware, syncUserMiddleware];
 
 // ============================================
 // НАСТРОЙКА ЗАГРУЗКИ ФАЙЛОВ ДЛЯ ДЕФЕКТОВ
+// (Multer используется ТОЛЬКО для дефектов!)
 // ============================================
 const defectStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -29,6 +31,13 @@ const defectUpload = multer({
   storage: defectStorage, 
   limits: { fileSize: 10 * 1024 * 1024 }
 });
+
+// ============================================
+// ПРИМЕЧАНИЕ: Для чек-листа используется express-fileupload,
+// который глобально подключён в index.js: app.use(fileUpload({}))
+// Multer и express-fileupload конфликтуют, поэтому для чек-листа
+// НЕ используем multer middleware!
+// ============================================
 
 // ============================================
 // СИНХРОНИЗАЦИЯ С DHCP
@@ -109,14 +118,40 @@ router.delete(
 );
 
 // ============================================
-// ЧЕК-ЛИСТЫ СЕРВЕРА
+// ЧЕК-ЛИСТ СЕРВЕРА
 // ============================================
 
+// Получить чек-лист сервера с файлами
+router.get(
+  "/servers/:serverId/checklist",
+  ...protect,
+  checkAbility("beryll.view"),
+  ChecklistController.getServerChecklist
+);
+
+// Переключить статус пункта чек-листа
 router.put(
   "/servers/:serverId/checklist/:checklistId",
   ...protect,
   checkAbility("beryll.work"),
-  beryllController.toggleChecklistItem
+  ChecklistController.toggleChecklistItem
+);
+
+// Загрузить файл (доказательство) к пункту чек-листа
+// ⚠️ НЕ используем multer - express-fileupload подключён глобально!
+router.post(
+  "/servers/:serverId/checklist/:checklistId/file",
+  ...protect,
+  checkAbility("beryll.work"),
+  ChecklistController.uploadChecklistFile
+);
+
+// Получить все файлы сервера
+router.get(
+  "/servers/:serverId/files",
+  ...protect,
+  checkAbility("beryll.view"),
+  ChecklistController.getServerFiles
 );
 
 // ============================================
@@ -187,32 +222,72 @@ router.get(
 // ШАБЛОНЫ ЧЕК-ЛИСТОВ
 // ============================================
 
+// Получить шаблоны
 router.get(
   "/checklists/templates",
   ...protect,
   checkAbility("beryll.view"),
-  beryllController.getChecklistTemplates
+  ChecklistController.getChecklistTemplates
 );
 
+// Создать шаблон
 router.post(
   "/checklists/templates",
   ...protect,
   checkAbility("beryll.manage"),
-  beryllController.createChecklistTemplate
+  ChecklistController.createChecklistTemplate
 );
 
+// ⚠️ ВАЖНО: reorder должен быть ПЕРЕД /:id, иначе "reorder" будет интерпретироваться как :id
+router.put(
+  "/checklists/templates/reorder",
+  ...protect,
+  checkAbility("beryll.manage"),
+  ChecklistController.reorderChecklistTemplates
+);
+
+// Обновить шаблон
 router.put(
   "/checklists/templates/:id",
   ...protect,
   checkAbility("beryll.manage"),
-  beryllController.updateChecklistTemplate
+  ChecklistController.updateChecklistTemplate
 );
 
+// Удалить/деактивировать шаблон
 router.delete(
   "/checklists/templates/:id",
   ...protect,
   checkAbility("beryll.manage"),
-  beryllController.deleteChecklistTemplate
+  ChecklistController.deleteChecklistTemplate
+);
+
+// Восстановить деактивированный шаблон
+router.post(
+  "/checklists/templates/:id/restore",
+  ...protect,
+  checkAbility("beryll.manage"),
+  ChecklistController.restoreChecklistTemplate
+);
+
+// ============================================
+// ФАЙЛЫ ЧЕК-ЛИСТА
+// ============================================
+
+// Скачать/просмотреть файл
+router.get(
+  "/files/:fileId",
+  ...protect,
+  checkAbility("beryll.view"),
+  ChecklistController.downloadFile
+);
+
+// Удалить файл доказательства
+router.delete(
+  "/checklists/files/:fileId",
+  ...protect,
+  checkAbility("beryll.work"),
+  ChecklistController.deleteChecklistFile
 );
 
 // ============================================
@@ -249,31 +324,6 @@ router.put(
   ...protect,
   checkAbility("beryll.work"),
   beryllController.updateApkSerialNumber
-);
-
-// ============================================
-// ФАЙЛЫ
-// ============================================
-
-router.post(
-  "/servers/:serverId/checklist/:checklistId/file",
-  ...protect,
-  checkAbility("beryll.work"),
-  beryllController.uploadChecklistFile
-);
-
-router.get(
-  "/servers/:serverId/files",
-  ...protect,
-  checkAbility("beryll.view"),
-  beryllController.getServerFiles
-);
-
-router.get(
-  "/files/:fileId",
-  ...protect,
-  checkAbility("beryll.view"),
-  beryllController.downloadFile
 );
 
 // ============================================
@@ -393,6 +443,7 @@ router.post(
   DefectMonitoringController.resolveDefect
 );
 
+// ⚠️ Дефекты используют Multer (отдельный middleware, не конфликтует)
 router.post(
   "/defects/:id/files",
   ...protect,

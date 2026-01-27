@@ -4,17 +4,20 @@
  * Вкладка "Учёт брака" для APK Beryll
  * Журнал дефектов серверов с отслеживанием ремонта
  * 
- * ОБНОВЛЕНО: Добавлены все колонки из Excel (13 колонок в таблице)
+ * ОБНОВЛЕНО: 
+ * - Добавлены все колонки из Excel (13 колонок в таблице)
+ * - Добавлена кнопка экспорта в Excel
  * 
  * Положить в: src/pages/Beryll/tabs/DefectRecordsTab.tsx
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   AlertTriangle, Plus, Search, Filter, FileText, Download,
   Clock, CheckCircle, XCircle, Send, RotateCcw, Repeat,
   ChevronDown, Trash2, Edit, Paperclip, Eye, Calendar,
-  Truck, Package, ChevronLeft, ChevronRight, RefreshCw
+  Truck, Package, ChevronLeft, ChevronRight, RefreshCw,
+  FileSpreadsheet, BarChart3, Loader2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -28,6 +31,45 @@ import { getServers } from "../../../api/beryllApi";
 import { getUsers } from "../../../api/userApi";
 import { Modal } from "../../../components/Modal/Modal";
 import { ConfirmModal } from "../../../components/Modal/ConfirmModal";
+import { $authHost } from "../../../api";
+
+// ============================================
+// ФУНКЦИИ ЭКСПОРТА
+// ============================================
+
+interface DefectExportParams {
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  serverId?: number;
+  search?: string;
+}
+
+const exportDefectsToExcel = async (params: DefectExportParams = {}): Promise<Blob> => {
+  const response = await $authHost.get("api/beryll/extended/defect/export", {
+    params,
+    responseType: "blob"
+  });
+  return response.data;
+};
+
+const exportDefectStatsToExcel = async (): Promise<Blob> => {
+  const response = await $authHost.get("api/beryll/extended/defect/export/stats", {
+    responseType: "blob"
+  });
+  return response.data;
+};
+
+const downloadBlob = (blob: Blob, filename: string): void => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
 
 // Конфигурация статусов
 const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -58,6 +100,160 @@ const PART_TYPE_LABELS: Record<RepairPartType, string> = {
   CABLE: "Кабель",
   OTHER: "Другое"
 };
+
+// ============================================
+// КОМПОНЕНТ КНОПКИ ЭКСПОРТА
+// ============================================
+
+interface ExportButtonProps {
+  currentFilters?: DefectExportParams;
+  className?: string;
+}
+
+const ExportButton: React.FC<ExportButtonProps> = ({ currentFilters, className = "" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Закрытие при клике вне компонента
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleExportAll = async () => {
+    setLoading("all");
+    try {
+      const blob = await exportDefectsToExcel({});
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      downloadBlob(blob, `Брак_серверов_${date}.xlsx`);
+      toast.success("Файл успешно сформирован");
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast.error(error.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setLoading(null);
+      setIsOpen(false);
+    }
+  };
+
+  const handleExportFiltered = async () => {
+    if (!currentFilters) {
+      toast.error("Фильтры не применены");
+      return;
+    }
+    setLoading("filtered");
+    try {
+      const blob = await exportDefectsToExcel(currentFilters);
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      downloadBlob(blob, `Брак_серверов_фильтр_${date}.xlsx`);
+      toast.success("Файл успешно сформирован");
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast.error(error.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setLoading(null);
+      setIsOpen(false);
+    }
+  };
+
+  const handleExportStats = async () => {
+    setLoading("stats");
+    try {
+      const blob = await exportDefectStatsToExcel();
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      downloadBlob(blob, `Статистика_брака_${date}.xlsx`);
+      toast.success("Статистика успешно сформирована");
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast.error(error.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setLoading(null);
+      setIsOpen(false);
+    }
+  };
+
+  const hasFilters = currentFilters && (
+    currentFilters.status ||
+    currentFilters.dateFrom ||
+    currentFilters.dateTo ||
+    currentFilters.search
+  );
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={!!loading}
+        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+      >
+        {loading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Download size={18} />
+        )}
+        <span>Excel</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          <button
+            onClick={handleExportAll}
+            disabled={!!loading}
+            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-5 h-5 text-green-600" />
+            <div>
+              <div className="font-medium text-gray-900 text-sm">Все записи</div>
+              <div className="text-xs text-gray-500">Экспорт всех дефектов</div>
+            </div>
+            {loading === "all" && <Loader2 className="w-4 h-4 animate-spin ml-auto" />}
+          </button>
+
+          <button
+            onClick={handleExportFiltered}
+            disabled={!!loading || !hasFilters}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors disabled:opacity-50 ${hasFilters ? "hover:bg-gray-50" : "cursor-not-allowed"}`}
+          >
+            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+            <div>
+              <div className="font-medium text-gray-900 text-sm">С фильтрами</div>
+              <div className="text-xs text-gray-500">
+                {hasFilters ? "Отфильтрованные записи" : "Сначала примените фильтры"}
+              </div>
+            </div>
+            {loading === "filtered" && <Loader2 className="w-4 h-4 animate-spin ml-auto" />}
+          </button>
+
+          <div className="border-t border-gray-200 my-1" />
+
+          <button
+            onClick={handleExportStats}
+            disabled={!!loading}
+            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors disabled:opacity-50"
+          >
+            <BarChart3 className="w-5 h-5 text-purple-600" />
+            <div>
+              <div className="font-medium text-gray-900 text-sm">Статистика</div>
+              <div className="text-xs text-gray-500">Сводка по статусам и типам</div>
+            </div>
+            {loading === "stats" && <Loader2 className="w-4 h-4 animate-spin ml-auto" />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ============================================
 
 const DefectRecordsTab: React.FC = () => {
   const [records, setRecords] = useState<BeryllDefectRecord[]>([]);
@@ -90,6 +286,16 @@ const DefectRecordsTab: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   
   const LIMIT = 20;
+
+  // Формирование параметров для экспорта
+  const getExportParams = useCallback((): DefectExportParams => {
+    return {
+      status: filters.status || undefined,
+      dateFrom: filters.dateFrom || undefined,
+      dateTo: filters.dateTo || undefined,
+      search: filters.search || undefined
+    };
+  }, [filters]);
   
   // Загрузка данных
   const loadRecords = async () => {
@@ -354,6 +560,9 @@ const DefectRecordsTab: React.FC = () => {
         </h2>
         
         <div className="flex items-center gap-3">
+          {/* КНОПКА ЭКСПОРТА */}
+          <ExportButton currentFilters={getExportParams()} />
+          
           <button
             onClick={() => setShowStats(!showStats)}
             className={`px-3 py-2 rounded-lg border ${showStats ? "bg-blue-50 border-blue-300" : ""}`}

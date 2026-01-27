@@ -8,6 +8,7 @@
  * - Подменные серверы
  * - SLA конфигурация
  * - Алиасы пользователей
+ * - Экспорт дефектов в Excel
  */
 
 const Router = require("express");
@@ -17,12 +18,15 @@ const router = new Router();
 const ComponentInventoryController = require("../controllers/ComponentInventoryController");
 const DefectRecordController = require("../controllers/DefectRecordController");
 const YadroController = require("../controllers/YadroController");
+const DefectExportController = require("../../controllers/beryll/controllers/DefectExportController");
 
 // Middleware
 const authMiddleware = require("../../../middleware/authMiddleware");
 const checkAbilityMiddleware = require("../../../middleware/checkAbilityMiddleware");
 
 // ============================================
+
+
 // ИНВЕНТАРЬ КОМПОНЕНТОВ
 // ============================================
 
@@ -147,6 +151,21 @@ router.get("/defects/statuses",
 router.get("/defects/stats", 
     authMiddleware, 
     DefectRecordController.getStats
+);
+
+// ============================================
+// ЭКСПОРТ ДЕФЕКТОВ В EXCEL
+// ВАЖНО: Должен быть ПЕРЕД /defects/:id
+// ============================================
+router.get("/defects/export", 
+    authMiddleware, 
+    checkAbilityMiddleware("beryll_defect_view"),
+    DefectExportController.exportDefects
+);
+router.get("/defects/export/stats", 
+    authMiddleware, 
+    checkAbilityMiddleware("beryll_defect_view"),
+    DefectExportController.exportStats
 );
 
 // CRUD

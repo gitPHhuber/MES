@@ -458,13 +458,7 @@ export async function validateComponent(
   return data;
 }
 
-// ============================================
-// ИМПОРТ / ЭКСПОРТ
-// ============================================
 
-/**
- * Импортировать комплектующие из Excel
- */
 export async function importComponentsFromExcel(
   serverId: number,
   file: File,

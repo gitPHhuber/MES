@@ -9,6 +9,7 @@ const RackController = require("../controllers/beryll/controllers/RackController
 const ClusterController = require("../controllers/beryll/controllers/ClusterController");
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
+const DefectExportController = require("../controllers/beryll/controllers/DefectExportController");
 const {
   addComponent,
   addComponentsBatch,
@@ -96,12 +97,24 @@ router.get("/components/:id/history", ...protect, checkAbility("beryll.view"), g
 // УЧЁТ БРАКА (DEFECT RECORDS)
 // ============================================
 
+// Справочники
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
 router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
+
+// ============================================
+// ЭКСПОРТ БРАКА В EXCEL
+// ВАЖНО: Должен быть ПЕРЕД /defect-records/:id
+// ============================================
+router.get("/defect-records/export", ...protect, checkAbility("beryll.view"), DefectExportController.exportDefects);
+router.get("/defect-records/export/stats", ...protect, checkAbility("beryll.view"), DefectExportController.exportStats);
+
+// CRUD
 router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
 router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.post("/defect-records", ...protect, checkAbility("beryll.work"), DefectRecordController.create);
+
+// Workflow
 router.post("/defect-records/:id/start-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.startDiagnosis);
 router.post("/defect-records/:id/complete-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.completeDiagnosis);
 router.post("/defect-records/:id/waiting-parts", ...protect, checkAbility("beryll.work"), DefectRecordController.setWaitingParts);

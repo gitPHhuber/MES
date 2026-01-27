@@ -1,6 +1,6 @@
 /**
  * API функции для модуля АПК Берилл
- * Улучшенная версия с поддержкой восстановления из архива и мониторинга
+ * Улучшенная версия с поддержкой чек-листов, доказательств и мониторинга
  * 
  * Заменить: src/api/beryllApi.ts
  */
@@ -18,7 +18,7 @@ export type PingStatus = "ONLINE" | "OFFLINE" | "UNKNOWN";
 export type HistoryAction = 
   | "CREATED" | "TAKEN" | "RELEASED" | "STATUS_CHANGED" | "NOTE_ADDED"
   | "CHECKLIST_COMPLETED" | "BATCH_ASSIGNED" | "BATCH_REMOVED" | "DELETED"
-  | "ARCHIVED" | "UNARCHIVED" | "FILE_UPLOADED" | "SERIAL_ASSIGNED";
+  | "ARCHIVED" | "UNARCHIVED" | "FILE_UPLOADED" | "FILE_DELETED" | "SERIAL_ASSIGNED";
 
 export interface BeryllServerUser {
   id: number;
@@ -32,9 +32,11 @@ export interface BeryllChecklistFile {
   serverChecklistId: number;
   fileName: string;
   originalName: string;
+  mimetype?: string;
   fileSize: number;
   uploadedById: number;
   uploadedAt: string;
+  createdAt?: string;
   uploadedBy?: BeryllServerUser;
 }
 
@@ -45,10 +47,12 @@ export interface BeryllChecklistTemplate {
   sortOrder: number;
   isRequired: boolean;
   estimatedMinutes: number;
-  group: ChecklistGroup;
+  groupCode: ChecklistGroup;
   fileCode: string | null;
+  requiresFile: boolean;  // Требуется ли загрузка доказательства (скриншота)
   isActive: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BeryllBatch {
@@ -239,11 +243,11 @@ export const STATUS_COLORS: Record<ServerStatus, string> = {
 };
 
 export const CHECKLIST_GROUP_LABELS: Record<ChecklistGroup, string> = {
-  VISUAL: "Визуальный осмотр",
-  TESTING: "Проверка работоспособности",
-  QC_PRIMARY: "Контрольная (ОТК)",
-  BURN_IN: "Испытательная",
-  QC_FINAL: "Контрольная (ОТК)"
+  VISUAL: "1. Визуальный осмотр",
+  TESTING: "2. Проверка работоспособности",
+  QC_PRIMARY: "3. Контрольная (ОТК) — первичная",
+  BURN_IN: "4. Испытательная",
+  QC_FINAL: "5. Контрольная (ОТК) — финальная"
 };
 
 export const CHECKLIST_GROUP_NUMBERS: Record<ChecklistGroup, number> = {
@@ -279,6 +283,7 @@ export const HISTORY_ACTION_LABELS: Record<HistoryAction, string> = {
   ARCHIVED: "Перенесён в архив",
   UNARCHIVED: "Восстановлен из архива",
   FILE_UPLOADED: "Загружен файл",
+  FILE_DELETED: "Удалён файл",
   SERIAL_ASSIGNED: "Присвоен серийник"
 };
 
@@ -456,9 +461,118 @@ export const getOfflineServers = async (params?: {
 };
 
 // ============================================
-// API ФУНКЦИИ - ЧЕК-ЛИСТЫ
+// API ФУНКЦИИ - ЧЕК-ЛИСТЫ (ШАБЛОНЫ)
 // ============================================
 
+/**
+ * Получить шаблоны чек-листов
+ * @param includeInactive Включить неактивные (удалённые) шаблоны
+ */
+export const getChecklistTemplates = async (
+  includeInactive = false
+): Promise<BeryllChecklistTemplate[]> => {
+  const { data } = await $authHost.get<BeryllChecklistTemplate[]>(
+    "/api/beryll/checklists/templates",
+    { params: { includeInactive } }
+  );
+  return data;
+};
+
+/**
+ * Создать шаблон чек-листа
+ */
+export const createChecklistTemplate = async (template: {
+  title: string;
+  description?: string;
+  sortOrder?: number;
+  isRequired?: boolean;
+  estimatedMinutes?: number;
+  groupCode?: ChecklistGroup;
+  fileCode?: string;
+  requiresFile?: boolean;
+}): Promise<BeryllChecklistTemplate> => {
+  const { data } = await $authHost.post<BeryllChecklistTemplate>(
+    "/api/beryll/checklists/templates",
+    template
+  );
+  return data;
+};
+
+/**
+ * Обновить шаблон чек-листа
+ */
+export const updateChecklistTemplate = async (
+  id: number,
+  template: Partial<BeryllChecklistTemplate>
+): Promise<BeryllChecklistTemplate> => {
+  const { data } = await $authHost.put<BeryllChecklistTemplate>(
+    `/api/beryll/checklists/templates/${id}`,
+    template
+  );
+  return data;
+};
+
+/**
+ * Удалить/деактивировать шаблон чек-листа
+ * @param hardDelete true - полное удаление (если не используется), false - деактивация
+ */
+export const deleteChecklistTemplate = async (
+  id: number,
+  hardDelete = false
+): Promise<{ success: boolean }> => {
+  const { data } = await $authHost.delete(
+    `/api/beryll/checklists/templates/${id}`,
+    { params: { hardDelete } }
+  );
+  return data;
+};
+
+/**
+ * Восстановить деактивированный шаблон
+ */
+export const restoreChecklistTemplate = async (
+  id: number
+): Promise<BeryllChecklistTemplate> => {
+  const { data } = await $authHost.post<BeryllChecklistTemplate>(
+    `/api/beryll/checklists/templates/${id}/restore`
+  );
+  return data;
+};
+
+/**
+ * Изменить порядок шаблонов (Drag & Drop)
+ * @param orderedIds Массив ID шаблонов в новом порядке
+ */
+export const reorderChecklistTemplates = async (
+  orderedIds: number[]
+): Promise<{ success: boolean }> => {
+  const { data } = await $authHost.put(
+    "/api/beryll/checklists/templates/reorder",
+    { orderedIds }
+  );
+  return data;
+};
+
+// ============================================
+// API ФУНКЦИИ - ЧЕК-ЛИСТ СЕРВЕРА
+// ============================================
+
+/**
+ * Получить чек-лист сервера с файлами
+ */
+export const getServerChecklist = async (
+  serverId: number
+): Promise<BeryllServerChecklist[]> => {
+  const { data } = await $authHost.get<BeryllServerChecklist[]>(
+    `/api/beryll/servers/${serverId}/checklist`
+  );
+  return data;
+};
+
+/**
+ * Переключить статус пункта чек-листа
+ * @throws Ошибка если requiresFile=true и нет загруженных файлов
+ */
 export const toggleChecklistItem = async (
   serverId: number,
   checklistId: number,
@@ -472,40 +586,85 @@ export const toggleChecklistItem = async (
   return data;
 };
 
-export const getChecklistTemplates = async (): Promise<BeryllChecklistTemplate[]> => {
-  const { data } = await $authHost.get<BeryllChecklistTemplate[]>("/api/beryll/checklists/templates");
+// ============================================
+// API ФУНКЦИИ - ФАЙЛЫ ЧЕК-ЛИСТА
+// ============================================
+
+/**
+ * Загрузить файл (доказательство) к пункту чек-листа
+ */
+export const uploadChecklistFile = async (
+  serverId: number,
+  checklistId: number,
+  file: File
+): Promise<BeryllChecklistFile> => {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  
+  // Используем XMLHttpRequest напрямую для гарантированной работы с FormData
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const baseURL = import.meta.env.VITE_API_URL || "";
+    const url = `${baseURL}/api/beryll/servers/${serverId}/checklist/${checklistId}/file`;
+    
+    xhr.open("POST", url, true);
+    
+    // Добавляем токен
+    const token = localStorage.getItem("token");
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+    
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch (e) {
+          resolve({ success: true } as any);
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText);
+          reject(new Error(error.message || "Ошибка загрузки"));
+        } catch (e) {
+          reject(new Error("Непредвиденная ошибка сервера"));
+        }
+      }
+    };
+    
+    xhr.onerror = function() {
+      reject(new Error("Ошибка сети"));
+    };
+    
+    // НЕ устанавливаем Content-Type - браузер сам добавит с boundary
+    xhr.send(formData);
+  });
+};
+
+/**
+ * Получить все файлы сервера
+ */
+export const getServerFiles = async (serverId: number): Promise<BeryllChecklistFile[]> => {
+  const { data } = await $authHost.get<BeryllChecklistFile[]>(`/api/beryll/servers/${serverId}/files`);
   return data;
 };
 
-export const createChecklistTemplate = async (template: {
-  title: string;
-  description?: string;
-  sortOrder?: number;
-  isRequired?: boolean;
-  estimatedMinutes?: number;
-  group?: ChecklistGroup;
-  fileCode?: string;
-}): Promise<BeryllChecklistTemplate> => {
-  const { data } = await $authHost.post<BeryllChecklistTemplate>(
-    "/api/beryll/checklists/templates",
-    template
-  );
-  return data;
+/**
+ * Получить URL для скачивания/просмотра файла
+ */
+export const downloadFile = (fileId: number): string => {
+  return `/api/beryll/files/${fileId}`;
 };
 
-export const updateChecklistTemplate = async (
-  id: number,
-  template: Partial<BeryllChecklistTemplate>
-): Promise<BeryllChecklistTemplate> => {
-  const { data } = await $authHost.put<BeryllChecklistTemplate>(
-    `/api/beryll/checklists/templates/${id}`,
-    template
-  );
-  return data;
-};
-
-export const deleteChecklistTemplate = async (id: number): Promise<{ success: boolean }> => {
-  const { data } = await $authHost.delete(`/api/beryll/checklists/templates/${id}`);
+/**
+ * Удалить файл чек-листа
+ * Если это последний файл для этапа с requiresFile=true, отметка выполнения снимается
+ */
+export const deleteChecklistFile = async (
+  fileId: number
+): Promise<{ success: boolean }> => {
+  const { data } = await $authHost.delete(`/api/beryll/checklists/files/${fileId}`);
   return data;
 };
 
@@ -584,7 +743,7 @@ export const getHistory = async (params?: {
 };
 
 // ============================================
-// API ФУНКЦИИ - АРХИВ (УЛУЧШЕНО!)
+// API ФУНКЦИИ - АРХИВ
 // ============================================
 
 export const getArchivedServers = async (params?: {
@@ -624,35 +783,6 @@ export const updateApkSerialNumber = async (
 };
 
 // ============================================
-// API ФУНКЦИИ - ФАЙЛЫ
-// ============================================
-
-export const uploadChecklistFile = async (
-  serverId: number,
-  checklistId: number,
-  file: File
-): Promise<{ success: boolean; file: { id: number; fileName: string; originalName: string; fileSize: number } }> => {
-  const formData = new FormData();
-  formData.append("file", file);
-  
-  const { data } = await $authHost.post(
-    `/api/beryll/servers/${serverId}/checklist/${checklistId}/file`,
-    formData,
-    { headers: { "Content-Type": "multipart/form-data" } }
-  );
-  return data;
-};
-
-export const getServerFiles = async (serverId: number): Promise<BeryllChecklistFile[]> => {
-  const { data } = await $authHost.get<BeryllChecklistFile[]>(`/api/beryll/servers/${serverId}/files`);
-  return data;
-};
-
-export const downloadFile = (fileId: number): string => {
-  return `/api/beryll/files/${fileId}`;
-};
-
-// ============================================
 // API ФУНКЦИИ - ГЕНЕРАЦИЯ ПАСПОРТА
 // ============================================
 
@@ -684,19 +814,28 @@ export default {
   updateServerStatus,
   updateServerNotes,
   deleteServer,
-  // Мониторинг (НОВОЕ!)
+  // Мониторинг
   getCachedStatus,
   pingServer,
   pingAllServers,
   getMonitoringStats,
   getOnlineServers,
   getOfflineServers,
-  // Чек-листы
-  toggleChecklistItem,
+  // Чек-листы (шаблоны)
   getChecklistTemplates,
   createChecklistTemplate,
   updateChecklistTemplate,
   deleteChecklistTemplate,
+  restoreChecklistTemplate,
+  reorderChecklistTemplates,
+  // Чек-лист сервера
+  getServerChecklist,
+  toggleChecklistItem,
+  // Файлы чек-листа
+  uploadChecklistFile,
+  getServerFiles,
+  downloadFile,
+  deleteChecklistFile,
   // Партии
   getBatches,
   getBatchById,
@@ -713,10 +852,6 @@ export default {
   unarchiveServer,
   // Серийный номер
   updateApkSerialNumber,
-  // Файлы
-  uploadChecklistFile,
-  getServerFiles,
-  downloadFile,
   // Паспорт
   downloadPassport,
   generatePassport,
