@@ -1,15 +1,10 @@
 /**
  * BeryllPage.tsx (обновлённый)
  * 
- * Главная страница APK Beryll с расширенными вкладками:
- * - Серверы (существующая)
- * - Партии (существующая)
- * - Стойки (новая)
- * - Кластеры (новая)
- * - Учёт брака (новая)
- * - Аналитика (существующая)
- * - Архив (существующая)
- * - Настройки (существующая)
+ * Изменения:
+ * 1. Субнавигация теперь sticky с top-0 (Header скрывается при скролле)
+ * 2. Заголовок страницы остаётся скроллящимся
+ * 3. Улучшена анимация переключения табов
  * 
  * Заменить: src/pages/Beryll/BeryllPage.tsx
  */
@@ -142,7 +137,7 @@ const BeryllPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Заголовок */}
+      {/* Заголовок - скроллится вместе с контентом */}
       <div className="bg-white shadow">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-4">
@@ -188,10 +183,14 @@ const BeryllPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Навигация по вкладкам */}
-      <div className="bg-white border-b">
+      {/* 
+        Навигация по вкладкам - STICKY
+        top-0 когда Header скрыт, при видимом Header контент уже имеет pt-14
+        z-40 чтобы быть под Header (z-50), но над контентом
+      */}
+      <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-1 overflow-x-auto" aria-label="Tabs">
+          <nav className="flex space-x-1 overflow-x-auto scrollbar-hide" aria-label="Tabs">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -202,18 +201,21 @@ const BeryllPage: React.FC = () => {
                   onClick={() => handleTabChange(tab.id)}
                   className={`
                     flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap
-                    transition-colors duration-150
+                    transition-all duration-200 ease-out
                     ${isActive
-                      ? "border-indigo-500 text-indigo-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      ? "border-indigo-500 text-indigo-600 bg-indigo-50/50"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50"
                     }
                   `}
                 >
-                  <Icon size={18} />
+                  <Icon 
+                    size={18} 
+                    className={`transition-transform duration-200 ${isActive ? "scale-110" : ""}`} 
+                  />
                   {tab.label}
                   {/* Бейдж для вкладки "Учёт брака" */}
                   {tab.id === "defects" && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full animate-pulse">
                       !
                     </span>
                   )}

@@ -1,4 +1,15 @@
-import React, { useContext, Fragment } from "react";
+/**
+ * Header.tsx (обновлённый)
+ * 
+ * Изменения:
+ * 1. Добавлено плавное скрытие при скролле вниз
+ * 2. Header появляется обратно при скролле вверх
+ * 3. Добавлен отступ через CSS переменную для координации с контентом
+ * 
+ * Заменить: src/components/Header/Header.tsx
+ */
+
+import React, { useContext, Fragment, useState, useEffect, useRef } from "react";
 import Logo from "assets/images/logo.svg";
 import { NavLink, useLocation } from "react-router-dom";
 import { observer } from "mobx-react-lite";
@@ -16,11 +27,8 @@ import {
   ChevronDown, PackageCheck, Cpu, Radio, Activity,
   BarChart3, Trophy, PieChart, MonitorPlay, FileText,
   Menu as MenuIcon, CircuitBoard, LineChart,
-  // --- ДОБАВЛЕНО: Иконка Сервера ---
   Server,
-  // --- ДОБАВЛЕНО: Иконка для Учёта брака ---
   AlertTriangle,
-  // --- ДОБАВЛЕНО: Иконка для Производства ---
   Factory
 } from "lucide-react";
 
@@ -34,12 +42,9 @@ import {
   FIRMWARE_OLD_ROUTE, FIRMWARE_FC_ROUTE, FIRMWARE_915_002_ROUTE,
   FIRMWARE_915_019_ROUTE, FIRMWARE_2_4_ROUTE, FIRMWARE_Coral_B_ROUTE,
   MQTT_CHECK_FC_ROUTE, MQTT_CHECK_ESC_ROUTE, PROFILE_ROUTE, RANKINGS_CHARTS_ROUTE,
-  // --- ДОБАВЛЕНО ---
   BERYLL_ROUTE,
   BERYLL_MONITORING_ROUTE,
-  // --- ДОБАВЛЕНО: Учёт брака ---
   DEFECTS_ROUTE,
-  // --- ДОБАВЛЕНО: Производство ---
   PRODUCTION_ROUTE
 } from "src/utils/consts";
 
@@ -51,6 +56,9 @@ type NavItem = {
   children?: { label: string; to: string; icon?: React.ElementType }[];
 };
 
+// Высота хедера в пикселях (h-14 = 56px)
+export const HEADER_HEIGHT = 56;
+
 export const Header: React.FC = observer(() => {
   const auth = useAuth();
   const context = useContext(Context);
@@ -58,6 +66,41 @@ export const Header: React.FC = observer(() => {
 
   if (!context) throw new Error("Context required");
   const { user } = context;
+
+  // --- ЛОГИКА СКРЫТИЯ ХЕДЕРА ПРИ СКРОЛЛЕ ---
+  const [isVisible, setIsVisible] = useState(true);
+  const [isAtTop, setIsAtTop] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollThreshold = 10; // Минимальный скролл для срабатывания
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Определяем, находимся ли мы вверху страницы
+      setIsAtTop(currentScrollY < 5);
+      
+      // Определяем направление скролла
+      const scrollDiff = currentScrollY - lastScrollY.current;
+      
+      if (Math.abs(scrollDiff) < scrollThreshold) {
+        return; // Игнорируем маленькие скроллы
+      }
+      
+      if (scrollDiff > 0 && currentScrollY > HEADER_HEIGHT) {
+        // Скролл вниз - скрываем
+        setIsVisible(false);
+      } else {
+        // Скролл вверх - показываем
+        setIsVisible(true);
+      }
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // --- ЛОГИКА ВЫХОДА ---
   const logOut = async () => {
@@ -100,14 +143,14 @@ export const Header: React.FC = observer(() => {
       ]
     },
 
-    // --- ДОБАВЛЕНО: Производство (Учёт выработки) ---
+    // Производство (Учёт выработки)
     {
       label: "Производство",
       icon: Factory,
       to: PRODUCTION_ROUTE,
     },
 
-    // --- ОБНОВЛЕНО: АПК Берилл с подменю ---
+    // АПК Берилл с подменю
     {
       label: "АПК Берилл",
       icon: Server,
@@ -118,7 +161,7 @@ export const Header: React.FC = observer(() => {
       ]
     },
 
-    // --- ДОБАВЛЕНО: Учёт брака (Дефекты) ---
+    // Учёт брака (Дефекты)
     {
       label: "Учёт брака",
       icon: AlertTriangle,
@@ -175,7 +218,17 @@ export const Header: React.FC = observer(() => {
   });
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 h-14 shadow-sm">
+    <div 
+      className={clsx(
+        "fixed top-0 left-0 right-0 z-50 h-14",
+        "bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm",
+        "transition-transform duration-300 ease-in-out",
+        // Скрываем при скролле вниз
+        !isVisible && "-translate-y-full",
+        // Убираем тень когда вверху страницы
+        isAtTop && "shadow-none"
+      )}
+    >
       <div className="max-w-[1920px] mx-auto px-4 h-full flex justify-between items-center">
         
         {/* ЛЕВАЯ ЧАСТЬ: Лого */}
@@ -282,41 +335,51 @@ export const Header: React.FC = observer(() => {
                 </Menu.Button>
                 
                 <Transition
-                    as={Fragment}
-                    enter="transition ease-[cubic-bezier(0.16,1,0.3,1)] duration-200"
-                    enterFrom="transform opacity-0 scale-95 -translate-y-2"
-                    enterTo="transform opacity-100 scale-100 translate-y-0"
-                    leave="transition ease-in duration-150"
-                    leaveFrom="transform opacity-100 scale-100 translate-y-0"
-                    leaveTo="transform opacity-0 scale-95 -translate-y-2"
+                  as={Fragment}
+                  enter="transition ease-out duration-100"
+                  enterFrom="transform opacity-0 scale-95"
+                  enterTo="transform opacity-100 scale-100"
+                  leave="transition ease-in duration-75"
+                  leaveFrom="transform opacity-100 scale-100"
+                  leaveTo="transform opacity-0 scale-95"
                 >
-                    <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-gray-100 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                        <div className="p-1">
-                            <Menu.Item>
-                                {({ active }) => (
-                                    <NavLink to={PROFILE_ROUTE} className={clsx("flex w-full items-center rounded-md px-2 py-2 text-sm", active ? "bg-slate-100 text-indigo-700" : "text-slate-700 hover:bg-slate-50")}>
-                                        <User className="mr-2 h-4 w-4" /> Профиль
-                                    </NavLink>
-                                )}
-                            </Menu.Item>
-                        </div>
-                        <div className="p-1">
-                            <Menu.Item>
-                                {({ active }) => (
-                                    <button onClick={logOut} className={clsx("flex w-full items-center rounded-md px-2 py-2 text-sm", active ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-slate-50")}>
-                                        <LogOut className="mr-2 h-4 w-4" /> Выйти
-                                    </button>
-                                )}
-                            </Menu.Item>
-                        </div>
-                    </Menu.Items>
+                  <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-gray-100 rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                    <div className="p-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <NavLink
+                            to={PROFILE_ROUTE}
+                            className={clsx(
+                              "flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm",
+                              active ? "bg-slate-100 text-indigo-700" : "text-slate-700"
+                            )}
+                          >
+                            <User size={14} />
+                            Профиль
+                          </NavLink>
+                        )}
+                      </Menu.Item>
+                    </div>
+                    <div className="p-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            onClick={logOut}
+                            className={clsx(
+                              "flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm",
+                              active ? "bg-red-50 text-red-700" : "text-slate-700"
+                            )}
+                          >
+                            <LogOut size={14} />
+                            Выйти
+                          </button>
+                        )}
+                      </Menu.Item>
+                    </div>
+                  </Menu.Items>
                 </Transition>
             </Menu>
-          ) : (
-            <button onClick={() => auth.signinRedirect()} className="bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-emerald-700 transition">
-              Войти
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

@@ -255,7 +255,7 @@ const App = observer(() => {
         }}
       />
       <Header />
-      <main className="flex-1 overflow-auto pb-4">
+      <main className="flex-1 overflow-auto pb-4 pt-14">
         <AppRouter />
       </main>
     </div>
