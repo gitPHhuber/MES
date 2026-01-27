@@ -9,6 +9,19 @@ const RackController = require("../controllers/beryll/controllers/RackController
 const ClusterController = require("../controllers/beryll/controllers/ClusterController");
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
+const {
+  addComponent,
+  addComponentsBatch,
+  updateComponent,
+  updateSerials,
+  replaceComponent,
+  deleteComponent,
+  searchComponent,
+  scanYadroSerial,
+  checkSerialUniqueness,
+  getComponentHistory,
+  getServerComponentsHistory
+} = require("../controllers/beryll/ComponentsExtendedController");
 
 const protect = [authMiddleware, syncUserMiddleware];
 
@@ -57,6 +70,27 @@ router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
 router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+
+// ============================================
+// КОМПЛЕКТУЮЩИЕ СЕРВЕРОВ (COMPONENTS)
+// ============================================
+
+// Поиск и сканирование комплектующих
+router.get("/components/search", ...protect, checkAbility("beryll.view"), searchComponent);
+router.get("/components/scan", ...protect, checkAbility("beryll.view"), scanYadroSerial);
+router.post("/components/check-serial", ...protect, checkAbility("beryll.view"), checkSerialUniqueness);
+
+// Комплектующие конкретного сервера
+router.post("/servers/:id/components", ...protect, checkAbility("beryll.work"), addComponent);
+router.post("/servers/:id/components/batch", ...protect, checkAbility("beryll.work"), addComponentsBatch);
+router.get("/servers/:id/components/history", ...protect, checkAbility("beryll.view"), getServerComponentsHistory);
+
+// Операции с отдельными комплектующими
+router.put("/components/:id", ...protect, checkAbility("beryll.work"), updateComponent);
+router.patch("/components/:id/serials", ...protect, checkAbility("beryll.work"), updateSerials);
+router.post("/components/:id/replace", ...protect, checkAbility("beryll.work"), replaceComponent);
+router.delete("/components/:id", ...protect, checkAbility("beryll.work"), deleteComponent);
+router.get("/components/:id/history", ...protect, checkAbility("beryll.view"), getComponentHistory);
 
 // ============================================
 // УЧЁТ БРАКА (DEFECT RECORDS)

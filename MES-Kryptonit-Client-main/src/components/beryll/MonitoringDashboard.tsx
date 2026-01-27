@@ -1,9 +1,3 @@
-/**
- * MonitoringDashboard.tsx
- * 
- * Положить в: src/components/beryll/MonitoringDashboard.tsx
- */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   RefreshCw, Play, Wifi, WifiOff, Gauge, Timer, CloudOff, Server

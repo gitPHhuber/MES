@@ -54,7 +54,8 @@ import {
 } from "src/api/beryllApi";
 
 import { DefectComments } from '../../../components/beryll/DefectComments';
-import { ServerComponents } from '../../../components/beryll/ServerComponents';
+// ИЗМЕНЕНО: используем новый компонент ServerComponentsManager
+import ServerComponentsManager from '../../../components/beryll/ServerComponentsManager';
 
 
 export const ServerDetailPage: React.FC = observer(() => {
@@ -587,9 +588,14 @@ export const ServerDetailPage: React.FC = observer(() => {
             )}
           </div>
 
-          {/* Комплектующие */}
-          <div className="lg:col-span-2">
-            <ServerComponents serverId={server.id} serverIp={server.ipAddress} />
+          {/* ИЗМЕНЕНО: Комплектующие - теперь с новым компонентом */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <ServerComponentsManager 
+              serverId={server.id} 
+              serverIp={server.ipAddress}
+              apkSerialNumber={server.apkSerialNumber}
+              readOnly={server.status === "ARCHIVED"}
+            />
           </div>
 
           {/* Дефекты */}

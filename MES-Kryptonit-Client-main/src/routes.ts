@@ -55,6 +55,7 @@ import { ProductionDashboard } from "./pages/Analytics/ProductionDashboard";
 import BeryllPage from "./pages/Beryll/BeryllPage";
 import { ServerDetailPage } from "./pages/Beryll/pages/ServerDetailPage";
 import { BatchDetailPage } from "./pages/Beryll/pages/BatchDetailPage";
+import BeryllMonitoringPage from "./pages/Beryll/BeryllMonitoringPage";
 
 import { DefectsPage } from "./pages/Defects/DefectsPage";
 import { DefectDetailPage } from "./pages/Defects/DefectDetailPage";
@@ -111,6 +112,7 @@ import {
   BERYLL_ROUTE,
   BERYLL_SERVER_ROUTE,
   BERYLL_BATCH_ROUTE,
+  BERYLL_MONITORING_ROUTE,
   DEFECTS_ROUTE,
   DEFECT_DETAIL_ROUTE,
   ADMIN_DEFECT_CATEGORIES_ROUTE,
@@ -149,6 +151,8 @@ export const authRoutes = [
   { path: BERYLL_ROUTE, Component: BeryllPage },
   { path: BERYLL_SERVER_ROUTE, Component: ServerDetailPage },
   { path: BERYLL_BATCH_ROUTE, Component: BatchDetailPage },
+  // --- ДОБАВЛЕНО: Маршрут мониторинга ---
+  { path: BERYLL_MONITORING_ROUTE, Component: BeryllMonitoringPage },
   { path: DEFECTS_ROUTE, Component: DefectsPage },
   { path: DEFECT_DETAIL_ROUTE, Component: DefectDetailPage },
   { path: PRODUCTION_ROUTE, Component: ProductionPage },
