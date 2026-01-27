@@ -128,6 +128,22 @@ router.post("/defect-records/:id/return-substitute", ...protect, checkAbility("b
 router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
 
 // ============================================
+// ФАЙЛЫ ЗАПИСЕЙ О БРАКЕ
+// ============================================
+
+// Получить список файлов записи о браке
+router.get("/defect-records/:id/files", ...protect, checkAbility("beryll.view"), DefectRecordController.getFiles);
+
+// Загрузить файл к записи о браке
+router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
+
+// Скачать файл записи о браке
+router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
+
+// Удалить файл записи о браке
+router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
+
+// ============================================
 // ЖУРНАЛ ЗАЯВОК ЯДРО
 // ============================================
 

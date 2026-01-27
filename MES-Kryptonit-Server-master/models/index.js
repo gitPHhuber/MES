@@ -7,6 +7,7 @@
  * ОБНОВЛЕНО: добавлена ассоциация Project -> User (author) (исправление ошибки "user is not associated to project")
  * ОБНОВЛЕНО: добавлена ассоциация AuditLog -> User (исправление ошибки "user is not associated to audit_log")
  * ОБНОВЛЕНО: добавлена ассоциация Session -> PC (исправление ошибки "столбец session.PCId не существует")
+ * ОБНОВЛЕНО: добавлены ассоциации BeryllDefectRecordFile (исправление 404 на /api/beryll/defect-records/:id/files)
  */
 
 // ============================================
@@ -307,6 +308,14 @@ OperationType.hasMany(ProductionOutput, { foreignKey: "operationTypeId", as: "ou
 
 Project.belongsTo(User, { foreignKey: "createdById", as: "author" });
 User.hasMany(Project, { foreignKey: "createdById", as: "projects" });
+
+// ============================================
+// 19. ФАЙЛЫ ЗАПИСЕЙ О БРАКЕ (BeryllDefectRecordFile)
+// ПРИМЕЧАНИЕ: Ассоциации настраиваются через setupExtendedAssociations в BeryllExtended.js:
+// - BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", ... })
+// - BeryllDefectRecordFile.belongsTo(BeryllDefectRecord, { as: "defectRecord", ... })
+// - BeryllDefectRecordFile.belongsTo(User, { as: "uploadedBy", ... })
+// ============================================
 
 // ============================================
 // ЭКСПОРТ

@@ -6,11 +6,12 @@
  * - Индикатор "требуется скриншот"
  * - Загрузка файлов-доказательств
  * - Валидация перед отметкой выполнения
+ * - Просмотр изображений в модальном окне (с авторизацией)
  * 
  * Путь: src/pages/Beryll/components/ServerChecklistSection.tsx
  */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -24,7 +25,12 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
-  Eye
+  Eye,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Loader2
 } from "lucide-react";
 import {
   BeryllServerChecklist,
@@ -33,9 +39,9 @@ import {
   CHECKLIST_GROUP_LABELS,
   toggleChecklistItem,
   uploadChecklistFile,
-  deleteChecklistFile,
-  downloadFile
+  deleteChecklistFile
 } from "src/api/beryllApi";
+import { $authHost } from "src/api/index";
 
 interface ServerChecklistSectionProps {
   serverId: number;
@@ -55,9 +61,25 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   );
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
-  const [previewFile, setPreviewFile] = useState<BeryllChecklistFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadId, setActiveUploadId] = useState<number | null>(null);
+
+  // Состояния для модального окна просмотра
+  const [previewFile, setPreviewFile] = useState<BeryllChecklistFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+
+  // Очистка blob URL при закрытии модалки
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // Группировка по groupCode
   const groupedChecklists = checklists.reduce((acc, item) => {
@@ -158,16 +180,79 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
     }
   };
 
-  // Скачивание файла
-  const handleDownloadFile = (fileId: number, originalName: string) => {
-    const url = downloadFile(fileId);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = originalName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Скачивание файла через axios (с авторизацией)
+  const handleDownloadFile = async (fileId: number, originalName: string) => {
+    console.log("=== handleDownloadFile called ===", { fileId, originalName });
+    try {
+      const response = await $authHost.get(`/api/beryll/files/${fileId}?download=true`, {
+        responseType: 'blob'
+      });
+      
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = originalName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("Download error:", e);
+      alert("Ошибка скачивания файла");
+    }
   };
+
+  // Открытие превью изображения
+  const handleOpenPreview = async (file: BeryllChecklistFile) => {
+    console.log("=== handleOpenPreview called ===", file);
+    
+    setPreviewFile(file);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setZoom(1);
+    setRotation(0);
+
+    // Очищаем предыдущий blob URL
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
+    try {
+      console.log("Fetching file...", `/api/beryll/files/${file.id}`);
+      const response = await $authHost.get(`/api/beryll/files/${file.id}`, {
+        responseType: 'blob'
+      });
+      
+      console.log("Response received:", response);
+      const url = URL.createObjectURL(response.data);
+      console.log("Blob URL created:", url);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      console.error("Preview error:", e);
+      setPreviewError("Не удалось загрузить изображение");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Закрытие превью
+  const handleClosePreview = () => {
+    console.log("=== handleClosePreview called ===");
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewFile(null);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setZoom(1);
+    setRotation(0);
+  };
+
+  // Управление зумом
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
+  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
 
   // Подсчёт статистики
   const totalCount = checklists.length;
@@ -181,6 +266,14 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
            ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
              file.originalName?.toLowerCase().endsWith(`.${ext}`)
            );
+  };
+
+  // Форматирование размера файла
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "0 KB";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -239,6 +332,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
             >
               {/* Заголовок группы */}
               <button
+                type="button"
                 onClick={() => toggleGroup(groupCode)}
                 className="w-full px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
               >
@@ -275,6 +369,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                         <div className="flex items-start gap-3">
                           {/* Чекбокс */}
                           <button
+                            type="button"
                             onClick={() => handleToggle(item.checklistTemplateId, item.completed, requiresFile, !!hasFiles)}
                             disabled={readOnly || togglingId === item.checklistTemplateId}
                             className={`mt-0.5 shrink-0 ${readOnly ? "cursor-default" : "cursor-pointer"}`}
@@ -312,7 +407,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                                     : "bg-amber-100 text-amber-700"
                                 }`}>
                                   <Camera className="w-3 h-3" />
-                                  {hasFiles ? "СКРИН ✓" : "НУЖЕН СКРИН"}
+                                  {hasFiles ? "Скрин загружен" : "Нужен скрин"}
                                 </span>
                               )}
                             </div>
@@ -335,57 +430,71 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
 
                             {/* Файлы */}
                             {hasFiles && (
-                              <div className="mt-3 space-y-2">
+                              <div className="mt-3 flex flex-wrap gap-2">
                                 {item.files!.map((file) => (
                                   <div 
                                     key={file.id} 
-                                    className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
+                                    className="group relative flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
                                   >
                                     {/* Иконка типа */}
                                     {isImageFile(file) ? (
-                                      <ImageIcon className="w-4 h-4 text-indigo-500" />
+                                      <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
                                     ) : (
-                                      <FileText className="w-4 h-4 text-red-500" />
+                                      <FileText className="w-4 h-4 text-red-500 shrink-0" />
                                     )}
 
                                     {/* Имя файла */}
-                                    <span className="flex-1 text-sm text-gray-600 truncate">
+                                    <span className="text-sm text-gray-700 max-w-[120px] truncate" title={file.originalName}>
                                       {file.originalName}
                                     </span>
 
-                                    {/* Размер */}
-                                    <span className="text-xs text-gray-400">
-                                      {(file.size / 1024).toFixed(1)} KB
-                                    </span>
-
                                     {/* Действия */}
-                                    {isImageFile(file) && (
+                                    <div className="flex items-center gap-1 ml-1">
+                                      {isImageFile(file) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            console.log("👁 Eye button clicked for file:", file.id, file.originalName);
+                                            handleOpenPreview(file);
+                                          }}
+                                          className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                          title="Просмотр"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      
                                       <button
-                                        onClick={() => setPreviewFile(file)}
-                                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                                        title="Просмотр"
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          console.log("⬇ Download button clicked for file:", file.id, file.originalName);
+                                          handleDownloadFile(file.id, file.originalName);
+                                        }}
+                                        className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                                        title="Скачать"
                                       >
-                                        <Eye className="w-4 h-4" />
+                                        <Download className="w-4 h-4" />
                                       </button>
-                                    )}
-                                    
-                                    <button
-                                      onClick={() => handleDownloadFile(file.id, file.originalName)}
-                                      className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                                      title="Скачать"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                    </button>
 
-                                    {!readOnly && (
-                                      <button
-                                        onClick={() => handleDeleteFile(file.id, item.completed)}
-                                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                        title="Удалить"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    )}
+                                      {!readOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleDeleteFile(file.id, item.completed);
+                                          }}
+                                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Удалить"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -403,6 +512,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                           {/* Кнопка загрузки */}
                           {!readOnly && (
                             <button
+                              type="button"
                               onClick={() => handleUploadClick(item.checklistTemplateId)}
                               disabled={uploadingId === item.checklistTemplateId}
                               className={`px-3 py-1.5 text-sm rounded-lg flex items-center gap-1.5 transition-colors ${
@@ -416,7 +526,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                               ) : (
                                 <Upload className="w-4 h-4" />
                               )}
-                              Файл
+                              Скрин
                             </button>
                           )}
                         </div>
@@ -433,37 +543,126 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
       {/* Модальное окно просмотра изображения */}
       {previewFile && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setPreviewFile(null)}
+          className="fixed inset-0 bg-black/90 flex flex-col z-50"
+          onClick={handleClosePreview}
         >
+          {/* Шапка модалки */}
           <div 
-            className="relative max-w-4xl max-h-[90vh] bg-white rounded-xl overflow-hidden"
+            className="flex items-center justify-between px-4 py-3 bg-black/50 backdrop-blur-sm"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <span className="font-medium text-gray-800">{previewFile.originalName}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleDownloadFile(previewFile.id, previewFile.originalName)}
-                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
-                >
-                  <Download className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setPreviewFile(null)}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  ×
-                </button>
+            <div className="flex items-center gap-3 text-white">
+              <ImageIcon className="w-5 h-5 text-indigo-400" />
+              <div>
+                <p className="font-medium">{previewFile.originalName}</p>
+                <p className="text-sm text-gray-400">{formatFileSize(previewFile.fileSize)}</p>
               </div>
             </div>
-            <div className="p-4 flex items-center justify-center bg-gray-100">
-              <img 
-                src={downloadFile(previewFile.id)} 
-                alt={previewFile.originalName}
-                className="max-w-full max-h-[70vh] object-contain"
-              />
+            
+            <div className="flex items-center gap-2">
+              {/* Кнопки управления */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
+                disabled={zoom <= 0.5}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                title="Уменьшить"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </button>
+              
+              <span className="text-white/70 text-sm min-w-[60px] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
+                disabled={zoom >= 3}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                title="Увеличить"
+              >
+                <ZoomIn className="w-5 h-5" />
+              </button>
+              
+              <div className="w-px h-6 bg-white/20 mx-2" />
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleRotate(); }}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Повернуть"
+              >
+                <RotateCw className="w-5 h-5" />
+              </button>
+              
+              <div className="w-px h-6 bg-white/20 mx-2" />
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDownloadFile(previewFile.id, previewFile.originalName); }}
+                className="p-2 text-white/70 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
+                title="Скачать"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleClosePreview(); }}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors ml-2"
+                title="Закрыть (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+          </div>
+
+          {/* Контент */}
+          <div 
+            className="flex-1 flex items-center justify-center overflow-auto p-4"
+            onClick={e => e.stopPropagation()}
+          >
+            {previewLoading && (
+              <div className="flex flex-col items-center gap-3 text-white">
+                <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+                <span className="text-gray-400">Загрузка...</span>
+              </div>
+            )}
+
+            {previewError && (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <X className="w-8 h-8 text-red-400" />
+                </div>
+                <p className="text-white font-medium">Ошибка загрузки</p>
+                <p className="text-gray-400 text-sm">{previewError}</p>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleOpenPreview(previewFile); }}
+                  className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                >
+                  Повторить
+                </button>
+              </div>
+            )}
+
+            {previewUrl && !previewLoading && (
+              <img 
+                src={previewUrl}
+                alt={previewFile.originalName}
+                className="max-w-full max-h-full object-contain transition-transform duration-200 select-none"
+                style={{
+                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                }}
+                draggable={false}
+              />
+            )}
+          </div>
+
+          {/* Подсказка внизу */}
+          <div className="text-center py-2 text-gray-500 text-sm bg-black/50">
+            Нажмите в любом месте или Esc для закрытия
           </div>
         </div>
       )}

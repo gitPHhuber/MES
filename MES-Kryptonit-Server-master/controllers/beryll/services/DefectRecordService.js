@@ -4,6 +4,7 @@
  * ИСПРАВЛЕНО:
  * - findServerComponent: type → componentType
  * - performComponentReplacement: type → componentType, добавлено name
+ * - ДОБАВЛЕНЫ методы для работы с файлами: getFiles, getFileById, addFile, deleteFile
  * 
  * Положить в: controllers/beryll/services/DefectRecordService.js
  */
@@ -1007,6 +1008,161 @@ class DefectRecordService {
             CLOSED: "Закрыт"
         };
         return labels[status] || status;
+    }
+    
+    // =========================================
+    // МЕТОДЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ
+    // =========================================
+    
+    /**
+     * Получить список файлов записи о браке
+     * @param {number} defectRecordId - ID записи
+     * @returns {Promise<Array>}
+     */
+    async getFiles(defectRecordId) {
+        const files = await BeryllDefectRecordFile.findAll({
+            where: { defectRecordId },
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname", "login"],
+                    required: false
+                }
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+        
+        return files;
+    }
+    
+    /**
+     * Получить файл по ID
+     * @param {number} fileId - ID файла
+     * @returns {Promise<Object|null>}
+     */
+    async getFileById(fileId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname", "login"],
+                    required: false
+                }
+            ]
+        });
+        
+        return file;
+    }
+    
+    /**
+     * Добавить файл к записи о браке
+     * @param {number} defectRecordId - ID записи
+     * @param {Object} fileData - Данные файла
+     * @returns {Promise<Object>}
+     */
+    async addFile(defectRecordId, fileData) {
+        // Проверяем существование записи о браке
+        const defect = await BeryllDefectRecord.findByPk(defectRecordId, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
+        
+        if (!defect) {
+            throw new Error("Запись о браке не найдена");
+        }
+        
+        // Создаём запись о файле
+        const file = await BeryllDefectRecordFile.create({
+            defectRecordId,
+            fileName: fileData.fileName,
+            originalName: fileData.originalName,
+            filePath: fileData.filePath,
+            mimeType: fileData.mimeType,
+            fileSize: fileData.fileSize,
+            uploadedById: fileData.uploadedById
+        });
+        
+        // Записываем в историю
+        try {
+            const { BeryllHistory } = require("../../../models");
+            await BeryllHistory.create({
+                serverId: defect.serverId,
+                serverIp: defect.server?.ipAddress,
+                serverHostname: defect.server?.hostname,
+                userId: fileData.uploadedById,
+                action: "DEFECT_RECORD_FILE_UPLOADED",
+                comment: `Загружен файл: ${fileData.originalName}`,
+                metadata: {
+                    defectRecordId,
+                    fileId: file.id,
+                    fileName: fileData.originalName,
+                    fileSize: fileData.fileSize,
+                    mimeType: fileData.mimeType
+                }
+            });
+        } catch (historyError) {
+            console.error("[DefectRecordService] Ошибка записи в историю:", historyError.message);
+        }
+        
+        return file;
+    }
+    
+    /**
+     * Удалить файл
+     * @param {number} fileId - ID файла
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>}
+     */
+    async deleteFile(fileId, userId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [{
+                model: BeryllDefectRecord,
+                as: "defectRecord",
+                include: [{ model: BeryllServer, as: "server" }]
+            }]
+        });
+        
+        if (!file) {
+            throw new Error("Файл не найден");
+        }
+        
+        // Удаляем файл с диска
+        const fullPath = path.join(UPLOADS_DIR, file.filePath);
+        if (fs.existsSync(fullPath)) {
+            try {
+                fs.unlinkSync(fullPath);
+            } catch (e) {
+                console.warn("[DefectRecordService] Ошибка удаления файла с диска:", e.message);
+            }
+        }
+        
+        // Записываем в историю
+        try {
+            const { BeryllHistory } = require("../../../models");
+            if (file.defectRecord) {
+                await BeryllHistory.create({
+                    serverId: file.defectRecord.serverId,
+                    serverIp: file.defectRecord.server?.ipAddress,
+                    serverHostname: file.defectRecord.server?.hostname,
+                    userId,
+                    action: "DEFECT_RECORD_FILE_DELETED",
+                    comment: `Удалён файл: ${file.originalName}`,
+                    metadata: {
+                        defectRecordId: file.defectRecordId,
+                        fileId: file.id,
+                        fileName: file.originalName
+                    }
+                });
+            }
+        } catch (historyError) {
+            console.error("[DefectRecordService] Ошибка записи в историю:", historyError.message);
+        }
+        
+        // Удаляем запись из БД
+        await file.destroy();
+        
+        return { success: true, message: "Файл удалён" };
     }
 }
 

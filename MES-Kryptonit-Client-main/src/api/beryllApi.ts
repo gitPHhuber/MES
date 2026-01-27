@@ -654,7 +654,8 @@ export const getServerFiles = async (serverId: number): Promise<BeryllChecklistF
  * Получить URL для скачивания/просмотра файла
  */
 export const downloadFile = (fileId: number): string => {
-  return `/api/beryll/files/${fileId}`;
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  return `${baseUrl}/api/beryll/files/${fileId}`;
 };
 
 /**

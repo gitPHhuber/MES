@@ -277,8 +277,6 @@ router.post(
 // Скачать/просмотреть файл
 router.get(
   "/files/:fileId",
-  ...protect,
-  checkAbility("beryll.view"),
   ChecklistController.downloadFile
 );
 

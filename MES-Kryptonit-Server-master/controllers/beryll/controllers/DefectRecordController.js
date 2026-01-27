@@ -1,9 +1,26 @@
 /**
  * DefectRecordController.js - Контроллер записей о браке серверов
+ * Путь: controllers/beryll/controllers/DefectRecordController.js
+ * 
+ * Включает:
+ * - CRUD операции
+ * - Workflow диагностики и ремонта
+ * - Работа с файлами (загрузка, скачивание, удаление)
+ * - Справочники и статистика
  */
 
+const path = require("path");
+const fs = require("fs");
 const ApiError = require("../../../error/ApiError");
 const DefectRecordService = require("../services/DefectRecordService");
+
+// Директория для хранения файлов дефектов
+const DEFECT_FILES_DIR = path.join(__dirname, "../../../static/defect-records");
+
+// Убедимся, что директория существует
+if (!fs.existsSync(DEFECT_FILES_DIR)) {
+    fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
+}
 
 class DefectRecordController {
     
@@ -220,6 +237,159 @@ class DefectRecordController {
             return res.json(defect);
         } catch (error) {
             next(ApiError.badRequest(error.message));
+        }
+    }
+    
+    // =========================================
+    // ФАЙЛЫ
+    // =========================================
+    
+    /**
+     * GET /api/beryll/defect-records/:id/files
+     * Получить список файлов записи о браке
+     */
+    async getFiles(req, res, next) {
+        try {
+            const { id } = req.params;
+            
+            // Проверяем существование записи
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            const files = await DefectRecordService.getFiles(id);
+            return res.json(files);
+        } catch (error) {
+            console.error("[DefectRecordController] getFiles error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    /**
+     * POST /api/beryll/defect-records/:id/files
+     * Загрузить файл к записи о браке
+     */
+    async uploadFile(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            
+            // Проверяем существование записи
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            // Проверяем наличие файла (express-fileupload)
+            if (!req.files || !req.files.file) {
+                return next(ApiError.badRequest("Файл не загружен"));
+            }
+            
+            const file = req.files.file;
+            
+            // Валидация размера (макс 50MB)
+            const maxSize = 50 * 1024 * 1024;
+            if (file.size > maxSize) {
+                return next(ApiError.badRequest("Файл слишком большой (максимум 50MB)"));
+            }
+            
+            // Создаём директорию для записи
+            const recordDir = path.join(DEFECT_FILES_DIR, String(id));
+            if (!fs.existsSync(recordDir)) {
+                fs.mkdirSync(recordDir, { recursive: true });
+            }
+            
+            // Генерируем уникальное имя файла
+            const ext = path.extname(file.name);
+            const timestamp = Date.now();
+            const safeOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fileName = `${timestamp}_${safeOriginalName}`;
+            const filePath = path.join(recordDir, fileName);
+            
+            // Сохраняем файл
+            await file.mv(filePath);
+            
+            // Сохраняем запись в БД
+            const fileRecord = await DefectRecordService.addFile(id, {
+                fileName,
+                originalName: file.name,
+                filePath: path.join(String(id), fileName),
+                mimeType: file.mimetype,
+                fileSize: file.size,
+                uploadedById: userId
+            });
+            
+            return res.json({
+                success: true,
+                file: fileRecord
+            });
+        } catch (error) {
+            console.error("[DefectRecordController] uploadFile error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    /**
+     * GET /api/beryll/defect-record-files/:fileId
+     * Скачать файл
+     */
+    async downloadFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            
+            const fileRecord = await DefectRecordService.getFileById(fileId);
+            if (!fileRecord) {
+                return next(ApiError.notFound("Файл не найден"));
+            }
+            
+            const fullPath = path.join(DEFECT_FILES_DIR, fileRecord.filePath);
+            
+            if (!fs.existsSync(fullPath)) {
+                return next(ApiError.notFound("Файл не найден на диске"));
+            }
+            
+            // Устанавливаем заголовки для скачивания
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileRecord.originalName)}"`);
+            res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
+            
+            return res.download(fullPath, fileRecord.originalName);
+        } catch (error) {
+            console.error("[DefectRecordController] downloadFile error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    /**
+     * DELETE /api/beryll/defect-record-files/:fileId
+     * Удалить файл
+     */
+    async deleteFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user?.id;
+            
+            const fileRecord = await DefectRecordService.getFileById(fileId);
+            if (!fileRecord) {
+                return next(ApiError.notFound("Файл не найден"));
+            }
+            
+            // Удаляем файл с диска
+            const fullPath = path.join(DEFECT_FILES_DIR, fileRecord.filePath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+            
+            // Удаляем запись из БД
+            await DefectRecordService.deleteFile(fileId, userId);
+            
+            return res.json({
+                success: true,
+                message: "Файл удалён"
+            });
+        } catch (error) {
+            console.error("[DefectRecordController] deleteFile error:", error);
+            next(ApiError.internal(error.message));
         }
     }
     
