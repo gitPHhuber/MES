@@ -1,14 +1,6 @@
 /**
  * RankingsController.js
  * Контроллер рейтингов сотрудников
- * 
- * Поддерживаемые периоды:
- * - day: Сегодня
- * - week: Текущая неделя (с понедельника)
- * - month: Текущий месяц
- * - year: Текущий год
- * - all: За всё время
- * - custom: Кастомный диапазон (требует startDate и endDate)
  */
 
 const { WarehouseMovement, User, Team, Section } = require("../models/index");
@@ -72,6 +64,21 @@ function calculateDateRange(period, customStartDate, customEndDate) {
 }
 
 /**
+ * Определяет максимальное количество точек для sparkline в зависимости от периода
+ */
+function getSparklineLimit(period) {
+    switch (period) {
+        case 'day': return 1;
+        case 'week': return 7;
+        case 'month': return 31;
+        case 'year': return 52; // по неделям
+        case 'all': return 100;
+        case 'custom': return 90;
+        default: return 14;
+    }
+}
+
+/**
  * Получить статистику рейтинга
  */
 async function getStats(req, res, next) {
@@ -81,8 +88,9 @@ async function getStats(req, res, next) {
         const { startDate, endDate } = calculateDateRange(period, customStartDate, customEndDate);
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
+        const sparklineLimit = getSparklineLimit(period);
 
-        console.log(`>>> [Rankings] Запрос статистики: период=${period}, с ${startDate.toISOString()} по ${endDate.toISOString()}`);
+        console.log(`>>> [Rankings] период=${period}, с ${startDateStr} по ${endDateStr}, sparkline limit=${sparklineLimit}`);
 
         const warehouseDateCondition = period === 'all' 
             ? { [Op.gte]: startDate }
@@ -215,14 +223,14 @@ async function getStats(req, res, next) {
             dayMap.set(date, (dayMap.get(date) || 0) + good);
         });
 
-        // Преобразуем в массив для спарклайна (последние 14 дней)
+        // Преобразуем в массив для спарклайна (с учётом лимита периода)
         function getSparklineData(userId) {
             const dayMap = userDailyMap.get(userId);
             if (!dayMap || dayMap.size === 0) return [];
             
             const entries = [...dayMap.entries()]
                 .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(-14);
+                .slice(-sparklineLimit); // Динамический лимит
             
             return entries.map(([date, value]) => ({ date, value }));
         }
@@ -325,7 +333,6 @@ async function getStats(req, res, next) {
                 output: warehouseGood + productionData.productionGood,
                 defects: warehouseScrap,
                 
-                // Поля для спарклайна
                 sparkline: getSparklineData(user.id),
                 dailyChange: getDailyChange(user.id)
             });
@@ -613,7 +620,6 @@ async function getUserDetails(req, res, next) {
     }
 }
 
-// Экспорт как объект с функциями
 module.exports = {
     getStats,
     getUserDetails

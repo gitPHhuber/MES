@@ -1,6 +1,7 @@
 /**
  * API функции для модуля АПК Берилл
  * Улучшенная версия с поддержкой чек-листов, доказательств и мониторинга
+ * + Параметр assignedToId для фильтра "Мои серверы"
  * 
  * Заменить: src/api/beryllApi.ts
  */
@@ -339,11 +340,17 @@ export const syncWithDhcp = async (): Promise<SyncResult> => {
 // API ФУНКЦИИ - СЕРВЕРЫ
 // ============================================
 
+/**
+ * Получить список серверов с фильтрами
+ * 
+ * ДОБАВЛЕНО: параметр assignedToId для фильтра "Мои серверы"
+ */
 export const getServers = async (params?: {
   status?: ServerStatus;
   search?: string;
   onlyActive?: boolean;
   batchId?: number | "null";
+  assignedToId?: number;  // ДОБАВЛЕНО: фильтр по исполнителю
 }): Promise<BeryllServer[]> => {
   const { data } = await $authHost.get<BeryllServer[]>("/api/beryll/servers", { params });
   return data;
@@ -833,6 +840,7 @@ export const exportBatchPassports = async (batchId: number | string): Promise<Bl
   });
   return data;
 };
+
 // ============================================
 // ЭКСПОРТ ПО УМОЛЧАНИЮ
 // ============================================
@@ -891,7 +899,7 @@ export default {
   // Паспорт
   downloadPassport,
   generatePassport,
-    // Экспорт паспортов
+  // Экспорт паспортов
   exportPassports,
   exportSelectedPassports,
   exportBatchPassports,

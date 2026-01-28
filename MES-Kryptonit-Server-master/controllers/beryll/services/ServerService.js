@@ -8,9 +8,11 @@ const ChecklistService = require("./ChecklistService");
 class ServerService {
   /**
    * Получить список серверов с фильтрами
+   * 
+   * ДОБАВЛЕНО: параметр assignedToId для фильтра "Мои серверы"
    */
   async getServers(filters = {}) {
-    const { status, search, onlyActive, batchId } = filters;
+    const { status, search, onlyActive, batchId, assignedToId } = filters; // ДОБАВЛЕНО: assignedToId
     
     const where = {};
     
@@ -24,6 +26,11 @@ class ServerService {
     
     if (batchId) {
       where.batchId = batchId === "null" ? null : parseInt(batchId);
+    }
+    
+    // ДОБАВЛЕНО: Фильтр по исполнителю (для функционала "Мои серверы")
+    if (assignedToId) {
+      where.assignedToId = parseInt(assignedToId);
     }
     
     if (search) {

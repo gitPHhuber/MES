@@ -1,6 +1,7 @@
 /**
  * ServersTab.tsx
  * + Кнопка "Выгрузить в Excel"
+ * + Фильтр "Мои серверы"
  */
 
 import { useState, useEffect, useContext } from "react";
@@ -80,6 +81,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const [statusFilter, setStatusFilter] = useState<ServerStatus | "ALL">("ALL");
   const [batchFilter, setBatchFilter] = useState<number | "ALL" | "UNASSIGNED">("ALL");
   const [onlyActive, setOnlyActive] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false); 
 
   // Пагинация
   const [currentPage, setCurrentPage] = useState(1);
@@ -102,7 +104,8 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           status: statusFilter === "ALL" ? undefined : statusFilter,
           search: search || undefined,
           onlyActive: onlyActive || undefined,
-          batchId: batchFilter === "ALL" ? undefined : batchFilter === "UNASSIGNED" ? "null" : batchFilter
+          batchId: batchFilter === "ALL" ? undefined : batchFilter === "UNASSIGNED" ? "null" : batchFilter,
+          assignedToId: onlyMine ? currentUser?.id : undefined // ДОБАВЛЕНО: передаём ID пользователя
         }),
         getBatches({ status: "ACTIVE" })
       ]);
@@ -119,7 +122,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
 
   useEffect(() => {
     loadData();
-  }, [statusFilter, onlyActive, batchFilter]);
+  }, [statusFilter, onlyActive, batchFilter, onlyMine]); // ДОБАВЛЕНО: onlyMine в зависимости
 
   useEffect(() => {
     const timer = setTimeout(() => loadData(), 300);
@@ -509,6 +512,18 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           <span className="text-sm text-gray-600">Только активные</span>
         </label>
 
+        {/* ДОБАВЛЕНО: Мои серверы */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlyMine}
+            onChange={(e) => setOnlyMine(e.target.checked)}
+            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <User className="w-4 h-4 text-gray-500" />
+          <span className="text-sm text-gray-600">Мои серверы</span>
+        </label>
+
         {/* Кнопка обновления */}
         <button
           onClick={() => loadData()}
@@ -606,7 +621,10 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
             <Server className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-lg font-medium">Серверы не найдены</p>
             <p className="text-sm mt-1">
-              Нажмите "Синхронизация с DHCP" для получения списка
+              {onlyMine 
+                ? "У вас нет серверов в работе. Снимите фильтр или возьмите сервер в работу."
+                : "Нажмите \"Синхронизация с DHCP\" для получения списка"
+              }
             </p>
           </div>
         ) : (
