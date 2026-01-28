@@ -460,9 +460,17 @@ export const ServerDetailPage: React.FC = observer(() => {
     }
   };
 
-  // Просмотр файла - ИСПРАВЛЕНО: загрузка через авторизованный запрос
-  const handleViewFile = async (fileId: number, mimetype?: string) => {
-    if (mimetype?.startsWith("image/")) {
+  // Просмотр файла - ИСПРАВЛЕНО: проверка по расширению если mimetype отсутствует
+  const handleViewFile = async (fileId: number, mimetype?: string, originalName?: string) => {
+    // Определяем, является ли файл изображением по mimetype ИЛИ по расширению
+    const isImage = mimetype?.startsWith("image/") || 
+      (originalName && ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+        originalName.toLowerCase().endsWith(`.${ext}`)
+      ));
+
+    console.log("handleViewFile:", { fileId, mimetype, originalName, isImage });
+
+    if (isImage) {
       // Освобождаем предыдущий blob URL
       if (previewImage) {
         URL.revokeObjectURL(previewImage);
@@ -593,10 +601,11 @@ export const ServerDetailPage: React.FC = observer(() => {
         className="hidden"
       />
       
-      {/* Модалка просмотра изображения - ИСПРАВЛЕНО */}
+      {/* Модалка просмотра изображения */}
       {(previewImage || previewLoading) && (
         <div 
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
           onClick={handleClosePreview}
         >
           <button
@@ -625,7 +634,8 @@ export const ServerDetailPage: React.FC = observer(() => {
       {/* Модалка загрузки файла с превью и названием */}
       {uploadModal.open && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
           onClick={closeUploadModal}
         >
           <div 
@@ -1106,7 +1116,10 @@ export const ServerDetailPage: React.FC = observer(() => {
                                             key={file.id}
                                             className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs"
                                           >
-                                            {file.mimetype?.startsWith("image/") ? (
+                                            {file.mimetype?.startsWith("image/") || 
+                                             (file.originalName && ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+                                               file.originalName.toLowerCase().endsWith(`.${ext}`)
+                                             )) ? (
                                               <Image className="w-3 h-3 text-blue-500" />
                                             ) : (
                                               <FileIcon className="w-3 h-3 text-red-500" />
@@ -1115,10 +1128,7 @@ export const ServerDetailPage: React.FC = observer(() => {
                                               {file.originalName}
                                             </span>
                                             <button
-                                              onClick={() => {
-                                                console.log("👁 ServerDetailPage Eye clicked:", file.id, file.mimetype);
-                                                handleViewFile(file.id, file.mimetype);
-                                              }}
+                                              onClick={() => handleViewFile(file.id, file.mimetype, file.originalName)}
                                               className="p-0.5 text-gray-400 hover:text-blue-600"
                                               title="Просмотреть"
                                             >
