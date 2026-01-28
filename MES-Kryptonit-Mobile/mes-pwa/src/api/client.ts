@@ -1,26 +1,91 @@
-/**
- * API клиент для MES Kryptonit PWA
- */
-
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { User } from 'oidc-client-ts'
 
-// ============================================================================
-// Конфигурация
-// ============================================================================
+export type NetworkEnvironment = 'production' | 'wifi' | 'development'
 
-export const API_BASE_URL = 'http://localhost:5001/api'
+interface NetworkConfig {
+  apiBaseUrl: string
+  keycloakAuthority: string
+  keycloakClientId: string
+  network: NetworkEnvironment
+}
+
+const detectNetwork = (): NetworkConfig => {
+  const hostname = window.location.hostname
+  const protocol = window.location.protocol
+
+  if (hostname.startsWith('192.168.27.')) {
+    return {
+      apiBaseUrl: `${protocol}//${hostname}:3000/api`,
+      keycloakAuthority: `${protocol}//${hostname}:8080/realms/MES-Realm`,
+      keycloakClientId: 'mes-pwa-client',
+      network: 'wifi'
+    }
+  }
+
+  if (hostname === 'mes-wifi.local' || hostname === 'mes-mobile.local') {
+    return {
+      apiBaseUrl: `${protocol}//${hostname}:3000/api`,
+      keycloakAuthority: `${protocol}//${hostname}:8080/realms/MES-Realm`,
+      keycloakClientId: 'mes-pwa-client',
+      network: 'wifi'
+    }
+  }
+
+  if (hostname.startsWith('10.11.0.')) {
+    return {
+      apiBaseUrl: `${protocol}//${hostname}:3000/api`,
+      keycloakAuthority: `${protocol}//10.11.0.16:8080/realms/MES-Realm`,
+      keycloakClientId: 'mes-pwa-client',
+      network: 'production'
+    }
+  }
+
+  if (hostname === 'mes.local' || hostname === 'mes-kryptonit.local') {
+    return {
+      apiBaseUrl: `${protocol}//${hostname}:3000/api`,
+      keycloakAuthority: `${protocol}//${hostname}:8080/realms/MES-Realm`,
+      keycloakClientId: 'mes-pwa-client',
+      network: 'production'
+    }
+  }
+
+  if (hostname === '10.11.0.16') {
+    return {
+      apiBaseUrl: `${protocol}//10.11.0.16:5001/api`,
+      keycloakAuthority: `${protocol}//10.11.0.16:8080/realms/MES-Realm`,
+      keycloakClientId: 'mes-pwa-client',
+      network: 'production'
+    }
+  }
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return {
+      apiBaseUrl: '/api',
+      keycloakAuthority: 'http://keycloak.local/realms/MES-Realm',
+      keycloakClientId: 'mes-client',
+      network: 'development'
+    }
+  }
+
+  return {
+    apiBaseUrl: `${protocol}//${hostname}/api`,
+    keycloakAuthority: `${protocol}//${hostname}:8080/realms/MES-Realm`,
+    keycloakClientId: 'mes-pwa-client',
+    network: 'production'
+  }
+}
+
+const networkConfig = detectNetwork()
+
+export const API_BASE_URL = networkConfig.apiBaseUrl
 
 export const KEYCLOAK_CONFIG = {
-  authority: 'http://keycloak.local/realms/MES-Realm',
-  clientId: 'mes-client',
+  authority: networkConfig.keycloakAuthority,
+  clientId: networkConfig.keycloakClientId,
 }
 
 const DEBUG_HTTP = import.meta.env.DEV
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 const maskToken = (t?: string | null): string => {
   if (!t) return '<none>'
@@ -36,10 +101,6 @@ const joinUrl = (baseURL?: string, url?: string): string => {
   return `${base.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
 }
 
-// ============================================================================
-// OIDC Token Storage
-// ============================================================================
-
 const getOidcStorageKey = (): string => {
   return `oidc.user:${KEYCLOAK_CONFIG.authority}:${KEYCLOAK_CONFIG.clientId}`
 }
@@ -47,9 +108,7 @@ const getOidcStorageKey = (): string => {
 export const getAccessToken = (): string | null => {
   const key = getOidcStorageKey()
   const data = sessionStorage.getItem(key)
-  
   if (!data) return null
-  
   try {
     const user = JSON.parse(data) as User
     return user.access_token || null
@@ -61,9 +120,7 @@ export const getAccessToken = (): string | null => {
 export const getUser = (): User | null => {
   const key = getOidcStorageKey()
   const data = sessionStorage.getItem(key)
-  
   if (!data) return null
-  
   try {
     return JSON.parse(data) as User
   } catch {
@@ -71,83 +128,139 @@ export const getUser = (): User | null => {
   }
 }
 
-// ============================================================================
-// Axios Instance
-// ============================================================================
-
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
 })
 
-// Request Interceptor
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getAccessToken()
+api.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = getAccessToken()
 
-  if (DEBUG_HTTP) {
-    const method = (config.method ?? 'GET').toUpperCase()
-    console.log(`[HTTP] --> ${method} ${joinUrl(config.baseURL, config.url)}`)
-    console.log(`[HTTP] token = ${maskToken(token)}`)
+    if (DEBUG_HTTP) {
+      const method = (config.method ?? 'GET').toUpperCase()
+      console.log(`[HTTP] --> ${method} ${joinUrl(config.baseURL, config.url)}`)
+      console.log(`[HTTP] token = ${maskToken(token)}`)
+    }
+
+    if (token) {
+      config.headers = config.headers ?? {}
+      config.headers.Authorization = `Bearer ${token}`
+    }
+
+    return config
+  },
+  (error) => {
+    console.error('[API] Request error:', error)
+    return Promise.reject(error)
   }
+)
 
-  if (token) {
-    config.headers = config.headers ?? {}
-    config.headers.Authorization = `Bearer ${token}`
-  }
-
-  return config
-})
-
-// Response Interceptor
 api.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     if (DEBUG_HTTP) {
       console.log(`[HTTP] <-- ${response.status} ${response.config.method?.toUpperCase()} ${joinUrl(response.config.baseURL, response.config.url)}`)
     }
     return response
   },
   (err: AxiosError) => {
+    const status = err.response?.status
+    const url = err.config?.url
+
     if (DEBUG_HTTP) {
       console.error(`[HTTP] <-- ERROR`, {
         message: err.message,
-        status: err.response?.status,
+        status: status,
         data: err.response?.data,
       })
     }
 
-    // 401 - редирект на логин
-    if (err.response?.status === 401) {
-      window.location.href = '/login'
+    if (status === 401) {
+      console.warn('[API] Unauthorized - token may be expired')
+    }
+
+    if (status === 403) {
+      console.warn('[API] Forbidden - insufficient permissions')
+    }
+
+    if (status === 404) {
+      console.warn('[API] Not Found:', url)
+    }
+
+    if (status && status >= 500) {
+      console.error('[API] Server Error:', err.response?.data)
+    }
+
+    if (!err.response) {
+      console.error('[API] Network Error - check connection')
     }
 
     return Promise.reject(err)
   }
 )
 
-// ============================================================================
-// Error Helpers
-// ============================================================================
+export interface ApiErrorResponse {
+  message: string
+  error?: string
+  statusCode?: number
+  details?: any
+}
 
 export const getErrorMessage = (error: unknown, fallback = 'Произошла ошибка'): string => {
   if (axios.isAxiosError(error)) {
-    if (!error.response) {
-      return 'Нет подключения к серверу'
+    const axiosError = error as AxiosError<ApiErrorResponse>
+
+    if (axiosError.response?.data?.message) {
+      return axiosError.response.data.message
     }
-    const data = error.response.data as any
-    return data?.message || data?.error || fallback
+
+    if (axiosError.response?.status === 401) {
+      return 'Сессия истекла. Пожалуйста, войдите снова.'
+    }
+    if (axiosError.response?.status === 403) {
+      return 'Недостаточно прав для выполнения операции.'
+    }
+    if (axiosError.response?.status === 404) {
+      return 'Запрашиваемый ресурс не найден.'
+    }
+    if (axiosError.response?.status && axiosError.response.status >= 500) {
+      return 'Ошибка сервера. Попробуйте позже.'
+    }
+
+    if (axiosError.code === 'ECONNABORTED') {
+      return 'Превышено время ожидания. Проверьте соединение.'
+    }
+    if (!axiosError.response) {
+      return 'Нет соединения с сервером. Проверьте сеть.'
+    }
+
+    return axiosError.message
   }
+
   if (error instanceof Error) {
     return error.message
   }
+
   return fallback
 }
 
-// ============================================================================
-// API Methods
-// ============================================================================
+export const isNetworkError = (error: unknown): boolean => {
+  if (axios.isAxiosError(error)) {
+    return !error.response || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK'
+  }
+  return false
+}
+
+export const isAuthError = (error: unknown): boolean => {
+  if (axios.isAxiosError(error)) {
+    return error.response?.status === 401
+  }
+  return false
+}
 
 export const apiGet = async <T>(url: string, params?: any): Promise<T> => {
   const { data } = await api.get<T>(url, { params })
@@ -164,9 +277,35 @@ export const apiPut = async <T>(url: string, body?: any): Promise<T> => {
   return data
 }
 
+export const apiPatch = async <T>(url: string, body?: any): Promise<T> => {
+  const { data } = await api.patch<T>(url, body)
+  return data
+}
+
 export const apiDelete = async <T>(url: string): Promise<T> => {
   const { data } = await api.delete<T>(url)
   return data
 }
+
+export const apiUpload = async <T>(url: string, formData: FormData): Promise<T> => {
+  const { data } = await api.post<T>(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 60000,
+  })
+  return data
+}
+
+export const getNetworkInfo = () => ({
+  apiUrl: API_BASE_URL,
+  keycloakAuthority: KEYCLOAK_CONFIG.authority,
+  network: networkConfig.network,
+  isWifi: networkConfig.network === 'wifi',
+  isProduction: networkConfig.network === 'production',
+  isDevelopment: networkConfig.network === 'development',
+})
+
+console.log(`[API] Network: ${networkConfig.network}, URL: ${API_BASE_URL}`)
 
 export default api

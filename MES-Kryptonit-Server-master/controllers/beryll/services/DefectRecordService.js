@@ -5,6 +5,7 @@
  * - findServerComponent: type → componentType
  * - performComponentReplacement: type → componentType, добавлено name
  * - ДОБАВЛЕНЫ методы для работы с файлами: getFiles, getFileById, addFile, deleteFile
+ * - ДОБАВЛЕНО логирование аудита во все ключевые методы
  * 
  * Положить в: controllers/beryll/services/DefectRecordService.js
  */
@@ -29,6 +30,9 @@ const {
     TICKET_TYPES,
     TICKET_STATUSES
 } = require("../../../models/index");
+
+// ============ АУДИТ ============
+const { logAudit, AUDIT_ACTIONS, AUDIT_ENTITIES } = require("../../../utils/auditLogger");
 
 const fs = require("fs");
 const path = require("path");
@@ -160,6 +164,30 @@ class DefectRecordService {
             
             await transaction.commit();
             
+            // ============ АУДИТ: Создание дефекта ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.DEFECT_CREATE,
+                    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                    entityId: defectRecord.id,
+                    description: `Создана запись о браке #${defectRecord.id} для сервера ${server.apkSerialNumber || server.hostname || 'N/A'}`,
+                    metadata: {
+                        serverId,
+                        serverSerial: server.apkSerialNumber,
+                        hostname: server.hostname,
+                        problemDescription: problemDescription?.substring(0, 100),
+                        repairPartType,
+                        defectPartSerialYadro,
+                        defectPartSerialManuf,
+                        isRepeatedDefect: !!previousDefect,
+                        priority
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования создания дефекта:", auditErr.message);
+            }
+            
             return this.getById(defectRecord.id);
             
         } catch (error) {
@@ -176,7 +204,9 @@ class DefectRecordService {
      * Начать диагностику
      */
     async startDiagnosis(id, diagnosticianId) {
-        const defect = await BeryllDefectRecord.findByPk(id);
+        const defect = await BeryllDefectRecord.findByPk(id, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
         if (!defect) throw new Error("Запись не найдена");
         
         if (defect.status !== DEFECT_RECORD_STATUSES.NEW) {
@@ -193,6 +223,25 @@ class DefectRecordService {
             `Начата диагностика`
         );
         
+        // ============ АУДИТ: Начало диагностики ============
+        try {
+            await logAudit({
+                userId: diagnosticianId,
+                action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: id,
+                description: `Начата диагностика дефекта #${id}`,
+                metadata: {
+                    serverId: defect.serverId,
+                    serverSerial: defect.server?.apkSerialNumber,
+                    newStatus: DEFECT_RECORD_STATUSES.DIAGNOSING,
+                    diagnosticianId
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования начала диагностики:", auditErr.message);
+        }
+        
         return this.getById(id);
     }
     
@@ -200,7 +249,9 @@ class DefectRecordService {
      * Завершить диагностику
      */
     async completeDiagnosis(id, userId, data) {
-        const defect = await BeryllDefectRecord.findByPk(id);
+        const defect = await BeryllDefectRecord.findByPk(id, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
         if (!defect) throw new Error("Запись не найдена");
         
         const {
@@ -224,6 +275,26 @@ class DefectRecordService {
             `Диагностика завершена. Определён тип: ${repairPartType || defect.repairPartType}`
         );
         
+        // ============ АУДИТ: Завершение диагностики ============
+        try {
+            await logAudit({
+                userId,
+                action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: id,
+                description: `Завершена диагностика дефекта #${id}. Тип: ${repairPartType || defect.repairPartType}`,
+                metadata: {
+                    serverId: defect.serverId,
+                    serverSerial: defect.server?.apkSerialNumber,
+                    repairPartType: repairPartType || defect.repairPartType,
+                    defectPartSerialYadro,
+                    defectPartSerialManuf
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования завершения диагностики:", auditErr.message);
+        }
+        
         return this.getById(id);
     }
     
@@ -235,8 +306,12 @@ class DefectRecordService {
      * Перевести в ожидание запчастей
      */
     async setWaitingParts(id, userId, notes = null) {
-        const defect = await BeryllDefectRecord.findByPk(id);
+        const defect = await BeryllDefectRecord.findByPk(id, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
         if (!defect) throw new Error("Запись не найдена");
+        
+        const oldStatus = defect.status;
         
         await defect.update({
             status: DEFECT_RECORD_STATUSES.WAITING_PARTS,
@@ -246,6 +321,25 @@ class DefectRecordService {
         await this.logHistory(id, "STATUS_CHANGED", userId, 
             `Переведено в ожидание запчастей. ${notes || ""}`
         );
+        
+        // ============ АУДИТ: Ожидание запчастей ============
+        try {
+            await logAudit({
+                userId,
+                action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: id,
+                description: `Дефект #${id} переведён в ожидание запчастей`,
+                metadata: {
+                    serverId: defect.serverId,
+                    serverSerial: defect.server?.apkSerialNumber,
+                    oldStatus,
+                    newStatus: DEFECT_RECORD_STATUSES.WAITING_PARTS
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования:", auditErr.message);
+        }
         
         return this.getById(id);
     }
@@ -257,7 +351,9 @@ class DefectRecordService {
         const transaction = await sequelize.transaction();
         
         try {
-            const defect = await BeryllDefectRecord.findByPk(id);
+            const defect = await BeryllDefectRecord.findByPk(id, {
+                include: [{ model: BeryllServer, as: "server" }]
+            });
             if (!defect) throw new Error("Запись не найдена");
             
             const component = await ComponentInventory.findByPk(inventoryId);
@@ -278,6 +374,26 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Резервирование компонента ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.COMPONENT_UPDATE,
+                    entity: AUDIT_ENTITIES.COMPONENT_INVENTORY,
+                    entityId: inventoryId,
+                    description: `Компонент ${component.serialNumber} зарезервирован для дефекта #${id}`,
+                    metadata: {
+                        defectRecordId: id,
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        componentSerial: component.serialNumber
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -294,8 +410,12 @@ class DefectRecordService {
      * Начать ремонт
      */
     async startRepair(id, userId) {
-        const defect = await BeryllDefectRecord.findByPk(id);
+        const defect = await BeryllDefectRecord.findByPk(id, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
         if (!defect) throw new Error("Запись не найдена");
+        
+        const oldStatus = defect.status;
         
         await defect.update({
             status: DEFECT_RECORD_STATUSES.REPAIRING,
@@ -303,6 +423,25 @@ class DefectRecordService {
         });
         
         await this.logHistory(id, "STATUS_CHANGED", userId, `Начат ремонт`);
+        
+        // ============ АУДИТ: Начало ремонта ============
+        try {
+            await logAudit({
+                userId,
+                action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: id,
+                description: `Начат ремонт по дефекту #${id}`,
+                metadata: {
+                    serverId: defect.serverId,
+                    serverSerial: defect.server?.apkSerialNumber,
+                    oldStatus,
+                    newStatus: DEFECT_RECORD_STATUSES.REPAIRING
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования:", auditErr.message);
+        }
         
         return this.getById(id);
     }
@@ -386,6 +525,28 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Замена компонента ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.COMPONENT_REPLACE,
+                    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                    entityId: id,
+                    description: `Выполнена замена компонента по дефекту #${id}`,
+                    metadata: {
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        repairPartType: defect.repairPartType,
+                        oldSerial: defect.defectPartSerialYadro || defect.defectPartSerialManuf,
+                        newSerial: replacementPartSerialYadro || replacementPartSerialManuf,
+                        replacementInventoryId
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -460,6 +621,29 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Отправка в Ядро ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.YADRO_TICKET_CREATE,
+                    entity: AUDIT_ENTITIES.YADRO_TICKET,
+                    entityId: ticket?.id || id,
+                    description: `Дефект #${id} отправлен в Ядро. Заявка: ${ticket?.ticketNumber || ticketNumber}`,
+                    metadata: {
+                        defectRecordId: id,
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        ticketNumber: ticket?.ticketNumber || ticketNumber,
+                        repairPartType: defect.repairPartType,
+                        componentSerial: defect.defectPartSerialYadro || defect.defectPartSerialManuf,
+                        trackingNumber
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -475,7 +659,9 @@ class DefectRecordService {
         const transaction = await sequelize.transaction();
         
         try {
-            const defect = await BeryllDefectRecord.findByPk(id);
+            const defect = await BeryllDefectRecord.findByPk(id, {
+                include: [{ model: BeryllServer, as: "server" }]
+            });
             if (!defect) throw new Error("Запись не найдена");
             
             const { resolution, replacementSerialYadro, replacementSerialManuf, condition } = data;
@@ -517,6 +703,30 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Возврат из Ядро ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.YADRO_TICKET_RECEIVE,
+                    entity: AUDIT_ENTITIES.YADRO_TICKET,
+                    entityId: id,
+                    description: `Получен возврат из Ядро по дефекту #${id}`,
+                    metadata: {
+                        defectRecordId: id,
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        ticketNumber: defect.yadroTicketNumber,
+                        resolution,
+                        replacementSerialYadro,
+                        replacementSerialManuf,
+                        condition
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -536,7 +746,9 @@ class DefectRecordService {
         const transaction = await sequelize.transaction();
         
         try {
-            const defect = await BeryllDefectRecord.findByPk(id);
+            const defect = await BeryllDefectRecord.findByPk(id, {
+                include: [{ model: BeryllServer, as: "server" }]
+            });
             if (!defect) throw new Error("Запись не найдена");
             
             let substitute;
@@ -579,6 +791,27 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Выдача подменного сервера ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                    entityId: id,
+                    description: `Выдан подменный сервер ${server?.apkSerialNumber} для дефекта #${id}`,
+                    metadata: {
+                        defectRecordId: id,
+                        originalServerId: defect.serverId,
+                        originalServerSerial: defect.server?.apkSerialNumber,
+                        substituteServerId: substitute.serverId,
+                        substituteServerSerial: server?.apkSerialNumber
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -594,12 +827,17 @@ class DefectRecordService {
         const transaction = await sequelize.transaction();
         
         try {
-            const defect = await BeryllDefectRecord.findByPk(id);
+            const defect = await BeryllDefectRecord.findByPk(id, {
+                include: [{ model: BeryllServer, as: "server" }]
+            });
             if (!defect) throw new Error("Запись не найдена");
             
             if (!defect.substituteServerId) {
                 throw new Error("Подменный сервер не был выдан");
             }
+            
+            const substituteServerId = defect.substituteServerId;
+            const substituteServerSerial = defect.substituteServerSerial;
             
             const substitute = await SubstituteServerPool.findOne({
                 where: { serverId: defect.substituteServerId }
@@ -615,6 +853,27 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Возврат подменного сервера ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.DEFECT_UPDATE,
+                    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                    entityId: id,
+                    description: `Возвращён подменный сервер ${substituteServerSerial} по дефекту #${id}`,
+                    metadata: {
+                        defectRecordId: id,
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        substituteServerId,
+                        substituteServerSerial
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -693,6 +952,30 @@ class DefectRecordService {
             );
             
             await transaction.commit();
+            
+            // ============ АУДИТ: Закрытие дефекта ============
+            try {
+                await logAudit({
+                    userId,
+                    action: AUDIT_ACTIONS.DEFECT_RESOLVE,
+                    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                    entityId: id,
+                    description: `Дефект #${id} закрыт. Резолюция: ${resolution || 'Не указана'}`,
+                    metadata: {
+                        serverId: defect.serverId,
+                        serverSerial: defect.server?.apkSerialNumber,
+                        resolution,
+                        totalDowntimeMinutes,
+                        totalDowntimeHours: Math.round(totalDowntimeMinutes / 60),
+                        repairPartType: defect.repairPartType,
+                        hadYadroTicket: !!defect.yadroTicketNumber,
+                        yadroTicketNumber: defect.yadroTicketNumber
+                    }
+                });
+            } catch (auditErr) {
+                console.error("[Audit] Ошибка логирования:", auditErr.message);
+            }
+            
             return this.getById(id);
             
         } catch (error) {
@@ -1118,6 +1401,28 @@ class DefectRecordService {
             console.error("[DefectRecordService] Ошибка записи в историю:", historyError.message);
         }
         
+        // ============ АУДИТ: Загрузка файла ============
+        try {
+            await logAudit({
+                userId: fileData.uploadedById,
+                action: AUDIT_ACTIONS.DEFECT_FILE_UPLOAD,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: defectRecordId,
+                description: `Загружен файл "${fileData.originalName}" к дефекту #${defectRecordId}`,
+                metadata: {
+                    defectRecordId,
+                    fileId: file.id,
+                    fileName: fileData.originalName,
+                    fileSize: fileData.fileSize,
+                    mimeType: fileData.mimeType,
+                    serverId: defect.serverId,
+                    serverSerial: defect.server?.apkSerialNumber
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования загрузки файла:", auditErr.message);
+        }
+        
         return file;
     }
     
@@ -1139,6 +1444,11 @@ class DefectRecordService {
         if (!file) {
             throw new Error("Файл не найден");
         }
+        
+        const defectRecordId = file.defectRecordId;
+        const fileName = file.originalName;
+        const serverId = file.defectRecord?.serverId;
+        const serverSerial = file.defectRecord?.server?.apkSerialNumber;
         
         // Удаляем файл с диска
         const fullPath = path.join(UPLOADS_DIR, file.filePath);
@@ -1174,6 +1484,26 @@ class DefectRecordService {
         
         // Удаляем запись из БД
         await file.destroy();
+        
+        // ============ АУДИТ: Удаление файла ============
+        try {
+            await logAudit({
+                userId,
+                action: AUDIT_ACTIONS.DEFECT_FILE_DELETE,
+                entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+                entityId: defectRecordId,
+                description: `Удалён файл "${fileName}" из дефекта #${defectRecordId}`,
+                metadata: {
+                    defectRecordId,
+                    fileId,
+                    fileName,
+                    serverId,
+                    serverSerial
+                }
+            });
+        } catch (auditErr) {
+            console.error("[Audit] Ошибка логирования удаления файла:", auditErr.message);
+        }
         
         return { success: true, message: "Файл удалён" };
     }

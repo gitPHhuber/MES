@@ -23,6 +23,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/api/index.ts
 - MES-Kryptonit-Client-main/src/api/labelTemplatesApi.ts
 - MES-Kryptonit-Client-main/src/api/mqttApi.ts
+- MES-Kryptonit-Client-main/src/api/passportsExportApi.ts
 - MES-Kryptonit-Client-main/src/api/product_componentApi.ts
 - MES-Kryptonit-Client-main/src/api/productionApi.ts
 - MES-Kryptonit-Client-main/src/api/projectsApi.ts
@@ -43,6 +44,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/components/beryll/BMCSyncPanel.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/DefectComments.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/MonitoringDashboard.tsx
+- MES-Kryptonit-Client-main/src/components/beryll/PassportsExportModal.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/ServerComponents.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/ServerComponentsManager.tsx
 - MES-Kryptonit-Client-main/src/components/common/Preloader.tsx
@@ -292,6 +294,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/StatsController.js
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/YadroController.js
 - MES-Kryptonit-Server-master/controllers/beryll/index.js
+- MES-Kryptonit-Server-master/controllers/beryll/passportsExportController.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/ArchiveService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/BatchService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/ChecklistService.js
@@ -299,6 +302,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/beryll/services/ComponentInventoryService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/DefectExportService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/DefectMonitoringService.js
+- MES-Kryptonit-Server-master/controllers/beryll/services/DefectRecordFileService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/DefectRecordService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/DhcpService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/FileService.js
@@ -308,6 +312,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/beryll/services/RackService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/ServerService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/StatsService.js
+- MES-Kryptonit-Server-master/controllers/beryll/services/UnifiedPassportsExportService.js
 - MES-Kryptonit-Server-master/controllers/beryll/utils/dhcpParser.js
 - MES-Kryptonit-Server-master/controllers/beryll/utils/helpers.js
 - MES-Kryptonit-Server-master/controllers/coralB_Controller.js
@@ -382,6 +387,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/routes/defectSystemRouter.js
 - MES-Kryptonit-Server-master/routes/fcRouter.js
 - MES-Kryptonit-Server-master/routes/index.js
+- MES-Kryptonit-Server-master/routes/passportsExportRoutes.js
 - MES-Kryptonit-Server-master/routes/pcRouter.js
 - MES-Kryptonit-Server-master/routes/productRouter.js
 - MES-Kryptonit-Server-master/routes/productionOutputRouter.js
@@ -400,6 +406,8 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/services/ExcelImportService.js
 - MES-Kryptonit-Server-master/services/PdfService.js
 - MES-Kryptonit-Server-master/static/defect-records/2/1769537183976_README.md
+- MES-Kryptonit-Server-master/static/defect-records/2/1769579757522_README.md
+- MES-Kryptonit-Server-master/static/defect-records/2/1769580241363_README.md
 - MES-Kryptonit-Server-master/tests/controllers/box.test.js
 - MES-Kryptonit-Server-master/tests/controllers/movement.test.js
 - MES-Kryptonit-Server-master/tests/controllers/supply.test.js
@@ -3277,6 +3285,41 @@ export const generatePassport = async (serverId: number): Promise<Blob> => {
 
 
 
+
+export interface ExportPassportsOptions {
+  serverIds?: number[];
+  batchId?: number | string | null;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  includeArchived?: boolean;
+}
+
+export const exportPassports = async (options: ExportPassportsOptions = {}): Promise<Blob> => {
+  const { data } = await $authHost.post("/api/beryll/export/passports", options, {
+    responseType: "blob"
+  });
+  return data;
+};
+
+export const exportSelectedPassports = async (serverIds: number[]): Promise<Blob> => {
+  const { data } = await $authHost.post("/api/beryll/export/passports/selected", { serverIds }, {
+    responseType: "blob"
+  });
+  return data;
+};
+
+export const exportBatchPassports = async (batchId: number | string): Promise<Blob> => {
+  const { data } = await $authHost.get(`/api/beryll/export/passports/batch/${batchId}`, {
+    responseType: "blob"
+  });
+  return data;
+};
+
+
+
+
 export default {
   
   syncWithDhcp,
@@ -3331,6 +3374,10 @@ export default {
   
   downloadPassport,
   generatePassport,
+    
+  exportPassports,
+  exportSelectedPassports,
+  exportBatchPassports,
   
   formatDuration,
   formatDateTime,
@@ -4624,6 +4671,272 @@ export const reloadTestESC = async (id: string) => {
 }
 
 
+
+================================================================================
+FILE: MES-Kryptonit-Client-main/src/api/passportsExportApi.ts
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+import { $authHost } from "./index";
+
+const BASE_URL = "api/beryll/export/passports";
+
+
+
+
+
+export interface ExportOptions {
+  serverIds?: number[];
+  batchId?: number | string | null;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  includeArchived?: boolean;
+}
+
+export interface ComponentsSummary {
+  total: number;
+  hdd: number;
+  ssd: number;
+  ram: number;
+  psu: number;
+  motherboard: number;
+  bmc: number;
+  nic: number;
+  raid: number;
+}
+
+export interface ServerPreview {
+  id: number;
+  apkSerialNumber: string;
+  serialNumber?: string;
+  status: string;
+  batchName: string | null;
+  createdAt: string;
+  componentsSummary: ComponentsSummary;
+  completeness: number;
+}
+
+export interface MissingComponent {
+  serverId: number;
+  apkSerialNumber: string;
+  missing: string[];
+}
+
+export interface ExportStats {
+  totalServers: number;
+  totalComponents: number;
+  byComponentType: Record<string, number>;
+  byBatch: Record<string, number>;
+  byStatus: Record<string, number>;
+  missingComponents: MissingComponent[];
+}
+
+export interface PreviewResponse {
+  success: boolean;
+  total: number;
+  showing: number;
+  preview: ServerPreview[];
+}
+
+export interface StatsResponse {
+  success: boolean;
+  stats: ExportStats;
+}
+
+
+
+
+
+
+
+
+
+export async function exportPassports(options: ExportOptions = {}): Promise<Blob> {
+  const response = await $authHost.post(BASE_URL, options, {
+    responseType: "blob"
+  });
+  return response.data;
+}
+
+
+
+
+export async function getExportStats(options: ExportOptions = {}): Promise<StatsResponse> {
+  const params: Record<string, string> = {};
+  
+  if (options.batchId !== undefined && options.batchId !== null) {
+    params.batchId = String(options.batchId);
+  }
+  if (options.status) params.status = options.status;
+  if (options.dateFrom) params.dateFrom = options.dateFrom;
+  if (options.dateTo) params.dateTo = options.dateTo;
+  if (options.search) params.search = options.search;
+  if (options.includeArchived) params.includeArchived = "true";
+  
+  const { data } = await $authHost.get<StatsResponse>(`${BASE_URL}/stats`, { params });
+  return data;
+}
+
+
+
+
+export async function getExportPreview(
+  options: ExportOptions = {},
+  limit = 10
+): Promise<PreviewResponse> {
+  const params: Record<string, string | number> = { limit };
+  
+  if (options.batchId !== undefined && options.batchId !== null) {
+    params.batchId = String(options.batchId);
+  }
+  if (options.status) params.status = options.status;
+  if (options.dateFrom) params.dateFrom = options.dateFrom;
+  if (options.dateTo) params.dateTo = options.dateTo;
+  if (options.search) params.search = options.search;
+  if (options.includeArchived) params.includeArchived = "true";
+  
+  const { data } = await $authHost.get<PreviewResponse>(`${BASE_URL}/preview`, { params });
+  return data;
+}
+
+
+
+
+export async function exportSinglePassport(serverId: number): Promise<Blob> {
+  const response = await $authHost.get(`${BASE_URL}/single/${serverId}`, {
+    responseType: "blob"
+  });
+  return response.data;
+}
+
+
+
+
+export async function exportSelectedPassports(serverIds: number[]): Promise<Blob> {
+  const response = await $authHost.post(
+    `${BASE_URL}/selected`,
+    { serverIds },
+    { responseType: "blob" }
+  );
+  return response.data;
+}
+
+
+
+
+export async function exportBatchPassports(batchId: number | string): Promise<Blob> {
+  const response = await $authHost.get(`${BASE_URL}/batch/${batchId}`, {
+    responseType: "blob"
+  });
+  return response.data;
+}
+
+
+
+
+
+
+
+
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+export function generateFilename(options: {
+  prefix?: string;
+  batchId?: number | string | null;
+  status?: string;
+  count?: number;
+}): string {
+  const timestamp = new Date().toISOString().split("T")[0];
+  let filename = options.prefix || "Состав_серверов";
+  
+  if (options.batchId) {
+    filename += options.batchId === "null" 
+      ? "_без_партии"
+      : `_партия_${options.batchId}`;
+  }
+  
+  if (options.status) {
+    filename += `_${options.status}`;
+  }
+  
+  if (options.count) {
+    filename += `_${options.count}шт`;
+  }
+  
+  filename += `_${timestamp}.xlsx`;
+  
+  return filename;
+}
+
+
+
+
+export async function exportAndDownload(
+  options: ExportOptions = {},
+  filenameOptions?: Parameters<typeof generateFilename>[0]
+): Promise<void> {
+  const blob = await exportPassports(options);
+  const filename = generateFilename(filenameOptions || {});
+  downloadBlob(blob, filename);
+}
+
+
+
+
+export async function exportSelectedAndDownload(serverIds: number[]): Promise<void> {
+  const blob = await exportSelectedPassports(serverIds);
+  const filename = generateFilename({
+    prefix: "Состав_серверов_выбранные",
+    count: serverIds.length
+  });
+  downloadBlob(blob, filename);
+}
+
+
+
+
+export async function exportBatchAndDownload(batchId: number | string): Promise<void> {
+  const blob = await exportBatchPassports(batchId);
+  const filename = generateFilename({ batchId });
+  downloadBlob(blob, filename);
+}
+
+export default {
+  exportPassports,
+  getExportStats,
+  getExportPreview,
+  exportSinglePassport,
+  exportSelectedPassports,
+  exportBatchPassports,
+  downloadBlob,
+  generateFilename,
+  exportAndDownload,
+  exportSelectedAndDownload,
+  exportBatchAndDownload
+};
 
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/api/product_componentApi.ts
@@ -6556,42 +6869,77 @@ export const Header: React.FC = observer(() => {
 FILE: MES-Kryptonit-Client-main/src/components/Modal/ConfirmModal.tsx
 ================================================================================
 
+import React from "react";
+
 interface ConfirmModalProps {
-  title1: string;
-  actionConfirm: () => void;
-  onClose: () => void;
+  isOpen: boolean;
+  title?: string;
+  message?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
+  confirmColor?: "red" | "green" | "blue";
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
-  title1,
-  actionConfirm,
-  onClose,
+  isOpen,
+  title = "Подтверждение",
+  message = "Вы уверены?",
+  onConfirm,
+  onCancel,
+  confirmText = "✅ ДА",
+  cancelText = "❌ Отмена",
+  confirmColor = "green"
 }) => {
-  return (
-    <div className="flex flex-col items-center justify-center text-center">
-      <h2 className="text-xl font-bold text-gray-800">Вы уверены?</h2>
-      <p className="text-gray-600 mt-2">{title1}</p>
+  if (!isOpen) return null;
 
-      <div className="flex justify-center gap-4 mt-6 w-full max-w-xs">
-        <button
-          type="button"
-          className="flex-1 bg-emerald-600 text-white py-3 rounded-lg hover:bg-emerald-700 transition font-semibold shadow-lg"
-          onClick={actionConfirm}
-        >
-          ✅ ДА
-        </button>
-        <button
-          type="button"
-          className="flex-1 bg-gray-300 text-gray-800 py-3 rounded-lg hover:bg-gray-400 transition font-semibold shadow-lg"
-          onClick={onClose}
-        >
-          ❌ Отмена
-        </button>
+  const confirmColorClasses = {
+    red: "bg-red-600 hover:bg-red-700",
+    green: "bg-emerald-600 hover:bg-emerald-700",
+    blue: "bg-blue-600 hover:bg-blue-700"
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {}
+      <div 
+        className="absolute inset-0 bg-black/50" 
+        onClick={onCancel}
+      />
+      
+      {}
+      <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
+        <div className="flex flex-col items-center justify-center text-center">
+          {title && (
+            <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+          )}
+          {message && (
+            <p className="text-gray-600 mt-2">{message}</p>
+          )}
+          <div className="flex justify-center gap-4 mt-6 w-full">
+            <button
+              type="button"
+              className={`flex-1 ${confirmColorClasses[confirmColor]} text-white py-3 rounded-lg transition font-semibold shadow-lg`}
+              onClick={onConfirm}
+            >
+              {confirmText}
+            </button>
+            <button
+              type="button"
+              className="flex-1 bg-gray-300 text-gray-800 py-3 rounded-lg hover:bg-gray-400 transition font-semibold shadow-lg"
+              onClick={onCancel}
+            >
+              {cancelText}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
+export default ConfirmModal;
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/Modal/Modal.tsx
 ================================================================================
@@ -8022,6 +8370,886 @@ export const MonitoringDashboard: React.FC<Props> = ({
 };
 
 export default MonitoringDashboard;
+
+================================================================================
+FILE: MES-Kryptonit-Client-main/src/components/beryll/PassportsExportModal.tsx
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import React, { useState, useEffect, useCallback } from "react";
+import { Dialog, Transition, Listbox } from "@headlessui/react";
+import { 
+  Download, 
+  FileSpreadsheet, 
+  X, 
+  ChevronDown, 
+  Check,
+  Loader2,
+  AlertTriangle,
+  HardDrive,
+  MemoryStick,
+  Cpu,
+  Zap,
+  Server,
+  Network,
+  Calendar,
+  Search,
+  Filter,
+  Eye,
+  BarChart3,
+  CheckCircle,
+  XCircle,
+  Package,
+  RefreshCw
+} from "lucide-react";
+import clsx from "clsx";
+import { toast } from "react-hot-toast";
+import passportsExportApi, {
+  ExportOptions,
+  ExportStats,
+  ServerPreview,
+  PreviewResponse,
+  StatsResponse
+} from "../../api/passportsExportApi";
+
+
+
+
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  batches: Array<{ id: number; name: string }>;
+  initialBatchId?: number | null;
+  selectedServerIds?: number[];
+}
+
+interface FilterState {
+  batchId: number | string | null;
+  status: string;
+  dateFrom: string;
+  dateTo: string;
+  search: string;
+  includeArchived: boolean;
+}
+
+
+
+
+
+const SERVER_STATUSES = [
+  { value: "", label: "Все статусы" },
+  { value: "NEW", label: "Новый" },
+  { value: "IN_PROGRESS", label: "В работе" },
+  { value: "TESTING", label: "Тестирование" },
+  { value: "READY", label: "Готов" },
+  { value: "SHIPPED", label: "Отгружен" },
+  { value: "RETURNED", label: "Возврат" }
+];
+
+const COMPONENT_ICONS: Record<string, React.FC<{ className?: string; size?: number }>> = {
+  HDD: HardDrive,
+  SSD: HardDrive,
+  NVME: HardDrive,
+  RAM: MemoryStick,
+  CPU: Cpu,
+  PSU: Zap,
+  MOTHERBOARD: Server,
+  NIC: Network,
+  BMC: Server,
+  RAID: HardDrive
+};
+
+
+
+
+
+export const PassportsExportModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  batches,
+  initialBatchId = null,
+  selectedServerIds = []
+}) => {
+  
+  const [filters, setFilters] = useState<FilterState>({
+    batchId: initialBatchId,
+    status: "",
+    dateFrom: "",
+    dateTo: "",
+    search: "",
+    includeArchived: false
+  });
+  
+  
+  const [stats, setStats] = useState<ExportStats | null>(null);
+  const [preview, setPreview] = useState<ServerPreview[]>([]);
+  const [totalServers, setTotalServers] = useState(0);
+  
+  
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  
+  
+  const [activeTab, setActiveTab] = useState<"preview" | "stats">("preview");
+
+  
+  
+  
+
+  const loadStats = useCallback(async () => {
+    setLoadingStats(true);
+    try {
+      const response = await passportsExportApi.getExportStats(filters);
+      setStats(response.stats);
+    } catch (error) {
+      console.error("Ошибка загрузки статистики:", error);
+      toast.error("Не удалось загрузить статистику");
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [filters]);
+
+  const loadPreview = useCallback(async () => {
+    setLoadingPreview(true);
+    try {
+      const response = await passportsExportApi.getExportPreview(filters, 20);
+      setPreview(response.preview);
+      setTotalServers(response.total);
+    } catch (error) {
+      console.error("Ошибка загрузки предпросмотра:", error);
+      toast.error("Не удалось загрузить предпросмотр");
+    } finally {
+      setLoadingPreview(false);
+    }
+  }, [filters]);
+
+  
+  useEffect(() => {
+    if (isOpen) {
+      loadPreview();
+      loadStats();
+    }
+  }, [isOpen, filters, loadPreview, loadStats]);
+
+  
+  
+  
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await passportsExportApi.exportAndDownload(filters, {
+        batchId: filters.batchId,
+        status: filters.status || undefined
+      });
+      toast.success("Экспорт успешно выполнен!");
+      onClose();
+    } catch (error) {
+      console.error("Ошибка экспорта:", error);
+      toast.error("Не удалось выполнить экспорт");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSelected = async () => {
+    if (selectedServerIds.length === 0) {
+      toast.error("Не выбраны серверы для экспорта");
+      return;
+    }
+    
+    setExporting(true);
+    try {
+      await passportsExportApi.exportSelectedAndDownload(selectedServerIds);
+      toast.success(`Экспортировано ${selectedServerIds.length} серверов`);
+      onClose();
+    } catch (error) {
+      console.error("Ошибка экспорта:", error);
+      toast.error("Не удалось выполнить экспорт");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  
+  
+  
+
+  const updateFilter = <K extends keyof FilterState>(
+    key: K,
+    value: FilterState[K]
+  ) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      batchId: null,
+      status: "",
+      dateFrom: "",
+      dateTo: "",
+      search: "",
+      includeArchived: false
+    });
+  };
+
+  
+  
+  
+
+  const batchOptions = [
+    { id: null, name: "Все партии" },
+    { id: "null", name: "Без партии" },
+    ...batches
+  ];
+
+  const selectedBatch = batchOptions.find(b => b.id === filters.batchId) || batchOptions[0];
+  const selectedStatus = SERVER_STATUSES.find(s => s.value === filters.status) || SERVER_STATUSES[0];
+
+  return (
+    <Transition appear show={isOpen} as={React.Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child
+          as={React.Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black/50" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <Transition.Child
+              as={React.Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-5xl transform rounded-2xl bg-white shadow-2xl transition-all">
+                {}
+                <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                      <FileSpreadsheet size={20} />
+                    </div>
+                    <div>
+                      <Dialog.Title className="text-lg font-semibold text-slate-900">
+                        Экспорт паспортов серверов
+                      </Dialog.Title>
+                      <p className="text-sm text-slate-500">
+                        Объединение данных в таблицу "Состав серверов"
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {}
+                <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Filter size={16} className="text-slate-500" />
+                    <span className="text-sm font-medium text-slate-700">Фильтры</span>
+                    <button
+                      onClick={resetFilters}
+                      className="ml-auto flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                    >
+                      <RefreshCw size={12} />
+                      Сбросить
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {}
+                    <Listbox 
+                      value={filters.batchId} 
+                      onChange={(v) => updateFilter("batchId", v)}
+                    >
+                      <div className="relative">
+                        <Listbox.Label className="block text-xs font-medium text-slate-600 mb-1">
+                          Партия
+                        </Listbox.Label>
+                        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <span className="block truncate">{selectedBatch.name}</span>
+                          <span className="absolute inset-y-0 right-0 flex items-center pr-2">
+                            <ChevronDown size={16} className="text-slate-400" />
+                          </span>
+                        </Listbox.Button>
+                        <Transition
+                          as={React.Fragment}
+                          leave="transition ease-in duration-100"
+                          leaveFrom="opacity-100"
+                          leaveTo="opacity-0"
+                        >
+                          <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none text-sm">
+                            {batchOptions.map((batch) => (
+                              <Listbox.Option
+                                key={String(batch.id)}
+                                value={batch.id}
+                                className={({ active }) =>
+                                  clsx(
+                                    "relative cursor-pointer select-none py-2 pl-10 pr-4",
+                                    active ? "bg-emerald-50 text-emerald-900" : "text-slate-900"
+                                  )
+                                }
+                              >
+                                {({ selected }) => (
+                                  <>
+                                    <span className={clsx("block truncate", selected && "font-medium")}>
+                                      {batch.name}
+                                    </span>
+                                    {selected && (
+                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-emerald-600">
+                                        <Check size={16} />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </Listbox.Option>
+                            ))}
+                          </Listbox.Options>
+                        </Transition>
+                      </div>
+                    </Listbox>
+
+                    {}
+                    <Listbox 
+                      value={filters.status} 
+                      onChange={(v) => updateFilter("status", v)}
+                    >
+                      <div className="relative">
+                        <Listbox.Label className="block text-xs font-medium text-slate-600 mb-1">
+                          Статус
+                        </Listbox.Label>
+                        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                          <span className="block truncate">{selectedStatus.label}</span>
+                          <span className="absolute inset-y-0 right-0 flex items-center pr-2">
+                            <ChevronDown size={16} className="text-slate-400" />
+                          </span>
+                        </Listbox.Button>
+                        <Transition
+                          as={React.Fragment}
+                          leave="transition ease-in duration-100"
+                          leaveFrom="opacity-100"
+                          leaveTo="opacity-0"
+                        >
+                          <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none text-sm">
+                            {SERVER_STATUSES.map((status) => (
+                              <Listbox.Option
+                                key={status.value}
+                                value={status.value}
+                                className={({ active }) =>
+                                  clsx(
+                                    "relative cursor-pointer select-none py-2 pl-10 pr-4",
+                                    active ? "bg-emerald-50 text-emerald-900" : "text-slate-900"
+                                  )
+                                }
+                              >
+                                {({ selected }) => (
+                                  <>
+                                    <span className={clsx("block truncate", selected && "font-medium")}>
+                                      {status.label}
+                                    </span>
+                                    {selected && (
+                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-emerald-600">
+                                        <Check size={16} />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </Listbox.Option>
+                            ))}
+                          </Listbox.Options>
+                        </Transition>
+                      </div>
+                    </Listbox>
+
+                    {}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Дата от
+                      </label>
+                      <div className="relative">
+                        <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="date"
+                          value={filters.dateFrom}
+                          onChange={(e) => updateFilter("dateFrom", e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Дата до
+                      </label>
+                      <div className="relative">
+                        <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="date"
+                          value={filters.dateTo}
+                          onChange={(e) => updateFilter("dateTo", e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {}
+                  <div className="mt-3 flex items-center gap-4">
+                    <div className="flex-1 relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Поиск по серийному номеру..."
+                        value={filters.search}
+                        onChange={(e) => updateFilter("search", e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.includeArchived}
+                        onChange={(e) => updateFilter("includeArchived", e.target.checked)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-600">Включая архивные</span>
+                    </label>
+                  </div>
+                </div>
+
+                {}
+                <div className="flex border-b border-slate-200">
+                  <button
+                    onClick={() => setActiveTab("preview")}
+                    className={clsx(
+                      "flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors",
+                      activeTab === "preview"
+                        ? "border-emerald-500 text-emerald-600"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    )}
+                  >
+                    <Eye size={16} />
+                    Предпросмотр
+                    {totalServers > 0 && (
+                      <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                        {totalServers}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("stats")}
+                    className={clsx(
+                      "flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors",
+                      activeTab === "stats"
+                        ? "border-emerald-500 text-emerald-600"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    )}
+                  >
+                    <BarChart3 size={16} />
+                    Статистика
+                  </button>
+                </div>
+
+                {}
+                <div className="max-h-96 overflow-y-auto p-6">
+                  {activeTab === "preview" ? (
+                    <PreviewTab 
+                      preview={preview} 
+                      loading={loadingPreview}
+                      total={totalServers}
+                    />
+                  ) : (
+                    <StatsTab 
+                      stats={stats} 
+                      loading={loadingStats} 
+                    />
+                  )}
+                </div>
+
+                {}
+                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4">
+                  <div className="text-sm text-slate-500">
+                    {totalServers > 0 ? (
+                      <>
+                        Найдено <span className="font-medium text-slate-700">{totalServers}</span> серверов
+                        {stats && (
+                          <>, <span className="font-medium text-slate-700">{stats.totalComponents}</span> компонентов</>
+                        )}
+                      </>
+                    ) : (
+                      "Нет данных для экспорта"
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={onClose}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Отмена
+                    </button>
+                    
+                    {selectedServerIds.length > 0 && (
+                      <button
+                        onClick={handleExportSelected}
+                        disabled={exporting}
+                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {exporting ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Download size={16} />
+                        )}
+                        Экспорт выбранных ({selectedServerIds.length})
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={handleExport}
+                      disabled={exporting || totalServers === 0}
+                      className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {exporting ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <FileSpreadsheet size={16} />
+                      )}
+                      Экспорт в Excel
+                    </button>
+                  </div>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  );
+};
+
+
+
+
+
+const PreviewTab: React.FC<{
+  preview: ServerPreview[];
+  loading: boolean;
+  total: number;
+}> = ({ preview, loading, total }) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="animate-spin text-emerald-500" />
+        <span className="ml-2 text-slate-500">Загрузка...</span>
+      </div>
+    );
+  }
+
+  if (preview.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+        <Package size={48} className="text-slate-300 mb-3" />
+        <p>Нет данных для отображения</p>
+        <p className="text-sm">Измените параметры фильтрации</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {preview.length < total && (
+        <p className="text-xs text-slate-500 mb-3">
+          Показаны первые {preview.length} из {total} серверов
+        </p>
+      )}
+      
+      {preview.map((server) => (
+        <div
+          key={server.id}
+          className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
+        >
+          {}
+          <div className="min-w-40">
+            <p className="font-mono font-medium text-slate-900">{server.apkSerialNumber}</p>
+            <p className="text-xs text-slate-500">
+              {server.batchName || "Без партии"}
+            </p>
+          </div>
+
+          {}
+          <div className="min-w-24">
+            <span className={clsx(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+              server.status === "READY" && "bg-green-100 text-green-700",
+              server.status === "IN_PROGRESS" && "bg-blue-100 text-blue-700",
+              server.status === "NEW" && "bg-slate-100 text-slate-700",
+              server.status === "TESTING" && "bg-amber-100 text-amber-700",
+              server.status === "SHIPPED" && "bg-purple-100 text-purple-700"
+            )}>
+              {server.status}
+            </span>
+          </div>
+
+          {}
+          <div className="flex-1 flex items-center gap-3">
+            <ComponentBadge 
+              icon={HardDrive} 
+              label="HDD" 
+              count={server.componentsSummary.hdd} 
+              expected={12} 
+            />
+            <ComponentBadge 
+              icon={HardDrive} 
+              label="SSD" 
+              count={server.componentsSummary.ssd} 
+              expected={4} 
+            />
+            <ComponentBadge 
+              icon={MemoryStick} 
+              label="RAM" 
+              count={server.componentsSummary.ram} 
+              expected={12} 
+            />
+            <ComponentBadge 
+              icon={Zap} 
+              label="PSU" 
+              count={server.componentsSummary.psu} 
+              expected={2} 
+            />
+          </div>
+
+          {}
+          <div className="min-w-20 text-right">
+            <div className={clsx(
+              "text-lg font-semibold",
+              server.completeness >= 90 && "text-green-600",
+              server.completeness >= 50 && server.completeness < 90 && "text-amber-600",
+              server.completeness < 50 && "text-red-600"
+            )}>
+              {server.completeness}%
+            </div>
+            <p className="text-xs text-slate-500">полнота</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+
+
+
+
+const ComponentBadge: React.FC<{
+  icon: React.FC<{ className?: string; size?: number }>;
+  label: string;
+  count: number;
+  expected: number;
+}> = ({ icon: Icon, label, count, expected }) => {
+  const isComplete = count >= expected;
+  
+  return (
+    <div className={clsx(
+      "flex items-center gap-1.5 rounded-full px-2 py-1 text-xs",
+      isComplete ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+    )}>
+      <Icon size={12} />
+      <span>{label}</span>
+      <span className="font-medium">{count}/{expected}</span>
+      {isComplete ? (
+        <CheckCircle size={12} className="text-green-500" />
+      ) : (
+        <AlertTriangle size={12} className="text-amber-500" />
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+const StatsTab: React.FC<{
+  stats: ExportStats | null;
+  loading: boolean;
+}> = ({ stats, loading }) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="animate-spin text-emerald-500" />
+        <span className="ml-2 text-slate-500">Загрузка статистики...</span>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+        <BarChart3 size={48} className="text-slate-300 mb-3" />
+        <p>Нет данных статистики</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {}
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard 
+          label="Всего серверов" 
+          value={stats.totalServers} 
+          icon={Server}
+          color="emerald" 
+        />
+        <StatCard 
+          label="Всего компонентов" 
+          value={stats.totalComponents} 
+          icon={Package}
+          color="blue" 
+        />
+        <StatCard 
+          label="С неполной комплектацией" 
+          value={stats.missingComponents.length} 
+          icon={AlertTriangle}
+          color={stats.missingComponents.length > 0 ? "amber" : "green"} 
+        />
+      </div>
+
+      {}
+      <div>
+        <h4 className="text-sm font-medium text-slate-700 mb-3">По типам компонентов</h4>
+        <div className="grid grid-cols-4 gap-2">
+          {Object.entries(stats.byComponentType).map(([type, count]) => {
+            const Icon = COMPONENT_ICONS[type] || Server;
+            return (
+              <div 
+                key={type}
+                className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"
+              >
+                <Icon size={16} className="text-slate-500" />
+                <span className="text-sm text-slate-600">{type}</span>
+                <span className="ml-auto font-semibold text-slate-900">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {}
+      {Object.keys(stats.byBatch).length > 1 && (
+        <div>
+          <h4 className="text-sm font-medium text-slate-700 mb-3">По партиям</h4>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(stats.byBatch).map(([batch, count]) => (
+              <span 
+                key={batch}
+                className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
+              >
+                {batch}: <span className="ml-1 font-semibold">{count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {}
+      {stats.missingComponents.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-amber-700 mb-3 flex items-center gap-2">
+            <AlertTriangle size={16} />
+            Серверы с неполной комплектацией ({stats.missingComponents.length})
+          </h4>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {stats.missingComponents.slice(0, 10).map((item) => (
+              <div 
+                key={item.serverId}
+                className="flex items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm"
+              >
+                <span className="font-mono font-medium text-amber-900">
+                  {item.apkSerialNumber}
+                </span>
+                <span className="text-amber-700">
+                  Отсутствуют: {item.missing.join(", ")}
+                </span>
+              </div>
+            ))}
+            {stats.missingComponents.length > 10 && (
+              <p className="text-xs text-slate-500">
+                ...и ещё {stats.missingComponents.length - 10}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+const StatCard: React.FC<{
+  label: string;
+  value: number;
+  icon: React.FC<{ className?: string; size?: number }>;
+  color: "emerald" | "blue" | "amber" | "green";
+}> = ({ label, value, icon: Icon, color }) => {
+  const colorClasses = {
+    emerald: "bg-emerald-50 text-emerald-600",
+    blue: "bg-blue-50 text-blue-600",
+    amber: "bg-amber-50 text-amber-600",
+    green: "bg-green-50 text-green-600"
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-3">
+        <div className={clsx("rounded-lg p-2", colorClasses[color])}>
+          <Icon size={20} />
+        </div>
+        <div>
+          <p className="text-2xl font-bold text-slate-900">{value}</p>
+          <p className="text-sm text-slate-500">{label}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PassportsExportModal;
 
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/beryll/ServerComponents.tsx
@@ -14389,20 +15617,122 @@ FILE: MES-Kryptonit-Client-main/src/pages/Admin/Audit/AuditLogPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { fetchAuditLogs } from "api/auditApi";
 import { Preloader } from "src/components/common/Preloader";
-import { History, Search } from "lucide-react";
+import { 
+  History, Search, LogIn, Building2, Shield, Server, 
+  AlertTriangle, Warehouse, Cpu, Factory, MoreHorizontal,
+  Download, RefreshCw
+} from "lucide-react";
 import { AuditLogModel } from "types/AuditLogModel";
 import { fetchUsers } from "src/api/fcApi";
 import { userGetModel } from "src/types/UserModel";
 
-type AuditTab = "ALL" | "SESSIONS" | "STRUCTURE" | "ACCESS" | "OTHER";
 
-const TABS: { id: AuditTab; label: string }[] = [
-  { id: "ALL", label: "Все события" },
-  { id: "SESSIONS", label: "Вход / выход" },
-  { id: "STRUCTURE", label: "Структура" },
-  { id: "ACCESS", label: "Роли и права" },
-  { id: "OTHER", label: "Прочее" },
+type AuditTab = 
+  | "ALL" 
+  | "SESSIONS" 
+  | "STRUCTURE" 
+  | "ACCESS" 
+  | "SERVERS" 
+  | "DEFECTS" 
+  | "WAREHOUSE" 
+  | "COMPONENTS"
+  | "PRODUCTION"
+  | "OTHER";
+
+
+const TABS: { id: AuditTab; label: string; icon: React.ElementType; description: string }[] = [
+  { id: "ALL", label: "Все события", icon: History, description: "Все записи журнала" },
+  { id: "SESSIONS", label: "Сессии", icon: LogIn, description: "Вход и выход пользователей" },
+  { id: "SERVERS", label: "Серверы", icon: Server, description: "Beryll: серверы, партии, стойки, кластеры" },
+  { id: "DEFECTS", label: "Брак", icon: AlertTriangle, description: "Дефекты серверов и плат" },
+  { id: "WAREHOUSE", label: "Склад", icon: Warehouse, description: "Складские операции" },
+  { id: "COMPONENTS", label: "Компоненты", icon: Cpu, description: "Компоненты серверов" },
+  { id: "PRODUCTION", label: "Производство", icon: Factory, description: "Производственные операции" },
+  { id: "STRUCTURE", label: "Структура", icon: Building2, description: "Участки и бригады" },
+  { id: "ACCESS", label: "Права", icon: Shield, description: "Роли и разрешения" },
+  { id: "OTHER", label: "Прочее", icon: MoreHorizontal, description: "Остальные события" },
 ];
+
+
+const ENTITY_TAB_MAP: Record<string, AuditTab> = {
+  
+  SESSION: "SESSIONS",
+  
+  
+  Section: "STRUCTURE",
+  Team: "STRUCTURE",
+  
+  
+  Role: "ACCESS",
+  Ability: "ACCESS",
+  RoleAbility: "ACCESS",
+  
+  
+  BeryllServer: "SERVERS",
+  BeryllBatch: "SERVERS",
+  BeryllRack: "SERVERS",
+  BeryllCluster: "SERVERS",
+  BeryllShipment: "SERVERS",
+  Server: "SERVERS",
+  Batch: "SERVERS",
+  Rack: "SERVERS",
+  Cluster: "SERVERS",
+  
+  
+  BeryllDefectRecord: "DEFECTS",
+  DefectRecord: "DEFECTS",
+  BoardDefect: "DEFECTS",
+  RepairAction: "DEFECTS",
+  RepairHistory: "DEFECTS",
+  DefectCategory: "DEFECTS",
+  YadroTicketLog: "DEFECTS",
+  Defect: "DEFECTS",
+  
+  
+  WarehouseMovement: "WAREHOUSE",
+  InventoryBox: "WAREHOUSE",
+  Supply: "WAREHOUSE",
+  WarehouseDocument: "WAREHOUSE",
+  Warehouse: "WAREHOUSE",
+  Box: "WAREHOUSE",
+  
+  
+  ComponentInventory: "COMPONENTS",
+  ComponentHistory: "COMPONENTS",
+  ComponentCatalog: "COMPONENTS",
+  ServerComponent: "COMPONENTS",
+  Component: "COMPONENTS",
+  
+  
+  ProductionEntry: "PRODUCTION",
+  ProductionOutput: "PRODUCTION",
+  AssembledProduct: "PRODUCTION",
+  Recipe: "PRODUCTION",
+  RecipeStep: "PRODUCTION",
+  Production: "PRODUCTION",
+};
+
+
+const ACTION_COLORS: Record<string, string> = {
+  CREATE: "bg-green-100 text-green-800",
+  CREATED: "bg-green-100 text-green-800",
+  UPDATE: "bg-blue-100 text-blue-800",
+  UPDATED: "bg-blue-100 text-blue-800",
+  DELETE: "bg-red-100 text-red-800",
+  DELETED: "bg-red-100 text-red-800",
+  SESSION_START: "bg-emerald-100 text-emerald-800",
+  SESSION_END: "bg-amber-100 text-amber-800",
+  SESSION_DELETE: "bg-red-100 text-red-800",
+  SESSION_AUTO_OFF: "bg-gray-100 text-gray-800",
+  SESSION_FORCE_OFF: "bg-orange-100 text-orange-800",
+  WAREHOUSE_MOVE: "bg-purple-100 text-purple-800",
+  WAREHOUSE_MOVE_BATCH: "bg-purple-100 text-purple-800",
+  DEFECT_RESOLVED: "bg-green-100 text-green-800",
+  DEFECT_CREATED: "bg-red-100 text-red-800",
+  COMPONENT_SYNC: "bg-cyan-100 text-cyan-800",
+  EXPORT: "bg-indigo-100 text-indigo-800",
+};
+
 
 export const AuditLogPage: React.FC = () => {
   const [logs, setLogs] = useState<AuditLogModel[]>([]);
@@ -14413,6 +15743,7 @@ export const AuditLogPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [actionFilter, setActionFilter] = useState<string>("");
+  const [entityFilter, setEntityFilter] = useState<string>("");
 
   const [searchText, setSearchText] = useState<string>("");
   const [activeTab, setActiveTab] = useState<AuditTab>("ALL");
@@ -14423,6 +15754,7 @@ export const AuditLogPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  
   useEffect(() => {
     const loadUsers = async () => {
       try {
@@ -14432,10 +15764,10 @@ export const AuditLogPage: React.FC = () => {
         console.error("Не удалось загрузить пользователей для фильтра журнала", e);
       }
     };
-
     loadUsers();
   }, []);
 
+  
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -14450,6 +15782,7 @@ export const AuditLogPage: React.FC = () => {
           page,
           limit,
           action: actionFilter || undefined,
+          entity: entityFilter || undefined,
           dateFrom: dateFrom || undefined,
           dateTo: dateTo || undefined,
           userId: userIdParam,
@@ -14466,8 +15799,9 @@ export const AuditLogPage: React.FC = () => {
     };
 
     load();
-  }, [page, limit, actionFilter, dateFrom, dateTo, selectedUserId]);
+  }, [page, limit, actionFilter, entityFilter, dateFrom, dateTo, selectedUserId]);
 
+  
   const actions = useMemo(() => {
     const set = new Set<string>();
     logs.forEach((log) => {
@@ -14476,224 +15810,313 @@ export const AuditLogPage: React.FC = () => {
     return Array.from(set).sort();
   }, [logs]);
 
+  
+  const entities = useMemo(() => {
+    const set = new Set<string>();
+    logs.forEach((log) => {
+      if (log.entity) set.add(log.entity);
+    });
+    return Array.from(set).sort();
+  }, [logs]);
+
+  
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(totalCount / limit)),
     [totalCount, limit]
   );
 
+  
+  const getLogTab = (log: AuditLogModel): AuditTab => {
+    if (log.entity && ENTITY_TAB_MAP[log.entity]) {
+      return ENTITY_TAB_MAP[log.entity];
+    }
+    
+    if (log.action?.startsWith("SESSION_")) return "SESSIONS";
+    if (log.action?.startsWith("WAREHOUSE_")) return "WAREHOUSE";
+    if (log.action?.startsWith("DEFECT_")) return "DEFECTS";
+    if (log.action?.startsWith("COMPONENT_")) return "COMPONENTS";
+    if (log.action?.startsWith("SERVER_") || log.action?.startsWith("BERYLL_")) return "SERVERS";
+    if (log.action?.startsWith("PRODUCTION_")) return "PRODUCTION";
+    return "OTHER";
+  };
+
+  
   const filteredLogs = useMemo(() => {
     const query = searchText.toLowerCase();
     let data = logs;
 
-    if (activeTab === "SESSIONS") {
-      data = data.filter((log) => log.entity === "SESSION");
-    } else if (activeTab === "STRUCTURE") {
-      data = data.filter(
-        (log) => log.entity === "Section" || log.entity === "Team"
-      );
-    } else if (activeTab === "ACCESS") {
-      data = data.filter(
-        (log) =>
-          log.entity === "Role" ||
-          log.entity === "Ability" ||
-          log.entity === "RoleAbility"
-      );
-    } else if (activeTab === "OTHER") {
-      data = data.filter(
-        (log) =>
-          log.entity !== "SESSION" &&
-          log.entity !== "Section" &&
-          log.entity !== "Team" &&
-          log.entity !== "Role" &&
-          log.entity !== "Ability" &&
-          log.entity !== "RoleAbility"
-      );
+    
+    if (activeTab !== "ALL") {
+      data = data.filter((log) => getLogTab(log) === activeTab);
     }
 
-    if (!query) {
-      return data;
+    
+    if (query) {
+      data = data.filter((log) => {
+        const description = (log.description || "").toLowerCase();
+        const action = (log.action || "").toLowerCase();
+        const entity = (log.entity || "").toLowerCase();
+        const user = `${log.User?.name || ""} ${log.User?.surname || ""} ${log.User?.login || ""}`
+          .trim()
+          .toLowerCase();
+
+        return (
+          description.includes(query) ||
+          action.includes(query) ||
+          entity.includes(query) ||
+          user.includes(query)
+        );
+      });
     }
 
-    return data.filter((log) => {
-      const description = (log.description || "").toLowerCase();
-      const action = (log.action || "").toLowerCase();
-      const user = `${log.User?.name || ""} ${log.User?.surname || ""} ${
-        log.User?.login || ""
-      }`
-        .trim()
-        .toLowerCase();
-
-      return (
-        description.includes(query) ||
-        action.includes(query) ||
-        user.includes(query)
-      );
-    });
+    return data;
   }, [logs, searchText, activeTab]);
 
+  
+  const tabStats = useMemo(() => {
+    const stats: Record<AuditTab, number> = {
+      ALL: logs.length,
+      SESSIONS: 0,
+      STRUCTURE: 0,
+      ACCESS: 0,
+      SERVERS: 0,
+      DEFECTS: 0,
+      WAREHOUSE: 0,
+      COMPONENTS: 0,
+      PRODUCTION: 0,
+      OTHER: 0,
+    };
+
+    logs.forEach((log) => {
+      const tab = getLogTab(log);
+      stats[tab]++;
+    });
+
+    return stats;
+  }, [logs]);
+
+  
+  const getActionBadgeClass = (action: string): string => {
+    if (ACTION_COLORS[action]) return ACTION_COLORS[action];
+    if (action.includes("CREATE") || action.includes("ADD")) return ACTION_COLORS.CREATE;
+    if (action.includes("UPDATE") || action.includes("EDIT")) return ACTION_COLORS.UPDATE;
+    if (action.includes("DELETE") || action.includes("REMOVE")) return ACTION_COLORS.DELETE;
+    return "bg-gray-100 text-gray-700";
+  };
+
+  
+  const handleExport = () => {
+    const headers = ["Время", "Пользователь", "Действие", "Сущность", "Описание"];
+    const rows = filteredLogs.map((log) => [
+      new Date(log.createdAt).toLocaleString("ru-RU"),
+      log.User ? `${log.User.name} ${log.User.surname}` : "Система",
+      log.action || "",
+      log.entity || "",
+      log.description || "",
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit_log_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="px-4 py-6">
-      <div className="flex items-center gap-3 mb-2">
-        <History className="w-6 h-6 text-blue-600" />
-        <h1 className="text-2xl font-semibold text-gray-800">
-          Журнал действий
-        </h1>
+    <div className="px-4 py-6 max-w-[1800px] mx-auto">
+      {}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+            <History className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Журнал действий</h1>
+            <p className="text-sm text-gray-500">Аудит изменений в системе MES Kryptonit</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Обновить"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Экспорт
+          </button>
+        </div>
       </div>
-      <p className="text-sm text-gray-500 mb-4">Аудит изменений в системе</p>
 
       {}
       <div className="mb-4 flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => {
-              setActiveTab(tab.id);
-              setPage(1);
-            }}
-            className={[
-              "px-3 py-1 rounded-full text-xs font-semibold border transition-colors",
-              activeTab === tab.id
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50",
-            ].join(" ")}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const count = tabStats[tab.id];
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.id);
+                setPage(1);
+              }}
+              title={tab.description}
+              className={[
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all",
+                isActive
+                  ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300",
+              ].join(" ")}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+              {count > 0 && (
+                <span
+                  className={[
+                    "px-1.5 py-0.5 rounded-full text-xs",
+                    isActive ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-600",
+                  ].join(" ")}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {}
-      <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-6 gap-4 mb-4">
-        {}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-600">
-            Дата с
-          </label>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setPage(1);
-            }}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {}
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Поиск</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Поиск по описанию, действию, пользователю..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
 
-        {}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-600">
-            Дата по
-          </label>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setPage(1);
-            }}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </div>
-
-        {}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-600">
-            Действие
-          </label>
-          <select
-            value={actionFilter}
-            onChange={(e) => {
-              setActionFilter(e.target.value);
-              setPage(1);
-            }}
-            className="border rounded px-2 py-1 text-sm bg-white"
-          >
-            <option value="">Все</option>
-            {actions.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-600">
-            Пользователь
-          </label>
-          <select
-            value={selectedUserId}
-            onChange={(e) => {
-              setSelectedUserId(e.target.value);
-              setPage(1);
-            }}
-            className="border rounded px-2 py-1 text-sm bg-white"
-          >
-            <option value="">Все</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} {u.surname} ({u.login})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {}
-        <div className="flex flex-col gap-1 md:col-span-2 lg:col-span-2">
-          <label className="text-xs font-semibold text-gray-600">
-            Поиск по описанию...
-          </label>
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-2 top-2.5 pointer-events-none" />
+          {}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Дата с</label>
             <input
-              type="text"
-              value={searchText}
+              type="date"
+              value={dateFrom}
               onChange={(e) => {
-                setSearchText(e.target.value);
+                setDateFrom(e.target.value);
                 setPage(1);
               }}
-              className="border rounded pl-8 pr-2 py-1 text-sm w-full"
-              placeholder="Действие, пользователь или текст..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Дата по</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Пользователь</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => {
+                setSelectedUserId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Все</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} {u.surname}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Действие</label>
+            <select
+              value={actionFilter}
+              onChange={(e) => {
+                setActionFilter(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Все</option>
+              {actions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
       {}
-      {loading && (
-        <div className="flex justify-center py-8">
-          <Preloader />
-        </div>
-      )}
+      {loading && <Preloader />}
 
-      {error && !loading && (
-        <div className="mb-4 p-3 rounded bg-red-50 text-sm text-red-700 border border-red-100">
-          Не удалось загрузить журнал.
-          <br />
-          <span className="font-mono text-xs">{error}</span>
+      {}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <strong>Ошибка:</strong> {error}
         </div>
       )}
 
       {}
       {!loading && (
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-40">
                     Время
                   </th>
-                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
-                    Кто
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-48">
+                    Пользователь
                   </th>
-                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-40">
                     Действие
                   </th>
-                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-36">
+                    Сущность
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">
                     Описание
                   </th>
                 </tr>
@@ -14701,11 +16124,9 @@ export const AuditLogPage: React.FC = () => {
               <tbody>
                 {filteredLogs.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-6 text-center text-sm text-gray-400"
-                    >
-                      Нет записей по выбранным фильтрам
+                    <td colSpan={5} className="px-4 py-12 text-center text-gray-400">
+                      <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p>Нет записей по выбранным фильтрам</p>
                     </td>
                   </tr>
                 )}
@@ -14713,39 +16134,76 @@ export const AuditLogPage: React.FC = () => {
                 {filteredLogs.map((log) => (
                   <tr
                     key={log.id}
-                    className="border-b last:border-b-0 hover:bg-gray-50"
+                    className="border-b last:border-b-0 hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-2 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString("ru-RU", {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric",
                         hour: "2-digit",
                         minute: "2-digit",
-                        second: "2-digit",
                       })}
                     </td>
 
-                    <td className="px-4 py-2 text-sm text-gray-700">
-                      {log.User
-                        ? `${log.User.name} ${log.User.surname} (${log.User.login})`
-                        : "Система"}
-                    </td>
-
-                    <td className="px-4 py-2 text-sm text-gray-700">
-                      {log.action}
-                    </td>
-
-                    <td className="px-4 py-2 text-sm text-gray-600">
-                      {log.description || (
-                        <span className="text-gray-400 italic">—</span>
+                    <td className="px-4 py-3 text-sm">
+                      {log.User ? (
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {log.User.name} {log.User.surname}
+                          </div>
+                          <div className="text-xs text-gray-400">{log.User.login}</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">Система</span>
                       )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-xs font-medium ${getActionBadgeClass(
+                          log.action || ""
+                        )}`}
+                      >
+                        {log.action}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {log.entity && (
+                        <span className="inline-block px-2 py-0.5 bg-gray-100 rounded text-xs">
+                          {log.entity}
+                          {log.entityId && <span className="text-gray-400 ml-1">#{log.entityId}</span>}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {log.description || <span className="text-gray-300 italic">—</span>}
 
                       {}
-                      {log.entity === "SESSION" && log.metadata?.pcName && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          ПК: {log.metadata.pcName}
-                          {log.metadata.pcIp ? ` (${log.metadata.pcIp})` : ""}
+                      {log.metadata && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {log.metadata.pcName && (
+                            <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
+                              ПК: {log.metadata.pcName}
+                            </span>
+                          )}
+                          {log.metadata.ip && (
+                            <span className="text-xs bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded">
+                              IP: {log.metadata.ip}
+                            </span>
+                          )}
+                          {log.metadata.serverSerial && (
+                            <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">
+                              S/N: {log.metadata.serverSerial}
+                            </span>
+                          )}
+                          {log.metadata.count !== undefined && (
+                            <span className="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">
+                              Кол-во: {log.metadata.count}
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
@@ -14756,38 +16214,39 @@ export const AuditLogPage: React.FC = () => {
           </div>
 
           {}
-          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-            <div className="text-xs text-gray-500">
-              Всего записей: {totalCount}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+              <div className="text-sm text-gray-500">
+                Показано {filteredLogs.length} из {totalCount} записей
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1 border border-gray-200 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  Назад
+                </button>
+                <span className="text-sm text-gray-600">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1 border border-gray-200 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  Вперёд
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                className="px-2 py-1 text-xs border rounded disabled:opacity-50"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                Назад
-              </button>
-              <span className="text-xs text-gray-600">
-                Стр. {page} из {totalPages}
-              </span>
-              <button
-                className="px-2 py-1 text-xs border rounded disabled:opacity-50"
-                onClick={() =>
-                  setPage((p) => (p < totalPages ? p + 1 : p))
-                }
-                disabled={page >= totalPages}
-              >
-                Вперёд
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
+export default AuditLogPage;
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/pages/Admin/CreateModals/CreateCoralB.tsx
 ================================================================================
@@ -21981,7 +23440,8 @@ import {
   Eye,
   X,
   AlertCircle,
-  File as FileIcon
+  File as FileIcon,
+  Loader2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Context } from "src/main";
@@ -22010,6 +23470,7 @@ import {
   formatDateTime,
   formatDuration
 } from "src/api/beryllApi";
+import { $authHost } from "src/api/index";
 
 import { DefectComments } from '../../../components/beryll/DefectComments';
 import ServerComponentsManager from '../../../components/beryll/ServerComponentsManager';
@@ -22043,6 +23504,7 @@ export const ServerDetailPage: React.FC = observer(() => {
   
   
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   
   
   const [uploadModal, setUploadModal] = useState<{
@@ -22079,6 +23541,15 @@ export const ServerDetailPage: React.FC = observer(() => {
   useEffect(() => {
     loadServer();
   }, [id]);
+
+  
+  useEffect(() => {
+    return () => {
+      if (previewImage) {
+        URL.revokeObjectURL(previewImage);
+      }
+    };
+  }, []);
 
   const handleTake = async () => {
     if (!server) return;
@@ -22395,13 +23866,59 @@ export const ServerDetailPage: React.FC = observer(() => {
   };
 
   
-  const handleViewFile = (fileId: number, mimetype?: string) => {
-    const url = downloadFile(fileId);
-    if (mimetype?.startsWith("image/")) {
-      setPreviewImage(url);
+  const handleViewFile = async (fileId: number, mimetype?: string, originalName?: string) => {
+    
+    const isImage = mimetype?.startsWith("image/") || 
+      (originalName && ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+        originalName.toLowerCase().endsWith(`.${ext}`)
+      ));
+
+    console.log("handleViewFile:", { fileId, mimetype, originalName, isImage });
+
+    if (isImage) {
+      
+      if (previewImage) {
+        URL.revokeObjectURL(previewImage);
+        setPreviewImage(null);
+      }
+      
+      setPreviewLoading(true);
+      
+      try {
+        const response = await $authHost.get(`/api/beryll/files/${fileId}`, {
+          responseType: 'blob'
+        });
+        const url = URL.createObjectURL(response.data);
+        setPreviewImage(url);
+      } catch (e: any) {
+        console.error("Ошибка загрузки изображения:", e);
+        toast.error("Не удалось загрузить изображение");
+      } finally {
+        setPreviewLoading(false);
+      }
     } else {
-      window.open(url, "_blank");
+      
+      try {
+        const response = await $authHost.get(`/api/beryll/files/${fileId}`, {
+          responseType: 'blob'
+        });
+        const url = URL.createObjectURL(response.data);
+        window.open(url, "_blank");
+        
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e: any) {
+        console.error("Ошибка загрузки файла:", e);
+        toast.error("Не удалось загрузить файл");
+      }
     }
+  };
+
+  
+  const handleClosePreview = () => {
+    if (previewImage) {
+      URL.revokeObjectURL(previewImage);
+    }
+    setPreviewImage(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -22490,30 +24007,40 @@ export const ServerDetailPage: React.FC = observer(() => {
       />
       
       {}
-      {previewImage && (
+      {(previewImage || previewLoading) && (
         <div 
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
+          onClick={handleClosePreview}
         >
           <button
-            onClick={() => setPreviewImage(null)}
+            onClick={handleClosePreview}
             className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20"
           >
             <X className="w-6 h-6" />
           </button>
-          <img 
-            src={previewImage} 
-            alt="Preview" 
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
+          
+          {previewLoading ? (
+            <div className="flex flex-col items-center gap-3 text-white">
+              <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+              <span className="text-gray-400">Загрузка...</span>
+            </div>
+          ) : previewImage ? (
+            <img 
+              src={previewImage} 
+              alt="Preview" 
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : null}
         </div>
       )}
 
       {}
       {uploadModal.open && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
           onClick={closeUploadModal}
         >
           <div 
@@ -22994,7 +24521,10 @@ export const ServerDetailPage: React.FC = observer(() => {
                                             key={file.id}
                                             className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs"
                                           >
-                                            {file.mimetype?.startsWith("image/") ? (
+                                            {file.mimetype?.startsWith("image/") || 
+                                             (file.originalName && ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+                                               file.originalName.toLowerCase().endsWith(`.${ext}`)
+                                             )) ? (
                                               <Image className="w-3 h-3 text-blue-500" />
                                             ) : (
                                               <FileIcon className="w-3 h-3 text-red-500" />
@@ -23003,7 +24533,7 @@ export const ServerDetailPage: React.FC = observer(() => {
                                               {file.originalName}
                                             </span>
                                             <button
-                                              onClick={() => handleViewFile(file.id, file.mimetype)}
+                                              onClick={() => handleViewFile(file.id, file.mimetype, file.originalName)}
                                               className="p-0.5 text-gray-400 hover:text-blue-600"
                                               title="Просмотреть"
                                             >
@@ -26035,7 +27565,7 @@ import {
   Clock, CheckCircle, XCircle, Send, RotateCcw, Repeat,
   ChevronDown, Trash2, Edit, Paperclip, Eye, Calendar,
   Truck, Package, ChevronLeft, ChevronRight, RefreshCw,
-  FileSpreadsheet, BarChart3, Loader2
+  FileSpreadsheet, BarChart3, Loader2, X
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -26388,6 +27918,11 @@ const DefectRecordsTab: React.FC = () => {
   }, []);
   
   const totalPages = Math.ceil(totalCount / LIMIT);
+  
+  
+  const closeDetails = () => {
+    setSelectedRecord(null);
+  };
   
   
   const formatDate = (dateStr: string | null) => {
@@ -26785,6 +28320,7 @@ const DefectRecordsTab: React.FC = () => {
               onEdit={() => setShowEditModal(true)}
               onDelete={() => setShowDeleteConfirm(true)}
               onStatusChange={() => setShowStatusModal(true)}
+              onClose={closeDetails}
             />
           </div>
         )}
@@ -26830,6 +28366,7 @@ const DefectRecordsTab: React.FC = () => {
             }}
           />
           
+          {}
           <ConfirmModal
             isOpen={showDeleteConfirm}
             title="Удалить запись?"
@@ -26847,6 +28384,7 @@ const DefectRecordsTab: React.FC = () => {
               setShowDeleteConfirm(false);
             }}
             onCancel={() => setShowDeleteConfirm(false)}
+            confirmColor="red"
           />
         </>
       )}
@@ -26865,9 +28403,12 @@ const RecordDetails: React.FC<{
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: () => void;
-}> = ({ record, users, onUpdate, onEdit, onDelete, onStatusChange }) => {
+  onClose: () => void;
+}> = ({ record, users, onUpdate, onEdit, onDelete, onStatusChange, onClose }) => {
   const statusConfig = STATUS_CONFIG[record.status];
   const [uploading, setUploading] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{id: number; name: string} | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
@@ -26887,6 +28428,10 @@ const RecordDetails: React.FC<{
       toast.error(error.response?.data?.message || "Ошибка загрузки");
     } finally {
       setUploading(false);
+      
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
   
@@ -26904,14 +28449,16 @@ const RecordDetails: React.FC<{
     }
   };
   
-  const handleFileDelete = async (fileId: number) => {
-    if (!confirm("Удалить файл?")) return;
+  const confirmDeleteFile = async () => {
+    if (!fileToDelete) return;
     try {
-      await deleteDefectRecordFile(fileId);
+      await deleteDefectRecordFile(fileToDelete.id);
       toast.success("Файл удалён");
       onUpdate();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Ошибка");
+      toast.error(error.response?.data?.message || "Ошибка удаления");
+    } finally {
+      setFileToDelete(null);
     }
   };
   
@@ -26930,6 +28477,10 @@ const RecordDetails: React.FC<{
             </button>
             <button onClick={onDelete} className="p-1.5 hover:bg-red-100 text-red-500 rounded" title="Удалить">
               <Trash2 size={16} />
+            </button>
+            {}
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded ml-2" title="Закрыть">
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -27089,8 +28640,21 @@ const RecordDetails: React.FC<{
             Файлы ({record.files?.length || 0})
           </span>
           <label className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer">
-            {uploading ? "Загрузка..." : "+ Добавить"}
-            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+            {uploading ? (
+              <span className="flex items-center gap-1">
+                <Loader2 size={14} className="animate-spin" />
+                Загрузка...
+              </span>
+            ) : (
+              "+ Добавить"
+            )}
+            <input 
+              type="file" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileUpload} 
+              disabled={uploading} 
+            />
           </label>
         </div>
         
@@ -27110,7 +28674,7 @@ const RecordDetails: React.FC<{
                     <Download size={14} />
                   </button>
                   <button
-                    onClick={() => handleFileDelete(file.id)}
+                    onClick={() => setFileToDelete({ id: file.id, name: file.originalName })}
                     className="p-1 hover:bg-red-100 text-red-500 rounded"
                     title="Удалить"
                   >
@@ -27122,6 +28686,16 @@ const RecordDetails: React.FC<{
           </div>
         )}
       </div>
+      
+      {}
+      <ConfirmModal
+        isOpen={!!fileToDelete}
+        title="Удалить файл?"
+        message={`Вы уверены, что хотите удалить файл "${fileToDelete?.name}"?`}
+        onConfirm={confirmDeleteFile}
+        onCancel={() => setFileToDelete(null)}
+        confirmColor="red"
+      />
     </div>
   );
 };
@@ -29127,11 +30701,6 @@ FILE: MES-Kryptonit-Client-main/src/pages/Beryll/tabs/ServersTab.tsx
 
 
 
-
-
-
-
-
 import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
@@ -29158,7 +30727,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Globe
+  Globe,
+  Download
 } from "lucide-react";
 import { Context } from "src/main";
 import {
@@ -29172,6 +30742,8 @@ import {
   assignServersToBatch,
   generatePassport,
   pingServer,
+  exportPassports,
+  exportSelectedPassports,
   BeryllServer,
   BeryllBatch,
   ServerStatus,
@@ -29184,7 +30756,6 @@ interface ServersTabProps {
   onStatsUpdate?: () => void;
 }
 
-
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }) => {
@@ -29196,6 +30767,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const [batches, setBatches] = useState<BeryllBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   
   const [pingingServerId, setPingingServerId] = useState<number | null>(null);
@@ -29214,8 +30786,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
-  
-  
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   
@@ -29236,7 +30806,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       ]);
       setServers(serversData);
       setBatches(batchesData);
-      
       setCurrentPage(1);
     } catch (e) {
       console.error("Ошибка загрузки:", e);
@@ -29255,7 +30824,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
     return () => clearTimeout(timer);
   }, [search]);
 
-  
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     document.addEventListener("click", handleClickOutside);
@@ -29274,7 +30842,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      
       setSelectedServers([]);
     }
   };
@@ -29289,16 +30856,74 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   
   
 
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      const blob = await exportPassports({
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        batchId: batchFilter === "ALL" ? undefined : batchFilter === "UNASSIGNED" ? "null" : batchFilter,
+        search: search || undefined
+      });
+      
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `Состав_серверов_${timestamp}.xlsx`;
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Экспортировано ${servers.length} серверов`);
+    } catch (e: any) {
+      console.error("Export error:", e);
+      toast.error(e.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSelected = async () => {
+    if (selectedServers.length === 0) {
+      toast.error("Выберите серверы для экспорта");
+      return;
+    }
+    
+    setExporting(true);
+    try {
+      const blob = await exportSelectedPassports(selectedServers);
+      
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `Состав_серверов_${selectedServers.length}шт_${timestamp}.xlsx`;
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Экспортировано ${selectedServers.length} серверов`);
+    } catch (e: any) {
+      console.error("Export error:", e);
+      toast.error(e.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  
+  
+  
+
   const handlePing = async (server: BeryllServer) => {
     setPingingServerId(server.id);
     try {
       const result = await pingServer(server.id);
       setPingResults(prev => ({
         ...prev,
-        [server.id]: {
-          online: result.online,
-          latency: result.latency
-        }
+        [server.id]: { online: result.online, latency: result.latency }
       }));
       
       if (result.online) {
@@ -29367,12 +30992,10 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       toast.error("Для переноса в архив необходимо присвоить серийный номер АПК");
       return;
     }
-    
     if (server.status !== "DONE") {
       toast.error("Перенести в архив можно только серверы со статусом 'Готово'");
       return;
     }
-    
     if (!confirm(`Перенести сервер ${server.apkSerialNumber || server.ipAddress} в архив?`)) {
       return;
     }
@@ -29458,19 +31081,15 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   
   
 
-  
   const copyToClipboard = async (text: string) => {
     if (!text) {
       toast.error("Нечего копировать");
       return;
     }
-
     try {
-      
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
       } else {
-        
         const textArea = document.createElement("textarea");
         textArea.value = text;
         textArea.style.position = "fixed";
@@ -29479,13 +31098,9 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
         const successful = document.execCommand("copy");
         document.body.removeChild(textArea);
-        
-        if (!successful) {
-          throw new Error("execCommand failed");
-        }
+        if (!successful) throw new Error("execCommand failed");
       }
       toast.success("Скопировано", { duration: 1500 });
     } catch (err) {
@@ -29494,7 +31109,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
     }
   };
 
-  
   const openInBrowser = (ipAddress: string | null) => {
     if (!ipAddress) {
       toast.error("IP адрес не указан");
@@ -29602,6 +31216,21 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
         >
           <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
         </button>
+
+        {}
+        <button
+          onClick={handleExportAll}
+          disabled={exporting || servers.length === 0}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Выгрузить все серверы в Excel"
+        >
+          {exporting ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          <span>Выгрузить в Excel</span>
+        </button>
       </div>
 
       {}
@@ -29615,7 +31244,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           )}
         </div>
 
-        {}
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">На странице:</span>
           <select
@@ -29642,6 +31270,19 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           >
             <Package className="w-4 h-4" />
             Привязать к партии
+          </button>
+          {}
+          <button
+            onClick={handleExportSelected}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Экспорт выбранных
           </button>
           <button
             onClick={() => setSelectedServers([])}
@@ -29702,7 +31343,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         !server.leaseActive ? "opacity-60" : ""
                       } ${selectedServers.includes(server.id) ? "bg-indigo-50/50" : ""}`}
                     >
-                      {}
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -29712,7 +31352,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         />
                       </td>
 
-                      {}
                       <td className="p-3">
                         <div className="flex items-center gap-1.5">
                           <button
@@ -29721,7 +31360,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                           >
                             {server.ipAddress}
                           </button>
-                          {}
                           <button
                             onClick={() => copyToClipboard(server.ipAddress || "")}
                             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
@@ -29729,7 +31367,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </button>
-                          {}
                           <button
                             onClick={() => openInBrowser(server.ipAddress)}
                             className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -29742,10 +31379,8 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                               OFFLINE
                             </span>
                           )}
-                          {}
                           {getPingStatusIcon(server.id)}
                         </div>
-                        {}
                         {server.apkSerialNumber && (
                           <div className="text-xs text-purple-600 font-mono mt-0.5">
                             АПК: {server.apkSerialNumber}
@@ -29753,14 +31388,12 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {}
                       <td className="p-3">
                         <span className="text-sm text-gray-600 font-mono">
                           {server.hostname || "-"}
                         </span>
                       </td>
 
-                      {}
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[server.status]}`}>
                           {getStatusIcon(server.status)}
@@ -29768,7 +31401,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         </span>
                       </td>
 
-                      {}
                       <td className="p-3">
                         {server.batch ? (
                           <button
@@ -29783,7 +31415,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {}
                       <td className="p-3">
                         {server.assignedTo ? (
                           <div className="flex items-center gap-2">
@@ -29806,17 +31437,14 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {}
                       <td className="p-3">
                         <span className="text-xs text-gray-500">
                           {formatDateTime(server.updatedAt)}
                         </span>
                       </td>
 
-                      {}
                       <td className="p-3">
                         <div className="flex items-center justify-center gap-1">
-                          {}
                           <button
                             onClick={() => handlePing(server)}
                             disabled={isPinging}
@@ -29830,7 +31458,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             )}
                           </button>
 
-                          {}
                           <button
                             onClick={() => navigate(`/beryll/server/${server.id}`)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -29839,7 +31466,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             <ExternalLink className="w-4 h-4" />
                           </button>
 
-                          {}
                           {server.status === "NEW" && (
                             <button
                               onClick={() => handleTake(server)}
@@ -29855,7 +31481,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {}
                           {canWork && (
                             <button
                               onClick={() => handleStatusChange(server, "DONE")}
@@ -29871,7 +31496,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {}
                           {server.status === "DONE" && server.apkSerialNumber && (
                             <button
                               onClick={() => handleArchive(server)}
@@ -29883,7 +31507,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {}
                           {server.status === "DONE" && server.apkSerialNumber && (
                             <button
                               onClick={() => handleGeneratePassport(server)}
@@ -29894,7 +31517,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {}
                           <button
                             onClick={() => handleDelete(server)}
                             disabled={isLoading}
@@ -29922,7 +31544,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           </div>
 
           <div className="flex items-center gap-1">
-            {}
             <button
               onClick={() => goToPage(1)}
               disabled={currentPage === 1}
@@ -29932,7 +31553,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronsLeft className="w-5 h-5" />
             </button>
 
-            {}
             <button
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
@@ -29942,7 +31562,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronLeft className="w-5 h-5" />
             </button>
 
-            {}
             <div className="flex items-center gap-1 mx-2">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum: number;
@@ -29972,7 +31591,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               })}
             </div>
 
-            {}
             <button
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
@@ -29982,7 +31600,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronRight className="w-5 h-5" />
             </button>
 
-            {}
             <button
               onClick={() => goToPage(totalPages)}
               disabled={currentPage === totalPages}
@@ -64145,12 +65762,6 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/DefectRecordCon
 
 
 
-
-
-
-
-
-
 const path = require("path");
 const fs = require("fs");
 const ApiError = require("../../../error/ApiError");
@@ -64213,6 +65824,70 @@ class DefectRecordController {
         try {
             const userId = req.user?.id;
             const defect = await DefectRecordService.create(req.body, userId);
+            return res.json(defect);
+        } catch (error) {
+            next(ApiError.badRequest(error.message));
+        }
+    }
+    
+    async update(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            const updated = await DefectRecordService.update(id, req.body, userId);
+            return res.json(updated);
+        } catch (error) {
+            next(ApiError.badRequest(error.message));
+        }
+    }
+    
+    async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            await DefectRecordService.delete(id, userId);
+            return res.json({ success: true, message: "Запись удалена" });
+        } catch (error) {
+            next(ApiError.badRequest(error.message));
+        }
+    }
+    
+    async changeStatus(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { status, notes } = req.body;
+            const userId = req.user?.id;
+            
+            if (!status) {
+                return next(ApiError.badRequest("Статус обязателен"));
+            }
+            
+            const defect = await DefectRecordService.changeStatus(id, status, userId, notes);
+            return res.json(defect);
+        } catch (error) {
+            next(ApiError.badRequest(error.message));
+        }
+    }
+    
+    async markAsRepeated(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { originalDefectId, notes } = req.body;
+            const userId = req.user?.id;
+            
+            const defect = await DefectRecordService.markAsRepeated(id, originalDefectId, userId, notes);
             return res.json(defect);
         } catch (error) {
             next(ApiError.badRequest(error.message));
@@ -64386,14 +66061,9 @@ class DefectRecordController {
     
     
     
-    
-
-
-
     async getFiles(req, res, next) {
         try {
             const { id } = req.params;
-            
             
             const defect = await DefectRecordService.getById(id);
             if (!defect) {
@@ -64408,21 +66078,15 @@ class DefectRecordController {
         }
     }
     
-    
-
-
-
     async uploadFile(req, res, next) {
         try {
             const { id } = req.params;
             const userId = req.user?.id;
             
-            
             const defect = await DefectRecordService.getById(id);
             if (!defect) {
                 return next(ApiError.notFound("Запись о браке не найдена"));
             }
-            
             
             if (!req.files || !req.files.file) {
                 return next(ApiError.badRequest("Файл не загружен"));
@@ -64430,18 +66094,15 @@ class DefectRecordController {
             
             const file = req.files.file;
             
-            
             const maxSize = 50 * 1024 * 1024;
             if (file.size > maxSize) {
                 return next(ApiError.badRequest("Файл слишком большой (максимум 50MB)"));
             }
             
-            
             const recordDir = path.join(DEFECT_FILES_DIR, String(id));
             if (!fs.existsSync(recordDir)) {
                 fs.mkdirSync(recordDir, { recursive: true });
             }
-            
             
             const ext = path.extname(file.name);
             const timestamp = Date.now();
@@ -64449,9 +66110,7 @@ class DefectRecordController {
             const fileName = `${timestamp}_${safeOriginalName}`;
             const filePath = path.join(recordDir, fileName);
             
-            
             await file.mv(filePath);
-            
             
             const fileRecord = await DefectRecordService.addFile(id, {
                 fileName,
@@ -64472,10 +66131,6 @@ class DefectRecordController {
         }
     }
     
-    
-
-
-
     async downloadFile(req, res, next) {
         try {
             const { fileId } = req.params;
@@ -64491,7 +66146,6 @@ class DefectRecordController {
                 return next(ApiError.notFound("Файл не найден на диске"));
             }
             
-            
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileRecord.originalName)}"`);
             res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
             
@@ -64502,10 +66156,6 @@ class DefectRecordController {
         }
     }
     
-    
-
-
-
     async deleteFile(req, res, next) {
         try {
             const { fileId } = req.params;
@@ -64516,12 +66166,10 @@ class DefectRecordController {
                 return next(ApiError.notFound("Файл не найден"));
             }
             
-            
             const fullPath = path.join(DEFECT_FILES_DIR, fileRecord.filePath);
             if (fs.existsSync(fullPath)) {
                 fs.unlinkSync(fullPath);
             }
-            
             
             await DefectRecordService.deleteFile(fileId, userId);
             
@@ -66302,6 +67950,341 @@ class BeryllController {
 
 module.exports = new BeryllController();
 module.exports.initChecklistTemplates = initChecklistTemplates;
+================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/passportsExportController.js
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const UnifiedPassportsExportService = require("./services/UnifiedPassportsExportService");
+const ApiError = require("../../error/ApiError");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function exportPassports(req, res, next) {
+  try {
+    const options = {
+      serverIds: req.body.serverIds || null,
+      batchId: req.body.batchId || null,
+      status: req.body.status || null,
+      dateFrom: req.body.dateFrom || null,
+      dateTo: req.body.dateTo || null,
+      search: req.body.search || null,
+      includeArchived: req.body.includeArchived || false
+    };
+
+    console.log("[PassportsExport] Starting export with options:", options);
+
+    const buffer = await UnifiedPassportsExportService.exportUnifiedPassports(options);
+
+    
+    const timestamp = new Date().toISOString().split("T")[0];
+    let filename = `Состав_серверов_${timestamp}`;
+    
+    if (options.batchId) {
+      filename += `_партия_${options.batchId}`;
+    }
+    if (options.status) {
+      filename += `_${options.status}`;
+    }
+    
+    filename += ".xlsx";
+
+    
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader("Content-Length", buffer.length);
+
+    console.log(`[PassportsExport] Export complete, file size: ${buffer.length} bytes`);
+
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("[PassportsExport] Export error:", error);
+    
+    if (error.message === "Не найдено серверов для экспорта") {
+      return next(ApiError.notFound(error.message));
+    }
+    
+    next(ApiError.internal(`Ошибка экспорта: ${error.message}`));
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+async function getExportStats(req, res, next) {
+  try {
+    const options = {
+      batchId: req.query.batchId || null,
+      status: req.query.status || null,
+      dateFrom: req.query.dateFrom || null,
+      dateTo: req.query.dateTo || null,
+      search: req.query.search || null,
+      includeArchived: req.query.includeArchived === "true"
+    };
+
+    console.log("[PassportsExport] Getting stats with options:", options);
+
+    const stats = await UnifiedPassportsExportService.getExportStats(options);
+
+    res.json({
+      success: true,
+      stats
+    });
+
+  } catch (error) {
+    console.error("[PassportsExport] Stats error:", error);
+    next(ApiError.internal(`Ошибка получения статистики: ${error.message}`));
+  }
+}
+
+
+
+
+
+
+
+
+
+async function getExportPreview(req, res, next) {
+  try {
+    const options = {
+      batchId: req.query.batchId || null,
+      status: req.query.status || null,
+      dateFrom: req.query.dateFrom || null,
+      dateTo: req.query.dateTo || null,
+      search: req.query.search || null,
+      includeArchived: req.query.includeArchived === "true"
+    };
+
+    const limit = parseInt(req.query.limit) || 10;
+
+    console.log("[PassportsExport] Getting preview with options:", options);
+
+    
+    const servers = await UnifiedPassportsExportService.getServersWithComponents(options);
+    
+    
+    const previewServers = servers.slice(0, limit);
+
+    
+    const preview = previewServers.map(server => {
+      const components = server.components || [];
+      const grouped = UnifiedPassportsExportService.groupComponentsByType(components);
+      
+      return {
+        id: server.id,
+        apkSerialNumber: server.apkSerialNumber,
+        serialNumber: server.serialNumber,
+        status: server.status,
+        batchName: server.batch?.name || null,
+        createdAt: server.createdAt,
+        componentsSummary: {
+          total: components.length,
+          hdd: grouped.HDD?.length || 0,
+          ssd: (grouped.SSD?.length || 0) + (grouped.NVME?.length || 0),
+          ram: grouped.RAM?.length || 0,
+          psu: grouped.PSU?.length || 0,
+          motherboard: grouped.MOTHERBOARD?.length || 0,
+          bmc: grouped.BMC?.length || 0,
+          nic: grouped.NIC?.length || 0,
+          raid: grouped.RAID?.length || 0
+        },
+        completeness: this.calculateCompleteness(grouped)
+      };
+    });
+
+    res.json({
+      success: true,
+      total: servers.length,
+      showing: previewServers.length,
+      preview
+    });
+
+  } catch (error) {
+    console.error("[PassportsExport] Preview error:", error);
+    next(ApiError.internal(`Ошибка предпросмотра: ${error.message}`));
+  }
+}
+
+
+
+
+function calculateCompleteness(grouped) {
+  const expected = {
+    HDD: 12,
+    RAM: 12,
+    PSU: 2,
+    SSD: 2,
+    NVME: 2,
+    MOTHERBOARD: 1,
+    BMC: 1,
+    NIC: 1,
+    RAID: 1
+  };
+  
+  let totalExpected = 0;
+  let totalActual = 0;
+  
+  for (const [type, count] of Object.entries(expected)) {
+    totalExpected += count;
+    const actual = grouped[type]?.length || 0;
+    totalActual += Math.min(actual, count);
+  }
+  
+  
+  const ssdNvmeActual = (grouped.SSD?.length || 0) + (grouped.NVME?.length || 0);
+  const ssdNvmeExpected = expected.SSD + expected.NVME;
+  totalActual = totalActual - Math.min(grouped.SSD?.length || 0, expected.SSD) - Math.min(grouped.NVME?.length || 0, expected.NVME);
+  totalActual += Math.min(ssdNvmeActual, ssdNvmeExpected);
+  
+  return Math.round((totalActual / totalExpected) * 100);
+}
+
+
+
+
+
+
+async function exportSinglePassport(req, res, next) {
+  try {
+    const { serverId } = req.params;
+    
+    if (!serverId) {
+      return next(ApiError.badRequest("Не указан ID сервера"));
+    }
+
+    console.log("[PassportsExport] Single export for server:", serverId);
+
+    
+    const buffer = await UnifiedPassportsExportService.exportUnifiedPassports({
+      serverIds: [parseInt(serverId)]
+    });
+
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `Паспорт_сервера_${serverId}_${timestamp}.xlsx`;
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader("Content-Length", buffer.length);
+
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("[PassportsExport] Single export error:", error);
+    next(ApiError.internal(`Ошибка экспорта: ${error.message}`));
+  }
+}
+
+
+
+
+
+
+
+async function exportSelectedPassports(req, res, next) {
+  try {
+    const { serverIds } = req.body;
+    
+    if (!serverIds || !Array.isArray(serverIds) || serverIds.length === 0) {
+      return next(ApiError.badRequest("Не выбраны серверы для экспорта"));
+    }
+
+    console.log("[PassportsExport] Selected export for servers:", serverIds);
+
+    const buffer = await UnifiedPassportsExportService.exportUnifiedPassports({
+      serverIds: serverIds.map(id => parseInt(id))
+    });
+
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `Состав_серверов_выбранные_${serverIds.length}шт_${timestamp}.xlsx`;
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader("Content-Length", buffer.length);
+
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("[PassportsExport] Selected export error:", error);
+    next(ApiError.internal(`Ошибка экспорта: ${error.message}`));
+  }
+}
+
+
+
+
+
+
+async function exportBatchPassports(req, res, next) {
+  try {
+    const { batchId } = req.params;
+    
+    console.log("[PassportsExport] Batch export for:", batchId);
+
+    const buffer = await UnifiedPassportsExportService.exportUnifiedPassports({
+      batchId: batchId === "null" ? "null" : parseInt(batchId)
+    });
+
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = batchId === "null" 
+      ? `Состав_серверов_без_партии_${timestamp}.xlsx`
+      : `Состав_серверов_партия_${batchId}_${timestamp}.xlsx`;
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader("Content-Length", buffer.length);
+
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("[PassportsExport] Batch export error:", error);
+    next(ApiError.internal(`Ошибка экспорта: ${error.message}`));
+  }
+}
+
+module.exports = {
+  exportPassports,
+  getExportStats,
+  getExportPreview,
+  exportSinglePassport,
+  exportSelectedPassports,
+  exportBatchPassports,
+  calculateCompleteness
+};
+
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/services/ArchiveService.js
 ================================================================================
@@ -69608,6 +71591,303 @@ class DefectMonitoringService {
 module.exports = new DefectMonitoringService();
 
 ================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/services/DefectRecordFileService.js
+================================================================================
+
+
+
+
+
+
+
+const path = require("path");
+const fs = require("fs");
+
+
+const DEFECT_FILES_DIR = path.join(__dirname, "../../../static/defect-records");
+
+
+if (!fs.existsSync(DEFECT_FILES_DIR)) {
+    fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
+}
+
+class DefectRecordFileService {
+    
+    
+
+
+
+
+    async getFiles(defectRecordId) {
+        const { BeryllDefectRecordFile, User } = require("../../../models");
+        
+        const files = await BeryllDefectRecordFile.findAll({
+            where: { defectRecordId },
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname"]
+                }
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+        
+        return files;
+    }
+    
+    
+
+
+
+
+    async getFileById(fileId) {
+        const { BeryllDefectRecordFile, User } = require("../../../models");
+        
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname"]
+                }
+            ]
+        });
+        
+        return file;
+    }
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+    async addFile(defectRecordId, fileData) {
+        const { 
+            BeryllDefectRecordFile, 
+            BeryllHistory, 
+            BeryllDefectRecord, 
+            BeryllServer 
+        } = require("../../../models");
+        
+        
+        const defect = await BeryllDefectRecord.findByPk(defectRecordId, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
+        
+        if (!defect) {
+            throw new Error("Запись о браке не найдена");
+        }
+        
+        
+        const file = await BeryllDefectRecordFile.create({
+            defectRecordId,
+            fileName: fileData.fileName,
+            originalName: fileData.originalName,
+            filePath: fileData.filePath,
+            mimeType: fileData.mimeType,
+            fileSize: fileData.fileSize,
+            uploadedById: fileData.uploadedById
+        });
+        
+        
+        await BeryllHistory.create({
+            serverId: defect.serverId,
+            serverIp: defect.server?.ipAddress,
+            serverHostname: defect.server?.hostname,
+            userId: fileData.uploadedById,
+            action: "DEFECT_RECORD_FILE_UPLOADED",
+            comment: `Загружен файл: ${fileData.originalName}`,
+            metadata: {
+                defectRecordId,
+                fileId: file.id,
+                fileName: fileData.originalName,
+                fileSize: fileData.fileSize,
+                mimeType: fileData.mimeType
+            }
+        });
+        
+        return file;
+    }
+    
+    
+
+
+
+
+
+    async deleteFile(fileId, userId) {
+        const { 
+            BeryllDefectRecordFile, 
+            BeryllHistory, 
+            BeryllDefectRecord, 
+            BeryllServer 
+        } = require("../../../models");
+        
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [{
+                model: BeryllDefectRecord,
+                as: "defectRecord",
+                include: [{ model: BeryllServer, as: "server" }]
+            }]
+        });
+        
+        if (!file) {
+            throw new Error("Файл не найден");
+        }
+        
+        
+        const fullPath = path.join(DEFECT_FILES_DIR, file.filePath);
+        if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+        }
+        
+        
+        if (file.defectRecord) {
+            await BeryllHistory.create({
+                serverId: file.defectRecord.serverId,
+                serverIp: file.defectRecord.server?.ipAddress,
+                serverHostname: file.defectRecord.server?.hostname,
+                userId,
+                action: "DEFECT_RECORD_FILE_DELETED",
+                comment: `Удалён файл: ${file.originalName}`,
+                metadata: {
+                    defectRecordId: file.defectRecordId,
+                    fileId: file.id,
+                    fileName: file.originalName
+                }
+            });
+        }
+        
+        
+        await file.destroy();
+        
+        return { success: true, message: "Файл удалён" };
+    }
+    
+    
+
+
+
+
+
+
+    async saveFile(defectRecordId, file, userId) {
+        
+        const recordDir = path.join(DEFECT_FILES_DIR, String(defectRecordId));
+        if (!fs.existsSync(recordDir)) {
+            fs.mkdirSync(recordDir, { recursive: true });
+        }
+        
+        
+        const timestamp = Date.now();
+        const safeOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${timestamp}_${safeOriginalName}`;
+        const filePath = path.join(recordDir, fileName);
+        const relativePath = path.join(String(defectRecordId), fileName);
+        
+        
+        await file.mv(filePath);
+        
+        
+        const fileRecord = await this.addFile(defectRecordId, {
+            fileName,
+            originalName: file.name,
+            filePath: relativePath,
+            mimeType: file.mimetype,
+            fileSize: file.size,
+            uploadedById: userId
+        });
+        
+        return fileRecord;
+    }
+    
+    
+
+
+
+
+    async getFileForDownload(fileId) {
+        const file = await this.getFileById(fileId);
+        
+        if (!file) {
+            throw new Error("Файл не найден");
+        }
+        
+        const fullPath = path.join(DEFECT_FILES_DIR, file.filePath);
+        
+        if (!fs.existsSync(fullPath)) {
+            throw new Error("Файл не найден на диске");
+        }
+        
+        return {
+            fullPath,
+            originalName: file.originalName,
+            mimeType: file.mimeType || "application/octet-stream"
+        };
+    }
+    
+    
+
+
+
+
+    async getFilesCount(defectRecordId) {
+        const { BeryllDefectRecordFile } = require("../../../models");
+        
+        const count = await BeryllDefectRecordFile.count({
+            where: { defectRecordId }
+        });
+        
+        return count;
+    }
+    
+    
+
+
+
+
+
+    async deleteAllFiles(defectRecordId, userId) {
+        const files = await this.getFiles(defectRecordId);
+        
+        let deletedCount = 0;
+        for (const file of files) {
+            try {
+                await this.deleteFile(file.id, userId);
+                deletedCount++;
+            } catch (error) {
+                console.error(`Ошибка удаления файла ${file.id}:`, error.message);
+            }
+        }
+        
+        
+        const recordDir = path.join(DEFECT_FILES_DIR, String(defectRecordId));
+        if (fs.existsSync(recordDir)) {
+            try {
+                fs.rmdirSync(recordDir);
+            } catch (e) {
+                
+            }
+        }
+        
+        return { 
+            success: true, 
+            deletedCount, 
+            message: `Удалено ${deletedCount} файлов` 
+        };
+    }
+}
+
+module.exports = new DefectRecordFileService();
+================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/services/DefectRecordService.js
 ================================================================================
 
@@ -70410,6 +72690,19 @@ class DefectRecordService {
                         model: User, 
                         as: "resolvedBy", 
                         attributes: ["id", "name", "surname", "login"],
+                        required: false
+                    },
+                    {
+                        model: BeryllDefectRecordFile,
+                        as: "files",
+                        include: [
+                            {
+                                model: User,
+                                as: "uploadedBy",
+                                attributes: ["id", "name", "surname", "login"],
+                                required: false
+                            }
+                        ],
                         required: false
                     }
                 ]
@@ -72898,6 +75191,1123 @@ class StatsService {
 }
 
 module.exports = new StatsService();
+
+================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/services/UnifiedPassportsExportService.js
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const ExcelJS = require("exceljs");
+const { Op } = require("sequelize");
+const { 
+  BeryllServer, 
+  BeryllServerComponent, 
+  BeryllBatch,
+  BeryllServerChecklist,
+  BeryllChecklistTemplate,
+  User,
+  UserAlias
+} = require("../../../models/index");
+
+
+
+
+
+const EXPORT_CONFIG = {
+  
+  HDD_COUNT: 12,
+  SSD_BOOT_COUNT: 2,    
+  SSD_DATA_COUNT: 2,    
+  RAM_COUNT: 12,
+  PSU_COUNT: 2,
+  
+  
+  COMPONENT_TYPES: {
+    HDD: "HDD",
+    SSD: "SSD",
+    NVME: "NVME", 
+    RAM: "RAM",
+    PSU: "PSU",
+    MOTHERBOARD: "MOTHERBOARD",
+    BMC: "BMC",
+    NIC: "NIC",
+    RAID: "RAID",
+    FAN: "FAN",
+    CPU: "CPU",
+    BACKPLANE_HDD: "BACKPLANE_HDD",
+    BACKPLANE_SSD: "BACKPLANE_SSD"
+  }
+};
+
+
+
+
+const COLUMN_STRUCTURE = {
+  
+  BASE: [
+    { key: "rowNumber", header: "№", width: 5 },
+    { key: "apkSerialNumber", header: "Серийный № сервера", width: 18 },
+    { key: "inspectionDate", header: "Дата проведения входного контроля", width: 20 },
+    { key: "employees1", header: "Фамилии сотрудников", width: 20 },
+    { key: "employees2", header: "", width: 20 }
+  ],
+  
+  
+  HDD: Array.from({ length: 12 }, (_, i) => ([
+    { key: `hdd${i + 1}_yadro`, header: i === 0 ? "S/N ядро" : "", subHeader: `HDD ${i + 1}` },
+    { key: `hdd${i + 1}_manuf`, header: i === 0 ? "S/N производитель" : "" }
+  ])).flat(),
+  
+  
+  BACKPLANE_HDD: [
+    { key: "backplaneHdd", header: "Backplane HDD", width: 18 }
+  ],
+  
+  
+  MOTHERBOARD: [
+    { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 30 },
+    { key: "motherboardType", header: "", width: 8 }
+  ],
+  
+  
+  COOLERS: [
+    { key: "coolers", header: "Кулеры CPU", width: 12 }
+  ],
+  
+  
+  PSU: [
+    { key: "psu1_yadro", header: "Блоки питания", subHeader: "S/N ядро", width: 18 },
+    { key: "psu1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
+    { key: "psu2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
+    { key: "psu2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
+  ],
+  
+  
+  SSD_BOOT: [
+    { key: "ssdBoot1_yadro", header: "SSD (sn)", subHeader: "S/N ядро", width: 18 },
+    { key: "ssdBoot1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
+    { key: "ssdBoot2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
+    { key: "ssdBoot2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
+  ],
+  
+  
+  SSD_DATA: [
+    { key: "ssdData1_yadro", header: "", subHeader: "S/N ядро", width: 18 },
+    { key: "ssdData1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
+    { key: "ssdData2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
+    { key: "ssdData2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
+  ],
+  
+  
+  BMC: [
+    { key: "bmc", header: "bmc (ревизия и sn)", width: 18 }
+  ],
+  
+  
+  BACKPLANE_SSD: [
+    { key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 22 }
+  ],
+  
+  
+  RAM: Array.from({ length: 12 }, (_, i) => ([
+    { key: `ram${i + 1}_yadro`, header: i === 0 ? "Планки памяти" : "", subHeader: i === 0 ? "S/N ядро" : "" },
+    { key: `ram${i + 1}_manuf`, header: "", subHeader: i === 0 ? "S/N производитель" : "" }
+  ])).flat(),
+  
+  
+  RAID: [
+    { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 20 },
+    { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 20 }
+  ],
+  
+  
+  NIC: [
+    { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 22 },
+    { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 22 }
+  ]
+};
+
+class UnifiedPassportsExportService {
+  
+
+
+
+
+
+
+
+
+
+
+  async exportUnifiedPassports(options = {}) {
+    const { 
+      serverIds, 
+      batchId, 
+      status, 
+      dateFrom, 
+      dateTo, 
+      search,
+      includeArchived = false 
+    } = options;
+
+    
+    const servers = await this.getServersWithComponents({
+      serverIds,
+      batchId,
+      status,
+      dateFrom,
+      dateTo,
+      search,
+      includeArchived
+    });
+
+    if (servers.length === 0) {
+      throw new Error("Не найдено серверов для экспорта");
+    }
+
+    
+    const exportData = await this.prepareExportData(servers);
+
+    
+    const buffer = await this.createExcelFile(exportData, options);
+
+    return buffer;
+  }
+
+  
+
+
+  async getServersWithComponents(filters) {
+    const where = {};
+    
+    
+    if (filters.serverIds && filters.serverIds.length > 0) {
+      where.id = { [Op.in]: filters.serverIds };
+    }
+    
+    
+    if (filters.batchId) {
+      if (filters.batchId === "null") {
+        where.batchId = null;
+      } else {
+        where.batchId = filters.batchId;
+      }
+    }
+    
+    
+    if (filters.status) {
+      where.status = filters.status;
+    }
+    
+    
+    if (!filters.includeArchived) {
+      where.archivedAt = null;
+    }
+    
+    
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) {
+        where.createdAt[Op.gte] = new Date(filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        where.createdAt[Op.lte] = new Date(filters.dateTo);
+      }
+    }
+    
+    
+    if (filters.search) {
+      where[Op.or] = [
+        { apkSerialNumber: { [Op.iLike]: `%${filters.search}%` } },
+        { serialNumber: { [Op.iLike]: `%${filters.search}%` } },
+        { hostname: { [Op.iLike]: `%${filters.search}%` } }
+      ];
+    }
+
+    const servers = await BeryllServer.findAll({
+      where,
+      include: [
+        {
+          model: BeryllServerComponent,
+          as: "components",
+          required: false
+        },
+        {
+          model: BeryllBatch,
+          as: "batch",
+          required: false
+        },
+        {
+          model: User,
+          as: "assignedTo",
+          attributes: ["id", "name", "surname", "login"],
+          required: false
+        },
+        {
+          model: BeryllServerChecklist,
+          as: "checklists",
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "completedBy",
+              attributes: ["id", "name", "surname"],
+              required: false
+            }
+          ]
+        }
+      ],
+      order: [
+        ["createdAt", "ASC"],
+        [{ model: BeryllServerComponent, as: "components" }, "componentType", "ASC"],
+        [{ model: BeryllServerComponent, as: "components" }, "slot", "ASC"]
+      ]
+    });
+
+    return servers;
+  }
+
+  
+
+
+  async prepareExportData(servers) {
+    const rows = [];
+    let rowNumber = 1;
+
+    for (const server of servers) {
+      const components = server.components || [];
+      
+      
+      const grouped = this.groupComponentsByType(components);
+      
+      
+      const employees = await this.getServerEmployees(server);
+      
+      
+      const mainRow = {
+        rowNumber,
+        apkSerialNumber: server.apkSerialNumber || server.serialNumber || "",
+        inspectionDate: this.formatDate(server.createdAt),
+        employees1: employees[0] || "",
+        employees2: employees[1] || "",
+        
+        
+        ...this.mapHddComponents(grouped.HDD || []),
+        
+        
+        backplaneHdd: this.getBackplaneHdd(grouped),
+        
+        
+        ...this.mapMotherboard(grouped.MOTHERBOARD || []),
+        
+        
+        coolers: this.getCoolerType(grouped.FAN || []),
+        
+        
+        ...this.mapPsuComponents(grouped.PSU || []),
+        
+        
+        ...this.mapSsdBootComponents(grouped.SSD || [], grouped.NVME || []),
+        
+        
+        ...this.mapSsdDataComponents(grouped.SSD || [], grouped.NVME || []),
+        
+        
+        bmc: this.mapBmc(grouped.BMC || []),
+        
+        
+        backplaneSsd: this.getBackplaneSsd(grouped),
+        
+        
+        ...this.mapRamComponents(grouped.RAM || []),
+        
+        
+        ...this.mapRaidController(grouped.RAID || []),
+        
+        
+        ...this.mapNicCard(grouped.NIC || [])
+      };
+      
+      
+      const serialRow = {
+        rowNumber: null,
+        apkSerialNumber: "",
+        inspectionDate: "",
+        employees1: "",
+        employees2: "",
+        
+        
+        ...this.mapHddSerialManuf(grouped.HDD || []),
+        
+        backplaneHdd: "",
+        motherboard: "",
+        motherboardType: "",
+        coolers: "",
+        
+        
+        ...this.mapPsuSerialManuf(grouped.PSU || []),
+        
+        
+        ...this.mapSsdBootSerialManuf(grouped.SSD || [], grouped.NVME || []),
+        ...this.mapSsdDataSerialManuf(grouped.SSD || [], grouped.NVME || []),
+        
+        bmc: "",
+        backplaneSsd: "",
+        
+        
+        ...this.mapRamSerialManuf(grouped.RAM || []),
+        
+        
+        ...this.mapRaidSerialManuf(grouped.RAID || []),
+        
+        
+        ...this.mapNicSerialManuf(grouped.NIC || [])
+      };
+      
+      rows.push({ main: mainRow, serial: serialRow, server });
+      rowNumber++;
+    }
+
+    return rows;
+  }
+
+  
+
+
+  groupComponentsByType(components) {
+    const grouped = {};
+    
+    for (const comp of components) {
+      const type = comp.componentType || "OTHER";
+      if (!grouped[type]) {
+        grouped[type] = [];
+      }
+      grouped[type].push(comp);
+    }
+    
+    
+    for (const type in grouped) {
+      grouped[type].sort((a, b) => {
+        const slotA = this.extractSlotNumber(a.slot);
+        const slotB = this.extractSlotNumber(b.slot);
+        return slotA - slotB;
+      });
+    }
+    
+    return grouped;
+  }
+
+  
+
+
+  extractSlotNumber(slot) {
+    if (!slot) return 999;
+    const match = slot.match(/(\d+)/);
+    return match ? parseInt(match[1]) : 999;
+  }
+
+  
+
+
+  async getServerEmployees(server) {
+    const employees = [];
+    
+    
+    if (server.checklists && server.checklists.length > 0) {
+      for (const checklist of server.checklists) {
+        if (checklist.completedBy) {
+          const name = `${checklist.completedBy.surname || ""} ${checklist.completedBy.name || ""}`.trim();
+          if (name && !employees.includes(name)) {
+            employees.push(name);
+          }
+        }
+      }
+    }
+    
+    
+    if (server.assignedTo) {
+      const name = `${server.assignedTo.surname || ""} ${server.assignedTo.name || ""}`.trim();
+      if (name && !employees.includes(name)) {
+        employees.push(name);
+      }
+    }
+    
+    return employees.slice(0, 2);
+  }
+
+  
+
+
+  mapHddComponents(hdds) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
+      const hdd = hdds[i];
+      result[`hdd${i + 1}_yadro`] = hdd?.serialNumberYadro || hdd?.serialNumber || "";
+      result[`hdd${i + 1}_manuf`] = "";  
+    }
+    
+    return result;
+  }
+
+  
+
+
+  mapHddSerialManuf(hdds) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
+      const hdd = hdds[i];
+      result[`hdd${i + 1}_yadro`] = "";  
+      result[`hdd${i + 1}_manuf`] = hdd?.serialNumber || "";
+    }
+    
+    return result;
+  }
+
+  
+
+
+  getBackplaneHdd(grouped) {
+    const backplane = grouped.BACKPLANE_HDD || grouped.BACKPLANE || [];
+    if (backplane.length > 0) {
+      return backplane[0].serialNumberYadro || backplane[0].serialNumber || backplane[0].model || "";
+    }
+    
+    
+    const motherboard = grouped.MOTHERBOARD?.[0];
+    if (motherboard?.metadata?.backplaneHdd) {
+      return motherboard.metadata.backplaneHdd;
+    }
+    
+    return "";
+  }
+
+  
+
+
+  mapMotherboard(motherboards) {
+    const mb = motherboards[0];
+    if (!mb) {
+      return { motherboard: "", motherboardType: "" };
+    }
+    
+    const serial = mb.serialNumberYadro || mb.serialNumber || "";
+    const revision = mb.metadata?.revision || mb.firmwareVersion || "";
+    const type = mb.metadata?.type || "";
+    
+    return {
+      motherboard: `${mb.model || ""} ${serial}`.trim(),
+      motherboardType: `${revision}${type ? ` ${type}` : ""}`
+    };
+  }
+
+  
+
+
+  getCoolerType(fans) {
+    if (fans.length === 0) return "";
+    
+    const fan = fans[0];
+    return fan.metadata?.type || fan.model || "Тип 1";
+  }
+
+  
+
+
+  mapPsuComponents(psus) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
+      const psu = psus[i];
+      result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || psu?.model || "";
+      result[`psu${i + 1}_manuf`] = "";  
+    }
+    
+    return result;
+  }
+
+  
+
+
+  mapPsuSerialManuf(psus) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
+      const psu = psus[i];
+      result[`psu${i + 1}_yadro`] = "";
+      result[`psu${i + 1}_manuf`] = psu?.serialNumber || "";
+    }
+    
+    return result;
+  }
+
+  
+
+
+  mapSsdBootComponents(ssds, nvmes) {
+    
+    const bootSsds = ssds.filter(s => 
+      s.manufacturer?.toLowerCase()?.includes("intel") ||
+      s.model?.toLowerCase()?.includes("intel") ||
+      s.slot?.toLowerCase()?.includes("boot")
+    ).slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
+    
+    
+    const finalBootSsds = bootSsds.length > 0 ? bootSsds : ssds.slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
+    
+    return {
+      ssdBoot1_yadro: finalBootSsds[0]?.serialNumberYadro || finalBootSsds[0]?.model || "",
+      ssdBoot1_manuf: "",
+      ssdBoot2_yadro: finalBootSsds[1]?.serialNumberYadro || finalBootSsds[1]?.model || "",
+      ssdBoot2_manuf: ""
+    };
+  }
+
+  
+
+
+  mapSsdBootSerialManuf(ssds, nvmes) {
+    const bootSsds = ssds.filter(s => 
+      s.manufacturer?.toLowerCase()?.includes("intel") ||
+      s.model?.toLowerCase()?.includes("intel") ||
+      s.slot?.toLowerCase()?.includes("boot")
+    ).slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
+    
+    const finalBootSsds = bootSsds.length > 0 ? bootSsds : ssds.slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
+    
+    return {
+      ssdBoot1_yadro: "",
+      ssdBoot1_manuf: finalBootSsds[0]?.serialNumber || "",
+      ssdBoot2_yadro: "",
+      ssdBoot2_manuf: finalBootSsds[1]?.serialNumber || ""
+    };
+  }
+
+  
+
+
+  mapSsdDataComponents(ssds, nvmes) {
+    
+    const dataSsds = [
+      ...nvmes,
+      ...ssds.filter(s => 
+        s.manufacturer?.toLowerCase()?.includes("samsung") ||
+        s.model?.toLowerCase()?.includes("samsung") ||
+        s.model?.toLowerCase()?.includes("mz-ql")
+      )
+    ].slice(0, EXPORT_CONFIG.SSD_DATA_COUNT);
+    
+    return {
+      ssdData1_yadro: dataSsds[0]?.serialNumberYadro || dataSsds[0]?.model || "",
+      ssdData1_manuf: "",
+      ssdData2_yadro: dataSsds[1]?.serialNumberYadro || dataSsds[1]?.model || "",
+      ssdData2_manuf: ""
+    };
+  }
+
+  
+
+
+  mapSsdDataSerialManuf(ssds, nvmes) {
+    const dataSsds = [
+      ...nvmes,
+      ...ssds.filter(s => 
+        s.manufacturer?.toLowerCase()?.includes("samsung") ||
+        s.model?.toLowerCase()?.includes("samsung")
+      )
+    ].slice(0, EXPORT_CONFIG.SSD_DATA_COUNT);
+    
+    return {
+      ssdData1_yadro: "",
+      ssdData1_manuf: dataSsds[0]?.serialNumber || "",
+      ssdData2_yadro: "",
+      ssdData2_manuf: dataSsds[1]?.serialNumber || ""
+    };
+  }
+
+  
+
+
+  mapBmc(bmcs) {
+    const bmc = bmcs[0];
+    if (!bmc) return "";
+    
+    const revision = bmc.metadata?.revision || bmc.firmwareVersion || "";
+    const serial = bmc.serialNumberYadro || bmc.serialNumber || "";
+    
+    return `${revision ? `${revision} ` : ""}${serial}`.trim();
+  }
+
+  
+
+
+  getBackplaneSsd(grouped) {
+    const backplane = grouped.BACKPLANE_SSD || [];
+    if (backplane.length > 0) {
+      return backplane[0].serialNumberYadro || backplane[0].serialNumber || "";
+    }
+    return "";
+  }
+
+  
+
+
+  mapRamComponents(rams) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.RAM_COUNT; i++) {
+      const ram = rams[i];
+      result[`ram${i + 1}_yadro`] = ram?.serialNumberYadro || "";
+      result[`ram${i + 1}_manuf`] = "";  
+    }
+    
+    return result;
+  }
+
+  
+
+
+  mapRamSerialManuf(rams) {
+    const result = {};
+    
+    for (let i = 0; i < EXPORT_CONFIG.RAM_COUNT; i++) {
+      const ram = rams[i];
+      result[`ram${i + 1}_yadro`] = "";
+      result[`ram${i + 1}_manuf`] = ram?.serialNumber || "";
+    }
+    
+    return result;
+  }
+
+  
+
+
+  mapRaidController(raids) {
+    const raid = raids[0];
+    if (!raid) {
+      return { raid_yadro: "", raid_manuf: "" };
+    }
+    
+    const type = raid.metadata?.type || raid.model || "";
+    return {
+      raid_yadro: `${type} ${raid.serialNumberYadro || ""}`.trim(),
+      raid_manuf: ""
+    };
+  }
+
+  
+
+
+  mapRaidSerialManuf(raids) {
+    const raid = raids[0];
+    return {
+      raid_yadro: "",
+      raid_manuf: raid?.serialNumber || ""
+    };
+  }
+
+  
+
+
+  mapNicCard(nics) {
+    const nic = nics[0];
+    if (!nic) {
+      return { nic_yadro: "", nic_manuf: "" };
+    }
+    
+    const revision = nic.metadata?.revision || nic.firmwareVersion || "";
+    return {
+      nic_yadro: `${revision ? `${revision} ` : ""}${nic.serialNumberYadro || ""}`.trim(),
+      nic_manuf: ""
+    };
+  }
+
+  
+
+
+  mapNicSerialManuf(nics) {
+    const nic = nics[0];
+    return {
+      nic_yadro: "",
+      nic_manuf: nic?.serialNumber || ""
+    };
+  }
+
+  
+
+
+  formatDate(date) {
+    if (!date) return "";
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day} ${month} ${year}`;
+  }
+
+  
+
+
+  async createExcelFile(exportData, options = {}) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "MES Kryptonit";
+    workbook.created = new Date();
+    
+    const sheet = workbook.addWorksheet("Состав серверов", {
+      views: [{ state: "frozen", ySplit: 2, xSplit: 3 }]
+    });
+
+    
+    const headerStyle = {
+      font: { bold: true, size: 10 },
+      alignment: { horizontal: "center", vertical: "middle", wrapText: true },
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } },
+      border: {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" }
+      }
+    };
+
+    const subHeaderStyle = {
+      font: { bold: false, size: 9 },
+      alignment: { horizontal: "center", vertical: "middle", wrapText: true },
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } },
+      border: {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" }
+      }
+    };
+
+    const dataStyle = {
+      font: { size: 9 },
+      alignment: { horizontal: "left", vertical: "middle" },
+      border: {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" }
+      }
+    };
+
+    
+    const columns = this.buildColumnDefinitions();
+    sheet.columns = columns.map(col => ({
+      header: "",
+      key: col.key,
+      width: col.width || 12
+    }));
+
+    
+    this.addGroupHeaders(sheet, columns, headerStyle);
+
+    
+    this.addSubHeaders(sheet, columns, subHeaderStyle);
+
+    
+    let currentRow = 3;
+    for (const rowData of exportData) {
+      
+      const mainRowValues = columns.map(col => rowData.main[col.key] || "");
+      const mainRow = sheet.getRow(currentRow);
+      mainRow.values = mainRowValues;
+      mainRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        Object.assign(cell, dataStyle);
+      });
+      currentRow++;
+
+      
+      const serialRowValues = columns.map(col => rowData.serial[col.key] || "");
+      const serialRow = sheet.getRow(currentRow);
+      serialRow.values = serialRowValues;
+      serialRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        Object.assign(cell, dataStyle);
+        cell.font = { size: 8, color: { argb: "FF666666" } };
+      });
+      currentRow++;
+    }
+
+    
+    this.applyHeaderMerges(sheet, columns);
+
+    
+    sheet.getRow(1).height = 30;
+    sheet.getRow(2).height = 25;
+
+    
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer;
+  }
+
+  
+
+
+  buildColumnDefinitions() {
+    const columns = [];
+    
+    
+    columns.push(
+      { key: "rowNumber", header: "№", width: 5, group: "base" },
+      { key: "apkSerialNumber", header: "Серийный № сервера", width: 18, group: "base" },
+      { key: "inspectionDate", header: "Дата проведения входного контроля", width: 22, group: "base" },
+      { key: "employees1", header: "Фамилии сотрудников проводившие проверку, сборку сервера", width: 20, group: "base" },
+      { key: "employees2", header: "", width: 18, group: "base" }
+    );
+    
+    
+    for (let i = 1; i <= 12; i++) {
+      columns.push(
+        { key: `hdd${i}_yadro`, header: i === 1 ? "HDD диски" : "", subHeader: "S/N ядро", width: 15, group: "hdd" },
+        { key: `hdd${i}_manuf`, header: "", subHeader: "S/N производитель", width: 12, group: "hdd" }
+      );
+    }
+    
+    
+    columns.push({ key: "backplaneHdd", header: "Backplane HDD", width: 16, group: "backplane_hdd" });
+    
+    
+    columns.push(
+      { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 28, group: "mb" },
+      { key: "motherboardType", header: "", width: 8, group: "mb" }
+    );
+    
+    
+    columns.push({ key: "coolers", header: "Кулеры CPU", width: 10, group: "coolers" });
+    
+    
+    for (let i = 1; i <= 2; i++) {
+      columns.push(
+        { key: `psu${i}_yadro`, header: i === 1 ? "Блоки питания" : "", subHeader: "S/N ядро", width: 18, group: "psu" },
+        { key: `psu${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "psu" }
+      );
+    }
+    
+    
+    for (let i = 1; i <= 2; i++) {
+      columns.push(
+        { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD (sn)" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
+        { key: `ssdBoot${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_boot" }
+      );
+    }
+    
+    
+    for (let i = 1; i <= 2; i++) {
+      columns.push(
+        { key: `ssdData${i}_yadro`, header: i === 1 ? "SSD NVMe" : "", subHeader: "S/N ядро", width: 18, group: "ssd_data" },
+        { key: `ssdData${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_data" }
+      );
+    }
+    
+    
+    columns.push({ key: "bmc", header: "bmc (ревизия и sn)", width: 16, group: "bmc" });
+    
+    
+    columns.push({ key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 20, group: "backplane_ssd" });
+    
+    
+    for (let i = 1; i <= 12; i++) {
+      columns.push(
+        { key: `ram${i}_yadro`, header: i === 1 ? "Планки памяти" : "", subHeader: "S/N ядро", width: 16, group: "ram" },
+        { key: `ram${i}_manuf`, header: "", subHeader: "S/N производитель", width: 14, group: "ram" }
+      );
+    }
+    
+    
+    columns.push(
+      { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 18, group: "raid" },
+      { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "raid" }
+    );
+    
+    
+    columns.push(
+      { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 20, group: "nic" },
+      { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "nic" }
+    );
+    
+    return columns;
+  }
+
+  
+
+
+  addGroupHeaders(sheet, columns, style) {
+    const headerRow = sheet.getRow(1);
+    
+    columns.forEach((col, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = col.header || "";
+      Object.assign(cell, style);
+    });
+    
+    headerRow.height = 35;
+  }
+
+  
+
+
+  addSubHeaders(sheet, columns, style) {
+    const subHeaderRow = sheet.getRow(2);
+    
+    columns.forEach((col, idx) => {
+      const cell = subHeaderRow.getCell(idx + 1);
+      cell.value = col.subHeader || "";
+      Object.assign(cell, style);
+    });
+    
+    subHeaderRow.height = 25;
+  }
+
+  
+
+
+  applyHeaderMerges(sheet, columns) {
+    const groups = {};
+    let startIdx = null;
+    let currentGroup = null;
+    
+    
+    columns.forEach((col, idx) => {
+      if (col.group !== currentGroup) {
+        if (currentGroup && startIdx !== null) {
+          if (!groups[currentGroup]) groups[currentGroup] = [];
+          groups[currentGroup].push({ start: startIdx, end: idx });
+        }
+        currentGroup = col.group;
+        startIdx = idx + 1;
+      }
+    });
+    
+    
+    if (currentGroup && startIdx !== null) {
+      if (!groups[currentGroup]) groups[currentGroup] = [];
+      groups[currentGroup].push({ start: startIdx, end: columns.length + 1 });
+    }
+    
+    
+    const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram"];
+    for (const groupName of multiColumnGroups) {
+      const groupRanges = [];
+      let rangeStart = null;
+      
+      columns.forEach((col, idx) => {
+        if (col.group === groupName) {
+          if (rangeStart === null) rangeStart = idx + 1;
+        } else if (rangeStart !== null) {
+          groupRanges.push({ start: rangeStart, end: idx });
+          rangeStart = null;
+        }
+      });
+      
+      if (rangeStart !== null) {
+        groupRanges.push({ start: rangeStart, end: columns.length });
+      }
+      
+      
+      for (const range of groupRanges) {
+        if (range.end - range.start > 1) {
+          try {
+            
+            const headerCol = columns.findIndex((c, i) => 
+              i >= range.start - 1 && i < range.end && c.header && c.group === groupName
+            );
+            
+            if (headerCol !== -1) {
+              const cell = sheet.getRow(1).getCell(headerCol + 1);
+              sheet.mergeCells(1, range.start, 1, range.end);
+              cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+            }
+          } catch (e) {
+            
+          }
+        }
+      }
+    }
+  }
+
+  
+
+
+  async getExportStats(options = {}) {
+    const servers = await this.getServersWithComponents(options);
+    
+    const stats = {
+      totalServers: servers.length,
+      totalComponents: 0,
+      byComponentType: {},
+      byBatch: {},
+      byStatus: {},
+      missingComponents: []
+    };
+    
+    for (const server of servers) {
+      const components = server.components || [];
+      stats.totalComponents += components.length;
+      
+      
+      for (const comp of components) {
+        const type = comp.componentType || "OTHER";
+        stats.byComponentType[type] = (stats.byComponentType[type] || 0) + 1;
+      }
+      
+      
+      const batchName = server.batch?.name || "Без партии";
+      stats.byBatch[batchName] = (stats.byBatch[batchName] || 0) + 1;
+      
+      
+      const status = server.status || "UNKNOWN";
+      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+      
+      
+      const grouped = this.groupComponentsByType(components);
+      const missing = [];
+      
+      if (!grouped.HDD || grouped.HDD.length < 12) {
+        missing.push(`HDD (${grouped.HDD?.length || 0}/12)`);
+      }
+      if (!grouped.RAM || grouped.RAM.length < 12) {
+        missing.push(`RAM (${grouped.RAM?.length || 0}/12)`);
+      }
+      if (!grouped.PSU || grouped.PSU.length < 2) {
+        missing.push(`PSU (${grouped.PSU?.length || 0}/2)`);
+      }
+      if (!grouped.MOTHERBOARD || grouped.MOTHERBOARD.length === 0) {
+        missing.push("Материнская плата");
+      }
+      
+      if (missing.length > 0) {
+        stats.missingComponents.push({
+          serverId: server.id,
+          apkSerialNumber: server.apkSerialNumber,
+          missing
+        });
+      }
+    }
+    
+    return stats;
+  }
+}
+
+module.exports = new UnifiedPassportsExportService();
 
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/utils/dhcpParser.js
@@ -86658,10 +90068,7 @@ router.get("/components/:id/history", ...protect, checkAbility("beryll.view"), g
 
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
-router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
-
-
-
+router.get("/defect-records/stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
 
 
 router.get("/defect-records/export", ...protect, checkAbility("beryll.view"), DefectExportController.exportDefects);
@@ -86669,36 +90076,45 @@ router.get("/defect-records/export/stats", ...protect, checkAbility("beryll.view
 
 
 router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
-router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.post("/defect-records", ...protect, checkAbility("beryll.work"), DefectRecordController.create);
+router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
+router.put("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.update);
+router.delete("/defect-records/:id", ...protect, checkAbility("beryll.manage"), DefectRecordController.delete);
+
+
+router.put("/defect-records/:id/status", ...protect, checkAbility("beryll.work"), DefectRecordController.changeStatus);
 
 
 router.post("/defect-records/:id/start-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.startDiagnosis);
 router.post("/defect-records/:id/complete-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.completeDiagnosis);
+
+
 router.post("/defect-records/:id/waiting-parts", ...protect, checkAbility("beryll.work"), DefectRecordController.setWaitingParts);
 router.post("/defect-records/:id/reserve-component", ...protect, checkAbility("beryll.work"), DefectRecordController.reserveComponent);
+
+
 router.post("/defect-records/:id/start-repair", ...protect, checkAbility("beryll.work"), DefectRecordController.startRepair);
 router.post("/defect-records/:id/perform-replacement", ...protect, checkAbility("beryll.work"), DefectRecordController.performReplacement);
+
+
 router.post("/defect-records/:id/send-to-yadro", ...protect, checkAbility("beryll.work"), DefectRecordController.sendToYadro);
 router.post("/defect-records/:id/return-from-yadro", ...protect, checkAbility("beryll.work"), DefectRecordController.returnFromYadro);
+
+
 router.post("/defect-records/:id/issue-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.issueSubstitute);
 router.post("/defect-records/:id/return-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.returnSubstitute);
-router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
 
+
+router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
+router.post("/defect-records/:id/mark-repeated", ...protect, checkAbility("beryll.work"), DefectRecordController.markAsRepeated);
 
 
 
 
 
 router.get("/defect-records/:id/files", ...protect, checkAbility("beryll.view"), DefectRecordController.getFiles);
-
-
 router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
-
-
 router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
-
-
 router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
 
 
@@ -87613,7 +91029,7 @@ const fcRouter = require("./fcRouter");
 const ELRS915_Router = require("./ELRS915_Router");
 const ELRS2_4_Router = require("./ELRS2_4_Router");
 const coralB_router = require("./CoralBRouter");
-
+const passportsExportRouter = require("./passportsExportRoutes"); 
 
 const defectRouter = require("./defectRouter");
 const defectRouter915 = require("./defectRouter915");
@@ -87626,9 +91042,6 @@ const beryllExtendedRouter = require("./beryllExtendedRouter");
 
 
 const defectSystemRouter = require("./defectSystemRouter");
-
-
-
 
 const productionOutputRouter = require("./productionOutputRouter");
 
@@ -87672,16 +91085,61 @@ router.use("/defects-Coral-B", defectRouter_CoralB);
 
 
 router.use("/beryll", beryllRouter);
-router.use("/beryll", beryllExtendedRouter); 
+router.use("/beryll", beryllExtendedRouter);
+router.use("/beryll/export/passports", passportsExportRouter); 
 
 
 router.use("/defects", defectSystemRouter);
 
-
-
-
-
 router.use("/production", productionOutputRouter);
+
+module.exports = router;
+================================================================================
+FILE: MES-Kryptonit-Server-master/routes/passportsExportRoutes.js
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+const Router = require("express");
+const router = new Router();
+const authMiddleware = require("../middleware/authMiddleware");
+const {
+  exportPassports,
+  getExportStats,
+  getExportPreview,
+  exportSinglePassport,
+  exportSelectedPassports,
+  exportBatchPassports
+} = require("../controllers/beryll/passportsExportController");
+
+
+router.use(authMiddleware);
+
+
+router.post("/", exportPassports);
+
+
+router.get("/stats", getExportStats);
+
+
+router.get("/preview", getExportPreview);
+
+
+router.get("/single/:serverId", exportSinglePassport);
+
+
+router.post("/selected", exportSelectedPassports);
+
+
+router.get("/batch/:batchId", exportBatchPassports);
 
 module.exports = router;
 ================================================================================
@@ -90600,6 +94058,832 @@ GET    /api/rankings/my-stats     # Моя статистика
 MIT
 
 ================================================================================
+FILE: MES-Kryptonit-Server-master/static/defect-records/2/1769579757522_README.md
+================================================================================
+
+# MABON — Luxury Porcelain & Sculpture
+
+Интернет-магазин дизайнерского фарфора и скульптур. React + Node.js + PostgreSQL.
+
+## 📦 Структура проекта
+
+```
+Mabon_Luxury/
+├── src/                    # Frontend (React + TypeScript)
+│   ├── components/         # UI компоненты
+│   ├── pages/              # Страницы
+│   ├── context/            # React контексты
+│   └── api/                # API клиент
+├── mabon-backend/          # Backend (Node.js + Express)
+│   ├── controllers/        # Контроллеры
+│   ├── models/             # Sequelize модели
+│   ├── routes/             # Роуты API
+│   ├── middleware/         # JWT, роли, ошибки
+│   └── static/             # Загруженные файлы
+├── docker-compose.yml      # Docker конфигурация
+├── nginx.conf              # Nginx для продакшена
+└── Dockerfile              # Frontend сборка
+```
+
+---
+
+## 🚀 Быстрый старт (Docker)
+
+### 1. Клонирование и запуск
+
+```bash
+git clone <repo-url>
+cd Mabon_Luxury
+
+# Запуск всех сервисов
+docker-compose up -d --build
+```
+
+### 2. Открыть в браузере
+
+- **Сайт:** http://localhost:3001
+- **API:** http://localhost:5000/api
+
+### 3. Войти как админ
+
+- **Email:** `admin@mabon.local`
+- **Пароль:** `Mabon_Super_Secret_2025!`
+
+---
+
+## 💻 Локальная разработка (без Docker)
+
+### Требования
+
+- Node.js 20+
+- PostgreSQL 15+
+- npm или yarn
+
+### 1. База данных
+
+```bash
+# Создать БД
+psql -U postgres -c "CREATE DATABASE mabon;"
+```
+
+### 2. Backend
+
+```bash
+cd mabon-backend
+
+# Установить зависимости
+npm install
+
+# Настроить .env (см. раздел ниже)
+cp .env.example .env
+nano .env
+
+# Запустить
+npm run dev
+```
+
+Backend запустится на http://localhost:5000
+
+### 3. Frontend
+
+```bash
+# В корне проекта
+npm install
+
+# Запустить dev-сервер
+npm run dev
+```
+
+Frontend запустится на http://localhost:5173
+
+---
+
+## ⚙️ Конфигурация
+
+### Backend: `mabon-backend/.env`
+
+```env
+# ===== СЕРВЕР =====
+PORT=5000
+
+# ===== БАЗА ДАННЫХ =====
+DB_HOST=localhost          # Для Docker: db
+DB_PORT=5432               # Локально может быть 5435
+DB_NAME=mabon
+DB_USER=postgres
+DB_PASSWORD=your_password  # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== БЕЗОПАСНОСТЬ =====
+JWT_SECRET=your_jwt_secret_min_32_chars    # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+SECRET_KEY=your_secret_key_min_32_chars    # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== CORS =====
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# ===== YOOKASSA (ОПЛАТА) =====
+YOOKASSA_SHOP_ID=123456                    # Ваш Shop ID
+YOOKASSA_SECRET_KEY=test_xxxxx             # Тестовый или боевой ключ
+
+# ===== АДМИН (создаётся при первом запуске) =====
+ADMIN_EMAIL=admin@mabon.local
+ADMIN_PASSWORD=Strong_Password_123!        # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== SEQUELIZE =====
+DB_SYNC_ALTER=true         # true для разработки, false для прода
+```
+
+### Frontend: переменные окружения
+
+Создайте `.env` в корне проекта:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000
+```
+
+Для продакшена:
+
+```env
+VITE_API_BASE_URL=https://api.your-domain.com
+```
+
+---
+
+## 🌐 Деплой в продакшен
+
+### Вариант 1: Docker Compose на VPS
+
+#### 1. Подготовка сервера
+
+```bash
+# Установить Docker и Docker Compose
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
+
+#### 2. Настройка переменных
+
+Создайте `docker-compose.prod.yml`:
+
+```yaml
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mabon_db
+    restart: always
+    environment:
+      POSTGRES_USER: mabon_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  # Из .env
+      POSTGRES_DB: mabon
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./mabon-backend
+    container_name: mabon_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: mabon
+      DB_USER: mabon_user
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: https://your-domain.com
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      DB_SYNC_ALTER: "false"
+    volumes:
+      - ./mabon-backend/static:/app/static
+
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: https://your-domain.com
+    container_name: mabon_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  postgres_data:
+```
+
+#### 3. Создайте `.env` на сервере
+
+```env
+DB_PASSWORD=SuperSecurePassword123!
+JWT_SECRET=your_very_long_jwt_secret_at_least_32_characters
+SECRET_KEY=your_very_long_secret_key_at_least_32_characters
+YOOKASSA_SHOP_ID=123456
+YOOKASSA_SECRET_KEY=live_xxxxxxxxxxxxx
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=AdminSecurePassword456!
+```
+
+#### 4. Запуск
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+### Вариант 2: Отдельные сервисы
+
+#### Backend на VPS / Cloud Run / Railway
+
+```bash
+cd mabon-backend
+npm install --production
+npm start
+```
+
+#### Frontend на Vercel / Netlify / Cloudflare Pages
+
+```bash
+npm run build
+# Загрузить папку dist/
+```
+
+---
+
+## 🔐 Что обязательно изменить для продакшена
+
+| Переменная | Описание | Пример |
+|------------|----------|--------|
+| `DB_PASSWORD` | Пароль БД | `Kj8#mNp$2qLx` |
+| `JWT_SECRET` | Секрет для JWT токенов (мин. 32 символа) | `a1b2c3d4e5f6g7h8i9j0...` |
+| `SECRET_KEY` | Общий секретный ключ | `x9y8z7w6v5u4t3s2r1q0...` |
+| `ADMIN_PASSWORD` | Пароль администратора | `Admin$ecure2025!` |
+| `YOOKASSA_SECRET_KEY` | Боевой ключ ЮKassa | `live_xxxxxxxxxxxx` |
+| `CORS_ORIGINS` | Разрешённые домены | `https://mabon.ru` |
+
+### Генерация безопасных ключей
+
+```bash
+# JWT_SECRET и SECRET_KEY
+openssl rand -base64 32
+
+# Или через Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+## 📝 API Endpoints
+
+### Публичные
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/product` | Список товаров |
+| GET | `/api/product/:id` | Товар по ID |
+| GET | `/api/author` | Список авторов |
+| GET | `/api/author/:id` | Автор по ID |
+| GET | `/api/arttype` | Типы искусства |
+| GET | `/api/review/product/:id` | Отзывы товара |
+
+### Авторизация
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/user/registration` | Регистрация |
+| POST | `/api/user/login` | Вход |
+| GET | `/api/user/auth` | Проверка токена |
+
+### Пользователь (требует JWT)
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/cart` | Корзина |
+| POST | `/api/cart` | Добавить в корзину |
+| DELETE | `/api/cart/:id` | Удалить из корзины |
+| GET | `/api/wishlist` | Избранное |
+| POST | `/api/order` | Создать заказ |
+| GET | `/api/order/my` | Мои заказы |
+
+### Админ (требует JWT + роль ADMIN)
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/product` | Создать товар |
+| PUT | `/api/product/:id` | Обновить товар |
+| DELETE | `/api/product/:id` | Удалить товар |
+| GET | `/api/order` | Все заказы |
+| PUT | `/api/order/:id` | Обновить статус заказа |
+
+---
+
+## 💳 Интеграция ЮKassa
+
+### Тестовый режим
+
+1. Зарегистрируйтесь в [ЮKassa](https://yookassa.ru/)
+2. Получите тестовые ключи в личном кабинете
+3. Укажите в `.env`:
+
+```env
+YOOKASSA_SHOP_ID=123456
+YOOKASSA_SECRET_KEY=test_xxxxxxxxxxxxxxxx
+```
+
+### Боевой режим
+
+1. Пройдите модерацию в ЮKassa
+2. Замените тестовый ключ на боевой:
+
+```env
+YOOKASSA_SECRET_KEY=live_xxxxxxxxxxxxxxxx
+```
+
+### Webhook для статусов оплаты
+
+Настройте в личном кабинете ЮKassa:
+
+```
+URL: https://your-domain.com/api/yookassa/webhook
+Метод: POST
+```
+
+---
+
+## 🛠 Полезные команды
+
+```bash
+# Пересобрать контейнеры
+docker-compose up -d --build
+
+# Логи
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Зайти в контейнер БД
+docker exec -it mabon_db psql -U postgres -d mabon
+
+# Перезапуск
+docker-compose restart backend
+
+# Остановка
+docker-compose down
+
+# Полная очистка (включая volumes)
+docker-compose down -v
+```
+
+---
+
+## 🐛 Частые проблемы
+
+### CORS ошибки
+
+Проверьте `CORS_ORIGINS` в `.env` — должен содержать домен фронтенда.
+
+### Не создаётся админ
+
+Убедитесь что `ADMIN_EMAIL` и `ADMIN_PASSWORD` заданы до первого запуска.
+
+### Ошибки подключения к БД
+
+- Проверьте что PostgreSQL запущен
+- Проверьте `DB_HOST` (для Docker: `db`, локально: `localhost`)
+- Проверьте порт (`5432` в Docker, может быть `5435` локально)
+
+### Картинки не загружаются
+
+Проверьте volume для static файлов:
+
+```yaml
+volumes:
+  - ./mabon-backend/static:/app/static
+```
+
+---
+
+## 📄 Лицензия
+
+MIT
+================================================================================
+FILE: MES-Kryptonit-Server-master/static/defect-records/2/1769580241363_README.md
+================================================================================
+
+# MABON — Luxury Porcelain & Sculpture
+
+Интернет-магазин дизайнерского фарфора и скульптур. React + Node.js + PostgreSQL.
+
+## 📦 Структура проекта
+
+```
+Mabon_Luxury/
+├── src/                    # Frontend (React + TypeScript)
+│   ├── components/         # UI компоненты
+│   ├── pages/              # Страницы
+│   ├── context/            # React контексты
+│   └── api/                # API клиент
+├── mabon-backend/          # Backend (Node.js + Express)
+│   ├── controllers/        # Контроллеры
+│   ├── models/             # Sequelize модели
+│   ├── routes/             # Роуты API
+│   ├── middleware/         # JWT, роли, ошибки
+│   └── static/             # Загруженные файлы
+├── docker-compose.yml      # Docker конфигурация
+├── nginx.conf              # Nginx для продакшена
+└── Dockerfile              # Frontend сборка
+```
+
+---
+
+## 🚀 Быстрый старт (Docker)
+
+### 1. Клонирование и запуск
+
+```bash
+git clone <repo-url>
+cd Mabon_Luxury
+
+# Запуск всех сервисов
+docker-compose up -d --build
+```
+
+### 2. Открыть в браузере
+
+- **Сайт:** http://localhost:3001
+- **API:** http://localhost:5000/api
+
+### 3. Войти как админ
+
+- **Email:** `admin@mabon.local`
+- **Пароль:** `Mabon_Super_Secret_2025!`
+
+---
+
+## 💻 Локальная разработка (без Docker)
+
+### Требования
+
+- Node.js 20+
+- PostgreSQL 15+
+- npm или yarn
+
+### 1. База данных
+
+```bash
+# Создать БД
+psql -U postgres -c "CREATE DATABASE mabon;"
+```
+
+### 2. Backend
+
+```bash
+cd mabon-backend
+
+# Установить зависимости
+npm install
+
+# Настроить .env (см. раздел ниже)
+cp .env.example .env
+nano .env
+
+# Запустить
+npm run dev
+```
+
+Backend запустится на http://localhost:5000
+
+### 3. Frontend
+
+```bash
+# В корне проекта
+npm install
+
+# Запустить dev-сервер
+npm run dev
+```
+
+Frontend запустится на http://localhost:5173
+
+---
+
+## ⚙️ Конфигурация
+
+### Backend: `mabon-backend/.env`
+
+```env
+# ===== СЕРВЕР =====
+PORT=5000
+
+# ===== БАЗА ДАННЫХ =====
+DB_HOST=localhost          # Для Docker: db
+DB_PORT=5432               # Локально может быть 5435
+DB_NAME=mabon
+DB_USER=postgres
+DB_PASSWORD=your_password  # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== БЕЗОПАСНОСТЬ =====
+JWT_SECRET=your_jwt_secret_min_32_chars    # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+SECRET_KEY=your_secret_key_min_32_chars    # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== CORS =====
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# ===== YOOKASSA (ОПЛАТА) =====
+YOOKASSA_SHOP_ID=123456                    # Ваш Shop ID
+YOOKASSA_SECRET_KEY=test_xxxxx             # Тестовый или боевой ключ
+
+# ===== АДМИН (создаётся при первом запуске) =====
+ADMIN_EMAIL=admin@mabon.local
+ADMIN_PASSWORD=Strong_Password_123!        # ⚠️ ИЗМЕНИТЬ В ПРОДЕ
+
+# ===== SEQUELIZE =====
+DB_SYNC_ALTER=true         # true для разработки, false для прода
+```
+
+### Frontend: переменные окружения
+
+Создайте `.env` в корне проекта:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000
+```
+
+Для продакшена:
+
+```env
+VITE_API_BASE_URL=https://api.your-domain.com
+```
+
+---
+
+## 🌐 Деплой в продакшен
+
+### Вариант 1: Docker Compose на VPS
+
+#### 1. Подготовка сервера
+
+```bash
+# Установить Docker и Docker Compose
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
+
+#### 2. Настройка переменных
+
+Создайте `docker-compose.prod.yml`:
+
+```yaml
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mabon_db
+    restart: always
+    environment:
+      POSTGRES_USER: mabon_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  # Из .env
+      POSTGRES_DB: mabon
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./mabon-backend
+    container_name: mabon_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: mabon
+      DB_USER: mabon_user
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: https://your-domain.com
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      DB_SYNC_ALTER: "false"
+    volumes:
+      - ./mabon-backend/static:/app/static
+
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: https://your-domain.com
+    container_name: mabon_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  postgres_data:
+```
+
+#### 3. Создайте `.env` на сервере
+
+```env
+DB_PASSWORD=SuperSecurePassword123!
+JWT_SECRET=your_very_long_jwt_secret_at_least_32_characters
+SECRET_KEY=your_very_long_secret_key_at_least_32_characters
+YOOKASSA_SHOP_ID=123456
+YOOKASSA_SECRET_KEY=live_xxxxxxxxxxxxx
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=AdminSecurePassword456!
+```
+
+#### 4. Запуск
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+### Вариант 2: Отдельные сервисы
+
+#### Backend на VPS / Cloud Run / Railway
+
+```bash
+cd mabon-backend
+npm install --production
+npm start
+```
+
+#### Frontend на Vercel / Netlify / Cloudflare Pages
+
+```bash
+npm run build
+# Загрузить папку dist/
+```
+
+---
+
+## 🔐 Что обязательно изменить для продакшена
+
+| Переменная | Описание | Пример |
+|------------|----------|--------|
+| `DB_PASSWORD` | Пароль БД | `Kj8#mNp$2qLx` |
+| `JWT_SECRET` | Секрет для JWT токенов (мин. 32 символа) | `a1b2c3d4e5f6g7h8i9j0...` |
+| `SECRET_KEY` | Общий секретный ключ | `x9y8z7w6v5u4t3s2r1q0...` |
+| `ADMIN_PASSWORD` | Пароль администратора | `Admin$ecure2025!` |
+| `YOOKASSA_SECRET_KEY` | Боевой ключ ЮKassa | `live_xxxxxxxxxxxx` |
+| `CORS_ORIGINS` | Разрешённые домены | `https://mabon.ru` |
+
+### Генерация безопасных ключей
+
+```bash
+# JWT_SECRET и SECRET_KEY
+openssl rand -base64 32
+
+# Или через Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+## 📝 API Endpoints
+
+### Публичные
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/product` | Список товаров |
+| GET | `/api/product/:id` | Товар по ID |
+| GET | `/api/author` | Список авторов |
+| GET | `/api/author/:id` | Автор по ID |
+| GET | `/api/arttype` | Типы искусства |
+| GET | `/api/review/product/:id` | Отзывы товара |
+
+### Авторизация
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/user/registration` | Регистрация |
+| POST | `/api/user/login` | Вход |
+| GET | `/api/user/auth` | Проверка токена |
+
+### Пользователь (требует JWT)
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/cart` | Корзина |
+| POST | `/api/cart` | Добавить в корзину |
+| DELETE | `/api/cart/:id` | Удалить из корзины |
+| GET | `/api/wishlist` | Избранное |
+| POST | `/api/order` | Создать заказ |
+| GET | `/api/order/my` | Мои заказы |
+
+### Админ (требует JWT + роль ADMIN)
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| POST | `/api/product` | Создать товар |
+| PUT | `/api/product/:id` | Обновить товар |
+| DELETE | `/api/product/:id` | Удалить товар |
+| GET | `/api/order` | Все заказы |
+| PUT | `/api/order/:id` | Обновить статус заказа |
+
+---
+
+## 💳 Интеграция ЮKassa
+
+### Тестовый режим
+
+1. Зарегистрируйтесь в [ЮKassa](https://yookassa.ru/)
+2. Получите тестовые ключи в личном кабинете
+3. Укажите в `.env`:
+
+```env
+YOOKASSA_SHOP_ID=123456
+YOOKASSA_SECRET_KEY=test_xxxxxxxxxxxxxxxx
+```
+
+### Боевой режим
+
+1. Пройдите модерацию в ЮKassa
+2. Замените тестовый ключ на боевой:
+
+```env
+YOOKASSA_SECRET_KEY=live_xxxxxxxxxxxxxxxx
+```
+
+### Webhook для статусов оплаты
+
+Настройте в личном кабинете ЮKassa:
+
+```
+URL: https://your-domain.com/api/yookassa/webhook
+Метод: POST
+```
+
+---
+
+## 🛠 Полезные команды
+
+```bash
+# Пересобрать контейнеры
+docker-compose up -d --build
+
+# Логи
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Зайти в контейнер БД
+docker exec -it mabon_db psql -U postgres -d mabon
+
+# Перезапуск
+docker-compose restart backend
+
+# Остановка
+docker-compose down
+
+# Полная очистка (включая volumes)
+docker-compose down -v
+```
+
+---
+
+## 🐛 Частые проблемы
+
+### CORS ошибки
+
+Проверьте `CORS_ORIGINS` в `.env` — должен содержать домен фронтенда.
+
+### Не создаётся админ
+
+Убедитесь что `ADMIN_EMAIL` и `ADMIN_PASSWORD` заданы до первого запуска.
+
+### Ошибки подключения к БД
+
+- Проверьте что PostgreSQL запущен
+- Проверьте `DB_HOST` (для Docker: `db`, локально: `localhost`)
+- Проверьте порт (`5432` в Docker, может быть `5435` локально)
+
+### Картинки не загружаются
+
+Проверьте volume для static файлов:
+
+```yaml
+volumes:
+  - ./mabon-backend/static:/app/static
+```
+
+---
+
+## 📄 Лицензия
+
+MIT
+================================================================================
 FILE: MES-Kryptonit-Server-master/tests/controllers/box.test.js
 ================================================================================
 
@@ -91011,7 +95295,224 @@ describe('syncUserMiddleware', () => {
 FILE: MES-Kryptonit-Server-master/utils/auditLogger.js
 ================================================================================
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const { AuditLog } = require("../models/index");
+
+
+const AUDIT_ACTIONS = {
+  
+  SESSION_START: "SESSION_START",
+  SESSION_END: "SESSION_END",
+  SESSION_DELETE: "SESSION_DELETE",
+  SESSION_AUTO_OFF: "SESSION_AUTO_OFF",
+  SESSION_FORCE_OFF: "SESSION_FORCE_OFF",
+
+  
+  SERVER_CREATE: "SERVER_CREATE",
+  SERVER_UPDATE: "SERVER_UPDATE",
+  SERVER_DELETE: "SERVER_DELETE",
+  SERVER_STATUS_CHANGE: "SERVER_STATUS_CHANGE",
+  SERVER_DHCP_SYNC: "SERVER_DHCP_SYNC",
+  SERVER_BMC_SYNC: "SERVER_BMC_SYNC",
+  SERVER_ARCHIVE: "SERVER_ARCHIVE",
+  SERVER_RESTORE: "SERVER_RESTORE",
+
+  
+  BATCH_CREATE: "BATCH_CREATE",
+  BATCH_UPDATE: "BATCH_UPDATE",
+  BATCH_DELETE: "BATCH_DELETE",
+  BATCH_CLOSE: "BATCH_CLOSE",
+
+  
+  RACK_CREATE: "RACK_CREATE",
+  RACK_UPDATE: "RACK_UPDATE",
+  RACK_DELETE: "RACK_DELETE",
+  RACK_SERVER_ADD: "RACK_SERVER_ADD",
+  RACK_SERVER_REMOVE: "RACK_SERVER_REMOVE",
+
+  
+  CLUSTER_CREATE: "CLUSTER_CREATE",
+  CLUSTER_UPDATE: "CLUSTER_UPDATE",
+  CLUSTER_DELETE: "CLUSTER_DELETE",
+  CLUSTER_SHIP: "CLUSTER_SHIP",
+
+  
+  DEFECT_CREATE: "DEFECT_CREATE",
+  DEFECT_UPDATE: "DEFECT_UPDATE",
+  DEFECT_RESOLVE: "DEFECT_RESOLVE",
+  DEFECT_CLOSE: "DEFECT_CLOSE",
+  DEFECT_REOPEN: "DEFECT_REOPEN",
+  DEFECT_FILE_UPLOAD: "DEFECT_FILE_UPLOAD",
+  DEFECT_FILE_DELETE: "DEFECT_FILE_DELETE",
+
+  
+  REPAIR_ACTION_ADD: "REPAIR_ACTION_ADD",
+  REPAIR_ACTION_UPDATE: "REPAIR_ACTION_UPDATE",
+  REPAIR_ACTION_DELETE: "REPAIR_ACTION_DELETE",
+
+  
+  YADRO_TICKET_CREATE: "YADRO_TICKET_CREATE",
+  YADRO_TICKET_UPDATE: "YADRO_TICKET_UPDATE",
+  YADRO_TICKET_RECEIVE: "YADRO_TICKET_RECEIVE",
+  YADRO_TICKET_CLOSE: "YADRO_TICKET_CLOSE",
+
+  
+  WAREHOUSE_MOVE: "WAREHOUSE_MOVE",
+  WAREHOUSE_MOVE_BATCH: "WAREHOUSE_MOVE_BATCH",
+  BOX_CREATE: "BOX_CREATE",
+  BOX_UPDATE: "BOX_UPDATE",
+  BOX_DELETE: "BOX_DELETE",
+  BOX_SPLIT: "BOX_SPLIT",
+  BOX_MERGE: "BOX_MERGE",
+  SUPPLY_CREATE: "SUPPLY_CREATE",
+  SUPPLY_UPDATE: "SUPPLY_UPDATE",
+  SUPPLY_RECEIVE: "SUPPLY_RECEIVE",
+
+  
+  COMPONENT_CREATE: "COMPONENT_CREATE",
+  COMPONENT_UPDATE: "COMPONENT_UPDATE",
+  COMPONENT_DELETE: "COMPONENT_DELETE",
+  COMPONENT_SYNC: "COMPONENT_SYNC",
+  COMPONENT_REPLACE: "COMPONENT_REPLACE",
+  COMPONENT_TRANSFER: "COMPONENT_TRANSFER",
+  COMPONENT_BATCH_ADD: "COMPONENT_BATCH_ADD",
+
+  
+  PRODUCTION_ENTRY_CREATE: "PRODUCTION_ENTRY_CREATE",
+  PRODUCTION_ENTRY_UPDATE: "PRODUCTION_ENTRY_UPDATE",
+  PRODUCTION_ENTRY_APPROVE: "PRODUCTION_ENTRY_APPROVE",
+  PRODUCTION_ENTRY_REJECT: "PRODUCTION_ENTRY_REJECT",
+  PRODUCTION_ENTRY_DELETE: "PRODUCTION_ENTRY_DELETE",
+  PRODUCT_ASSEMBLE: "PRODUCT_ASSEMBLE",
+  PRODUCT_QC_PASS: "PRODUCT_QC_PASS",
+  PRODUCT_QC_FAIL: "PRODUCT_QC_FAIL",
+
+  
+  SECTION_CREATE: "SECTION_CREATE",
+  SECTION_UPDATE: "SECTION_UPDATE",
+  SECTION_DELETE: "SECTION_DELETE",
+  TEAM_CREATE: "TEAM_CREATE",
+  TEAM_UPDATE: "TEAM_UPDATE",
+  TEAM_DELETE: "TEAM_DELETE",
+
+  
+  ROLE_CREATE: "ROLE_CREATE",
+  ROLE_UPDATE: "ROLE_UPDATE",
+  ROLE_DELETE: "ROLE_DELETE",
+  ABILITY_CREATE: "ABILITY_CREATE",
+  ABILITY_DELETE: "ABILITY_DELETE",
+  ROLE_ABILITY_GRANT: "ROLE_ABILITY_GRANT",
+  ROLE_ABILITY_REVOKE: "ROLE_ABILITY_REVOKE",
+
+  
+  USER_CREATE: "USER_CREATE",
+  USER_UPDATE: "USER_UPDATE",
+  USER_DELETE: "USER_DELETE",
+  USER_ROLE_CHANGE: "USER_ROLE_CHANGE",
+
+  
+  EXPORT_PASSPORT: "EXPORT_PASSPORT",
+  EXPORT_DEFECTS: "EXPORT_DEFECTS",
+  EXPORT_REPORT: "EXPORT_REPORT",
+
+  
+  SETTINGS_UPDATE: "SETTINGS_UPDATE",
+  SYSTEM_EVENT: "SYSTEM_EVENT",
+};
+
+
+const AUDIT_ENTITIES = {
+  SESSION: "SESSION",
+  
+  
+  BERYLL_SERVER: "BeryllServer",
+  BERYLL_BATCH: "BeryllBatch",
+  BERYLL_RACK: "BeryllRack",
+  BERYLL_CLUSTER: "BeryllCluster",
+  BERYLL_SHIPMENT: "BeryllShipment",
+  
+  
+  BERYLL_DEFECT: "BeryllDefectRecord",
+  BOARD_DEFECT: "BoardDefect",
+  REPAIR_ACTION: "RepairAction",
+  REPAIR_HISTORY: "RepairHistory",
+  DEFECT_CATEGORY: "DefectCategory",
+  YADRO_TICKET: "YadroTicketLog",
+  
+  
+  WAREHOUSE_MOVEMENT: "WarehouseMovement",
+  INVENTORY_BOX: "InventoryBox",
+  SUPPLY: "Supply",
+  WAREHOUSE_DOCUMENT: "WarehouseDocument",
+  
+  
+  COMPONENT_INVENTORY: "ComponentInventory",
+  COMPONENT_HISTORY: "ComponentHistory",
+  COMPONENT_CATALOG: "ComponentCatalog",
+  
+  
+  PRODUCTION_ENTRY: "ProductionEntry",
+  PRODUCTION_OUTPUT: "ProductionOutput",
+  ASSEMBLED_PRODUCT: "AssembledProduct",
+  
+  
+  SECTION: "Section",
+  TEAM: "Team",
+  
+  
+  ROLE: "Role",
+  ABILITY: "Ability",
+  ROLE_ABILITY: "RoleAbility",
+  
+  
+  USER: "User",
+};
 
 
 
@@ -91035,13 +95536,13 @@ async function logAudit({
   metadata,
 }) {
   if (!action) {
+    console.warn("[AuditLogger] Попытка логирования без указания action");
     return;
   }
 
   try {
     
     let finalUserId = null;
-
     if (req && req.user && req.user.id) {
       finalUserId = req.user.id;
     } else if (userId) {
@@ -91050,7 +95551,6 @@ async function logAudit({
 
     
     let meta = metadata || {};
-
     if (req) {
       const ipHeader = req.headers["x-forwarded-for"];
       const ip =
@@ -91071,18 +95571,192 @@ async function logAudit({
       userId: finalUserId,
       action,
       entity: entity || null,
-      entityId:
-        entityId === undefined || entityId === null ? null : String(entityId),
+      entityId: entityId === undefined || entityId === null ? null : String(entityId),
       description: description || null,
-      metadata: meta,
+      metadata: Object.keys(meta).length > 0 ? meta : null,
     });
-  } catch (e) {
-    console.error("ОШИБКА ЗАПИСИ АУДИТА:", e.message);
+  } catch (error) {
+    console.error("[AuditLogger] Ошибка записи в журнал аудита:", error);
+    
   }
 }
 
-module.exports = { logAudit };
 
+
+
+
+
+async function logServerCreate(req, server, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.SERVER_CREATE,
+    entity: AUDIT_ENTITIES.BERYLL_SERVER,
+    entityId: server.id,
+    description: `Создан сервер ${server.apkSerialNumber || server.hostname || 'N/A'}`,
+    metadata: {
+      serverSerial: server.apkSerialNumber,
+      hostname: server.hostname,
+      batchId: server.batchId,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logServerStatusChange(req, server, oldStatus, newStatus, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.SERVER_STATUS_CHANGE,
+    entity: AUDIT_ENTITIES.BERYLL_SERVER,
+    entityId: server.id,
+    description: `Статус сервера ${server.apkSerialNumber || 'N/A'}: ${oldStatus} → ${newStatus}`,
+    metadata: {
+      serverSerial: server.apkSerialNumber,
+      oldStatus,
+      newStatus,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logDefectCreate(req, defect, server, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.DEFECT_CREATE,
+    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+    entityId: defect.id,
+    description: `Создана запись о браке для сервера ${server?.apkSerialNumber || 'N/A'}`,
+    metadata: {
+      serverSerial: server?.apkSerialNumber,
+      serverId: server?.id,
+      problemDescription: defect.problemDescription?.substring(0, 100),
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logDefectResolve(req, defect, resolution, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.DEFECT_RESOLVE,
+    entity: AUDIT_ENTITIES.BERYLL_DEFECT,
+    entityId: defect.id,
+    description: `Дефект #${defect.id} закрыт: ${resolution}`,
+    metadata: {
+      resolution,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logWarehouseMove(req, movement, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.WAREHOUSE_MOVE,
+    entity: AUDIT_ENTITIES.WAREHOUSE_MOVEMENT,
+    entityId: movement.id,
+    description: `Перемещение: ${movement.operation}, кол-во: ${movement.deltaQty || 0}`,
+    metadata: {
+      boxId: movement.boxId,
+      operation: movement.operation,
+      fromSectionId: movement.fromSectionId,
+      toSectionId: movement.toSectionId,
+      deltaQty: movement.deltaQty,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logComponentSync(req, serverId, result, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.COMPONENT_SYNC,
+    entity: AUDIT_ENTITIES.COMPONENT_INVENTORY,
+    entityId: serverId,
+    description: `Синхронизация компонентов сервера #${serverId}`,
+    metadata: {
+      serverId,
+      mode: result.mode,
+      added: result.actions?.added?.length || 0,
+      updated: result.actions?.updated?.length || 0,
+      preserved: result.actions?.preserved?.length || 0,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logProductionEntry(req, entry, action, metadata = {}) {
+  const actionMap = {
+    create: AUDIT_ACTIONS.PRODUCTION_ENTRY_CREATE,
+    approve: AUDIT_ACTIONS.PRODUCTION_ENTRY_APPROVE,
+    reject: AUDIT_ACTIONS.PRODUCTION_ENTRY_REJECT,
+    update: AUDIT_ACTIONS.PRODUCTION_ENTRY_UPDATE,
+    delete: AUDIT_ACTIONS.PRODUCTION_ENTRY_DELETE,
+  };
+
+  await logAudit({
+    req,
+    action: actionMap[action] || AUDIT_ACTIONS.PRODUCTION_ENTRY_UPDATE,
+    entity: AUDIT_ENTITIES.PRODUCTION_ENTRY,
+    entityId: entry.id,
+    description: `Производственная запись #${entry.id}: ${action}`,
+    metadata: {
+      entryId: entry.id,
+      quantity: entry.quantity,
+      productId: entry.productId,
+      ...metadata,
+    },
+  });
+}
+
+
+
+
+async function logExport(req, exportType, description, metadata = {}) {
+  await logAudit({
+    req,
+    action: AUDIT_ACTIONS.EXPORT_REPORT,
+    entity: null,
+    entityId: null,
+    description: description || `Экспорт: ${exportType}`,
+    metadata: {
+      exportType,
+      ...metadata,
+    },
+  });
+}
+
+module.exports = {
+  logAudit,
+  AUDIT_ACTIONS,
+  AUDIT_ENTITIES,
+  
+  logServerCreate,
+  logServerStatusChange,
+  logDefectCreate,
+  logDefectResolve,
+  logWarehouseMove,
+  logComponentSync,
+  logProductionEntry,
+  logExport,
+};
 ================================================================================
 FILE: dump_project_full.py
 ================================================================================

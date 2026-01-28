@@ -1,24 +1,86 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  Trophy, TrendingUp, Users, Search, Factory, Package,
-  Medal, Star, Award, ChevronUp, ChevronDown, Loader2,
-  BarChart3, Boxes
+  Trophy, TrendingUp, TrendingDown, Users, Search, Factory,
+  Medal, Star, Loader2, BarChart3, Boxes, Calendar, X, Minus
 } from "lucide-react";
-import { fetchRankings, RankingResponse, RankingUser, RankingTeam } from "src/api/rankingsApi";
+import { fetchRankings, RankingResponse, RankingUser, RankingTeam, Period, RankingsParams, SparklinePoint } from "src/api/rankingsApi";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 import clsx from "clsx";
+import dayjs from "dayjs";
 
-type Period = "day" | "week" | "month";
 type Tab = "users" | "teams" | "sections";
 
+const periodLabels: Record<Period, string> = {
+  day: "Сегодня",
+  week: "Эта неделя",
+  month: "Этот месяц",
+  year: "За год",
+  all: "Всё время",
+  custom: "Период"
+};
+
+const mainPeriods: Period[] = ["day", "week", "month", "year", "all"];
+
 /**
- * Обновлённая страница рейтингов с интеграцией ProductionOutput
- * 
- * Показывает:
- * - Общий рейтинг (Склад + Производство)
- * - Разбивку по источникам
- * - Статистику по участкам
+ * Компонент мини-графика (спарклайн)
  */
+const Sparkline: React.FC<{ data: SparklinePoint[]; color?: string }> = ({ data, color }) => {
+  if (!data || data.length < 2) {
+    return <div className="w-20 h-8 flex items-center justify-center text-slate-300">—</div>;
+  }
+
+  // Определяем тренд по цвету
+  const firstValue = data[0]?.value || 0;
+  const lastValue = data[data.length - 1]?.value || 0;
+  const isUp = lastValue >= firstValue;
+  const lineColor = color || (isUp ? "#10b981" : "#ef4444");
+
+  return (
+    <div className="w-20 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line 
+            type="monotone" 
+            dataKey="value" 
+            stroke={lineColor}
+            strokeWidth={1.5}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+/**
+ * Компонент индикатора изменения
+ */
+const ChangeIndicator: React.FC<{ change: number; showPercent?: boolean }> = ({ change, showPercent }) => {
+  if (change === 0) {
+    return (
+      <div className="flex items-center gap-1 text-slate-400">
+        <Minus size={14} />
+        <span className="text-sm font-medium">0</span>
+      </div>
+    );
+  }
+
+  const isPositive = change > 0;
+  
+  return (
+    <div className={clsx(
+      "flex items-center gap-1",
+      isPositive ? "text-emerald-600" : "text-red-500"
+    )}>
+      {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+      <span className="text-sm font-bold">
+        {isPositive ? "+" : ""}{change}
+      </span>
+    </div>
+  );
+};
+
 const RankingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("week");
@@ -26,23 +88,72 @@ const RankingsPage: React.FC = () => {
   const [data, setData] = useState<RankingResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [appliedDateRange, setAppliedDateRange] = useState<{ start: string; end: string } | null>(null);
+
+  const loadData = useCallback(async (params: RankingsParams) => {
+    setLoading(true);
+    try {
+      const res = await fetchRankings(params);
+      setData(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const res = await fetchRankings(period);
-        setData(res);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [period]);
+    if (period === "custom" && appliedDateRange) {
+      loadData({
+        period: "custom",
+        startDate: appliedDateRange.start,
+        endDate: appliedDateRange.end
+      });
+    } else if (period !== "custom") {
+      loadData({ period });
+    }
+  }, [period, appliedDateRange, loadData]);
 
-  // Агрегация по участкам
+  const handlePeriodChange = (newPeriod: Period) => {
+    if (newPeriod === "custom") {
+      setShowDatePicker(true);
+    } else {
+      setPeriod(newPeriod);
+      setShowDatePicker(false);
+      setAppliedDateRange(null);
+    }
+  };
+
+  const applyCustomRange = () => {
+    if (customStartDate && customEndDate) {
+      setAppliedDateRange({
+        start: customStartDate,
+        end: customEndDate
+      });
+      setPeriod("custom");
+      setShowDatePicker(false);
+    }
+  };
+
+  const resetCustomRange = () => {
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setAppliedDateRange(null);
+    setShowDatePicker(false);
+    setPeriod("week");
+  };
+
+  const applyPreset = (days: number) => {
+    const end = dayjs().format("YYYY-MM-DD");
+    const start = dayjs().subtract(days, "day").format("YYYY-MM-DD");
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+  };
+
   const sectionsStats = useMemo(() => {
     if (!data?.teams) return [];
     const map = new Map();
@@ -77,16 +188,19 @@ const RankingsPage: React.FC = () => {
     t.title.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
-  const periodLabels: Record<Period, string> = {
-    day: "Сегодня",
-    week: "Эта неделя",
-    month: "Этот месяц"
+  const formatDateRange = () => {
+    if (appliedDateRange) {
+      const start = dayjs(appliedDateRange.start).format("DD.MM.YYYY");
+      const end = dayjs(appliedDateRange.end).format("DD.MM.YYYY");
+      return `${start} — ${end}`;
+    }
+    return periodLabels[period];
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-sans text-slate-800">
       
-      {/* Шапка */}
+      {/* Хедер */}
       <div className="bg-slate-900 pt-8 pb-32 px-6 rounded-b-[3rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-20 pointer-events-none">
           <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500 rounded-full blur-[100px]"></div>
@@ -105,22 +219,114 @@ const RankingsPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Переключатель периода */}
-            <div className="bg-slate-800/50 backdrop-blur-md p-1.5 rounded-xl flex gap-1 border border-slate-700/50">
-              {(["day", "week", "month"] as const).map(p => (
+            {/* Выбор периода */}
+            <div className="flex flex-col items-end gap-2">
+              <div className="bg-slate-800/50 backdrop-blur-md p-1.5 rounded-xl flex flex-wrap gap-1 border border-slate-700/50">
+                {mainPeriods.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    className={clsx(
+                      "px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap",
+                      period === p && !appliedDateRange
+                        ? "bg-indigo-600 text-white shadow-lg" 
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    )}
+                  >
+                    {periodLabels[p]}
+                  </button>
+                ))}
+                
                 <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
+                  onClick={() => setShowDatePicker(!showDatePicker)}
                   className={clsx(
-                    "px-5 py-2 rounded-lg text-sm font-bold transition-all",
-                    period === p 
+                    "px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
+                    appliedDateRange
                       ? "bg-indigo-600 text-white shadow-lg" 
                       : "text-slate-400 hover:text-white hover:bg-slate-700/50"
                   )}
                 >
-                  {periodLabels[p]}
+                  <Calendar size={16} />
+                  {appliedDateRange ? formatDateRange() : "Период"}
                 </button>
-              ))}
+              </div>
+
+              {/* Date picker dropdown */}
+              {showDatePicker && (
+                <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-2xl mt-2 w-80">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-white font-semibold">Выбрать период</span>
+                    <button 
+                      onClick={() => setShowDatePicker(false)}
+                      className="text-slate-400 hover:text-white"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {[
+                      { label: "7 дней", days: 7 },
+                      { label: "14 дней", days: 14 },
+                      { label: "30 дней", days: 30 },
+                      { label: "90 дней", days: 90 },
+                    ].map(preset => (
+                      <button
+                        key={preset.days}
+                        onClick={() => applyPreset(preset.days)}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-slate-400 text-xs mb-1 block">Начало</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        max={customEndDate || undefined}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 text-xs mb-1 block">Конец</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        min={customStartDate || undefined}
+                        max={dayjs().format("YYYY-MM-DD")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={resetCustomRange}
+                      className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition"
+                    >
+                      Сбросить
+                    </button>
+                    <button
+                      onClick={applyCustomRange}
+                      disabled={!customStartDate || !customEndDate}
+                      className={clsx(
+                        "flex-1 px-4 py-2 rounded-lg text-sm font-bold transition",
+                        customStartDate && customEndDate
+                          ? "bg-indigo-600 hover:bg-indigo-500 text-white"
+                          : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                      )}
+                    >
+                      Применить
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -171,12 +377,11 @@ const RankingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Контент */}
+      {/* Основной контент */}
       <div className="max-w-7xl mx-auto px-6 -mt-16 relative z-20">
         
-        {/* Панель управления */}
+        {/* Панель фильтров */}
         <div className="bg-white rounded-2xl shadow-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
-          {/* Табы */}
           <div className="flex gap-2">
             {[
               { id: "users", label: "Сотрудники", icon: Users },
@@ -199,7 +404,6 @@ const RankingsPage: React.FC = () => {
             ))}
           </div>
 
-          {/* Поиск */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
@@ -240,6 +444,8 @@ const RankingsPage: React.FC = () => {
                         </div>
                       </th>
                       <th className="px-4 py-3 text-right font-bold">Итого</th>
+                      <th className="px-4 py-3 text-center">Динамика</th>
+                      <th className="px-4 py-3 text-right">+/−</th>
                       <th className="px-4 py-3 text-right">Эффект.</th>
                     </tr>
                   </thead>
@@ -305,6 +511,16 @@ const RankingsPage: React.FC = () => {
                             {user.output}
                           </span>
                         </td>
+                        {/* Спарклайн */}
+                        <td className="px-4 py-4">
+                          <div className="flex justify-center">
+                            <Sparkline data={user.sparkline} />
+                          </div>
+                        </td>
+                        {/* Изменение за день */}
+                        <td className="px-4 py-4 text-right">
+                          <ChangeIndicator change={user.dailyChange?.change || 0} />
+                        </td>
                         <td className="px-4 py-4 text-right">
                           <span className={clsx(
                             "px-2 py-0.5 rounded-full text-xs font-bold",
@@ -328,7 +544,7 @@ const RankingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Таблица бригад */}
+            {/* Карточки бригад */}
             {activeTab === "teams" && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTeams.map((team, idx) => (
@@ -378,7 +594,6 @@ const RankingsPage: React.FC = () => {
                       <span>Эфф. {team.avgEfficiency}%</span>
                     </div>
 
-                    {/* Прогресс-бар */}
                     <div className="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
@@ -390,7 +605,7 @@ const RankingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Таблица участков */}
+            {/* Участки */}
             {activeTab === "sections" && (
               <div className="space-y-4">
                 {sectionsStats.map((section: any, idx: number) => (
