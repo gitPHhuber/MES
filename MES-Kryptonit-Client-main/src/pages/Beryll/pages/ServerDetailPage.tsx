@@ -35,7 +35,8 @@ import {
   Eye,
   X,
   AlertCircle,
-  File as FileIcon
+  File as FileIcon,
+  Loader2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Context } from "src/main";
@@ -64,6 +65,7 @@ import {
   formatDateTime,
   formatDuration
 } from "src/api/beryllApi";
+import { $authHost } from "src/api/index";
 
 import { DefectComments } from '../../../components/beryll/DefectComments';
 import ServerComponentsManager from '../../../components/beryll/ServerComponentsManager';
@@ -97,6 +99,7 @@ export const ServerDetailPage: React.FC = observer(() => {
   
   // Просмотр изображения
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   
   // Модалка загрузки файла с превью
   const [uploadModal, setUploadModal] = useState<{
@@ -133,6 +136,15 @@ export const ServerDetailPage: React.FC = observer(() => {
   useEffect(() => {
     loadServer();
   }, [id]);
+
+  // Очистка blob URL при размонтировании
+  useEffect(() => {
+    return () => {
+      if (previewImage) {
+        URL.revokeObjectURL(previewImage);
+      }
+    };
+  }, []);
 
   const handleTake = async () => {
     if (!server) return;
@@ -448,14 +460,52 @@ export const ServerDetailPage: React.FC = observer(() => {
     }
   };
 
-  // Просмотр файла
-  const handleViewFile = (fileId: number, mimetype?: string) => {
-    const url = downloadFile(fileId);
+  // Просмотр файла - ИСПРАВЛЕНО: загрузка через авторизованный запрос
+  const handleViewFile = async (fileId: number, mimetype?: string) => {
     if (mimetype?.startsWith("image/")) {
-      setPreviewImage(url);
+      // Освобождаем предыдущий blob URL
+      if (previewImage) {
+        URL.revokeObjectURL(previewImage);
+        setPreviewImage(null);
+      }
+      
+      setPreviewLoading(true);
+      
+      try {
+        const response = await $authHost.get(`/api/beryll/files/${fileId}`, {
+          responseType: 'blob'
+        });
+        const url = URL.createObjectURL(response.data);
+        setPreviewImage(url);
+      } catch (e: any) {
+        console.error("Ошибка загрузки изображения:", e);
+        toast.error("Не удалось загрузить изображение");
+      } finally {
+        setPreviewLoading(false);
+      }
     } else {
-      window.open(url, "_blank");
+      // Для PDF и других файлов - скачиваем через авторизованный запрос
+      try {
+        const response = await $authHost.get(`/api/beryll/files/${fileId}`, {
+          responseType: 'blob'
+        });
+        const url = URL.createObjectURL(response.data);
+        window.open(url, "_blank");
+        // Освобождаем URL после небольшой задержки
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e: any) {
+        console.error("Ошибка загрузки файла:", e);
+        toast.error("Не удалось загрузить файл");
+      }
     }
+  };
+
+  // Закрытие превью с освобождением blob URL
+  const handleClosePreview = () => {
+    if (previewImage) {
+      URL.revokeObjectURL(previewImage);
+    }
+    setPreviewImage(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -543,24 +593,32 @@ export const ServerDetailPage: React.FC = observer(() => {
         className="hidden"
       />
       
-      {/* Модалка просмотра изображения */}
-      {previewImage && (
+      {/* Модалка просмотра изображения - ИСПРАВЛЕНО */}
+      {(previewImage || previewLoading) && (
         <div 
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-          onClick={() => setPreviewImage(null)}
+          onClick={handleClosePreview}
         >
           <button
-            onClick={() => setPreviewImage(null)}
+            onClick={handleClosePreview}
             className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20"
           >
             <X className="w-6 h-6" />
           </button>
-          <img 
-            src={previewImage} 
-            alt="Preview" 
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
+          
+          {previewLoading ? (
+            <div className="flex flex-col items-center gap-3 text-white">
+              <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+              <span className="text-gray-400">Загрузка...</span>
+            </div>
+          ) : previewImage ? (
+            <img 
+              src={previewImage} 
+              alt="Preview" 
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : null}
         </div>
       )}
 
@@ -1057,7 +1115,10 @@ export const ServerDetailPage: React.FC = observer(() => {
                                               {file.originalName}
                                             </span>
                                             <button
-                                              onClick={() => handleViewFile(file.id, file.mimetype)}
+                                              onClick={() => {
+                                                console.log("👁 ServerDetailPage Eye clicked:", file.id, file.mimetype);
+                                                handleViewFile(file.id, file.mimetype);
+                                              }}
                                               className="p-0.5 text-gray-400 hover:text-blue-600"
                                               title="Просмотреть"
                                             >

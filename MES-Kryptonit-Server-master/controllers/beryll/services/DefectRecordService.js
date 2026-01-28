@@ -798,6 +798,19 @@ class DefectRecordService {
                         as: "resolvedBy", 
                         attributes: ["id", "name", "surname", "login"],
                         required: false
+                    },
+                    {
+                        model: BeryllDefectRecordFile,
+                        as: "files",
+                        include: [
+                            {
+                                model: User,
+                                as: "uploadedBy",
+                                attributes: ["id", "name", "surname", "login"],
+                                required: false
+                            }
+                        ],
+                        required: false
                     }
                 ]
             });

@@ -32,7 +32,7 @@ const fcRouter = require("./fcRouter");
 const ELRS915_Router = require("./ELRS915_Router");
 const ELRS2_4_Router = require("./ELRS2_4_Router");
 const coralB_router = require("./CoralBRouter");
-
+const passportsExportRouter = require("./passportsExportRoutes"); 
 // --- Legacy: Дефекты плат ---
 const defectRouter = require("./defectRouter");
 const defectRouter915 = require("./defectRouter915");
@@ -46,9 +46,6 @@ const beryllExtendedRouter = require("./beryllExtendedRouter"); // Включа�
 // --- Система дефектов (Учёт брака) ---
 const defectSystemRouter = require("./defectSystemRouter");
 
-// =========================================================================
-// НОВОЕ: Учёт выработки (Production Output)
-// =========================================================================
 const productionOutputRouter = require("./productionOutputRouter");
 
 
@@ -91,15 +88,12 @@ router.use("/defects-Coral-B", defectRouter_CoralB);
 
 // --- Beryll (АПК серверы) ---
 router.use("/beryll", beryllRouter);
-router.use("/beryll", beryllExtendedRouter); // Уже включает роуты комплектующих (components)
+router.use("/beryll", beryllExtendedRouter);
+router.use("/beryll/export/passports", passportsExportRouter); 
 
 // --- Система дефектов (Учёт брака) ---
 router.use("/defects", defectSystemRouter);
 
-// =========================================================================
-// НОВОЕ: Учёт выработки
-// Роуты: /api/production/outputs, /api/production/operation-types
-// =========================================================================
 router.use("/production", productionOutputRouter);
 
 module.exports = router;

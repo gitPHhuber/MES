@@ -1,11 +1,6 @@
 /**
- * ServersTab.tsx (обновлённый)
- * 
- * Вкладка "Серверы" для APK Beryll
- * + Пагинация
- * + Кнопка пинга
- * 
- * Заменить: src/pages/Beryll/tabs/ServersTab.tsx
+ * ServersTab.tsx
+ * + Кнопка "Выгрузить в Excel"
  */
 
 import { useState, useEffect, useContext } from "react";
@@ -34,7 +29,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Globe
+  Globe,
+  Download
 } from "lucide-react";
 import { Context } from "src/main";
 import {
@@ -48,6 +44,8 @@ import {
   assignServersToBatch,
   generatePassport,
   pingServer,
+  exportPassports,
+  exportSelectedPassports,
   BeryllServer,
   BeryllBatch,
   ServerStatus,
@@ -60,7 +58,6 @@ interface ServersTabProps {
   onStatsUpdate?: () => void;
 }
 
-// Количество серверов на странице
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }) => {
@@ -72,6 +69,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const [batches, setBatches] = useState<BeryllBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Пинг
   const [pingingServerId, setPingingServerId] = useState<number | null>(null);
@@ -87,11 +85,9 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // Выбор серверов для групповых операций
+  // Выбор серверов
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
-  
-  // Контекстное меню
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   // ============================================
@@ -112,7 +108,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       ]);
       setServers(serversData);
       setBatches(batchesData);
-      // Сброс на первую страницу при изменении фильтров
       setCurrentPage(1);
     } catch (e) {
       console.error("Ошибка загрузки:", e);
@@ -131,7 +126,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Закрытие меню при клике вне
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     document.addEventListener("click", handleClickOutside);
@@ -150,7 +144,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      // Снять выделение при переходе на другую страницу
       setSelectedServers([]);
     }
   };
@@ -159,6 +152,67 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
     setPageSize(newSize);
     setCurrentPage(1);
     setSelectedServers([]);
+  };
+
+  // ============================================
+  // ЭКСПОРТ В EXCEL
+  // ============================================
+
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      const blob = await exportPassports({
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        batchId: batchFilter === "ALL" ? undefined : batchFilter === "UNASSIGNED" ? "null" : batchFilter,
+        search: search || undefined
+      });
+      
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `Состав_серверов_${timestamp}.xlsx`;
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Экспортировано ${servers.length} серверов`);
+    } catch (e: any) {
+      console.error("Export error:", e);
+      toast.error(e.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSelected = async () => {
+    if (selectedServers.length === 0) {
+      toast.error("Выберите серверы для экспорта");
+      return;
+    }
+    
+    setExporting(true);
+    try {
+      const blob = await exportSelectedPassports(selectedServers);
+      
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `Состав_серверов_${selectedServers.length}шт_${timestamp}.xlsx`;
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Экспортировано ${selectedServers.length} серверов`);
+    } catch (e: any) {
+      console.error("Export error:", e);
+      toast.error(e.response?.data?.message || "Ошибка экспорта");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // ============================================
@@ -171,10 +225,7 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       const result = await pingServer(server.id);
       setPingResults(prev => ({
         ...prev,
-        [server.id]: {
-          online: result.online,
-          latency: result.latency
-        }
+        [server.id]: { online: result.online, latency: result.latency }
       }));
       
       if (result.online) {
@@ -243,12 +294,10 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
       toast.error("Для переноса в архив необходимо присвоить серийный номер АПК");
       return;
     }
-    
     if (server.status !== "DONE") {
       toast.error("Перенести в архив можно только серверы со статусом 'Готово'");
       return;
     }
-    
     if (!confirm(`Перенести сервер ${server.apkSerialNumber || server.ipAddress} в архив?`)) {
       return;
     }
@@ -334,19 +383,15 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
   // УТИЛИТЫ
   // ============================================
 
-  // Копирование в буфер обмена (с fallback для http)
   const copyToClipboard = async (text: string) => {
     if (!text) {
       toast.error("Нечего копировать");
       return;
     }
-
     try {
-      // Пробуем современный API
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
       } else {
-        // Fallback для http или старых браузеров
         const textArea = document.createElement("textarea");
         textArea.value = text;
         textArea.style.position = "fixed";
@@ -355,13 +400,9 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
         const successful = document.execCommand("copy");
         document.body.removeChild(textArea);
-        
-        if (!successful) {
-          throw new Error("execCommand failed");
-        }
+        if (!successful) throw new Error("execCommand failed");
       }
       toast.success("Скопировано", { duration: 1500 });
     } catch (err) {
@@ -370,7 +411,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
     }
   };
 
-  // Открыть сервер в браузере
   const openInBrowser = (ipAddress: string | null) => {
     if (!ipAddress) {
       toast.error("IP адрес не указан");
@@ -478,6 +518,21 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
         >
           <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
         </button>
+
+        {/* === КНОПКА ЭКСПОРТА В EXCEL === */}
+        <button
+          onClick={handleExportAll}
+          disabled={exporting || servers.length === 0}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Выгрузить все серверы в Excel"
+        >
+          {exporting ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          <span>Выгрузить в Excel</span>
+        </button>
       </div>
 
       {/* Статистика и пагинация сверху */}
@@ -491,7 +546,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           )}
         </div>
 
-        {/* Выбор размера страницы */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">На странице:</span>
           <select
@@ -518,6 +572,19 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           >
             <Package className="w-4 h-4" />
             Привязать к партии
+          </button>
+          {/* Кнопка экспорта выбранных */}
+          <button
+            onClick={handleExportSelected}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Экспорт выбранных
           </button>
           <button
             onClick={() => setSelectedServers([])}
@@ -578,7 +645,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         !server.leaseActive ? "opacity-60" : ""
                       } ${selectedServers.includes(server.id) ? "bg-indigo-50/50" : ""}`}
                     >
-                      {/* Чекбокс */}
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -588,7 +654,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         />
                       </td>
 
-                      {/* IP */}
                       <td className="p-3">
                         <div className="flex items-center gap-1.5">
                           <button
@@ -597,7 +662,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                           >
                             {server.ipAddress}
                           </button>
-                          {/* Копировать IP */}
                           <button
                             onClick={() => copyToClipboard(server.ipAddress || "")}
                             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
@@ -605,7 +669,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </button>
-                          {/* Открыть в браузере */}
                           <button
                             onClick={() => openInBrowser(server.ipAddress)}
                             className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -618,10 +681,8 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                               OFFLINE
                             </span>
                           )}
-                          {/* Результат пинга */}
                           {getPingStatusIcon(server.id)}
                         </div>
-                        {/* Серийный номер АПК под IP */}
                         {server.apkSerialNumber && (
                           <div className="text-xs text-purple-600 font-mono mt-0.5">
                             АПК: {server.apkSerialNumber}
@@ -629,14 +690,12 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {/* Hostname */}
                       <td className="p-3">
                         <span className="text-sm text-gray-600 font-mono">
                           {server.hostname || "-"}
                         </span>
                       </td>
 
-                      {/* Статус */}
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[server.status]}`}>
                           {getStatusIcon(server.status)}
@@ -644,7 +703,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         </span>
                       </td>
 
-                      {/* Партия */}
                       <td className="p-3">
                         {server.batch ? (
                           <button
@@ -659,7 +717,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {/* Исполнитель */}
                       <td className="p-3">
                         {server.assignedTo ? (
                           <div className="flex items-center gap-2">
@@ -682,17 +739,14 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                         )}
                       </td>
 
-                      {/* Обновлён */}
                       <td className="p-3">
                         <span className="text-xs text-gray-500">
                           {formatDateTime(server.updatedAt)}
                         </span>
                       </td>
 
-                      {/* Действия */}
                       <td className="p-3">
                         <div className="flex items-center justify-center gap-1">
-                          {/* Пинг */}
                           <button
                             onClick={() => handlePing(server)}
                             disabled={isPinging}
@@ -706,7 +760,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             )}
                           </button>
 
-                          {/* Открыть карточку */}
                           <button
                             onClick={() => navigate(`/beryll/server/${server.id}`)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -715,7 +768,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             <ExternalLink className="w-4 h-4" />
                           </button>
 
-                          {/* Взять в работу */}
                           {server.status === "NEW" && (
                             <button
                               onClick={() => handleTake(server)}
@@ -731,7 +783,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {/* Завершить */}
                           {canWork && (
                             <button
                               onClick={() => handleStatusChange(server, "DONE")}
@@ -747,7 +798,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {/* Архив */}
                           {server.status === "DONE" && server.apkSerialNumber && (
                             <button
                               onClick={() => handleArchive(server)}
@@ -759,7 +809,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {/* Паспорт */}
                           {server.status === "DONE" && server.apkSerialNumber && (
                             <button
                               onClick={() => handleGeneratePassport(server)}
@@ -770,7 +819,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
                             </button>
                           )}
 
-                          {/* Удалить */}
                           <button
                             onClick={() => handleDelete(server)}
                             disabled={isLoading}
@@ -798,7 +846,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Первая страница */}
             <button
               onClick={() => goToPage(1)}
               disabled={currentPage === 1}
@@ -808,7 +855,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronsLeft className="w-5 h-5" />
             </button>
 
-            {/* Предыдущая */}
             <button
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
@@ -818,7 +864,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronLeft className="w-5 h-5" />
             </button>
 
-            {/* Номера страниц */}
             <div className="flex items-center gap-1 mx-2">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum: number;
@@ -848,7 +893,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               })}
             </div>
 
-            {/* Следующая */}
             <button
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
@@ -858,7 +902,6 @@ export const ServersTab: React.FC<ServersTabProps> = observer(({ onStatsUpdate }
               <ChevronRight className="w-5 h-5" />
             </button>
 
-            {/* Последняя страница */}
             <button
               onClick={() => goToPage(totalPages)}
               disabled={currentPage === totalPages}

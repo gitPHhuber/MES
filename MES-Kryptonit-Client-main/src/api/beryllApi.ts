@@ -798,6 +798,41 @@ export const generatePassport = async (serverId: number): Promise<Blob> => {
   return data;
 };
 
+
+// ============================================
+// API ФУНКЦИИ - ЭКСПОРТ ПАСПОРТОВ
+// ============================================
+
+export interface ExportPassportsOptions {
+  serverIds?: number[];
+  batchId?: number | string | null;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  includeArchived?: boolean;
+}
+
+export const exportPassports = async (options: ExportPassportsOptions = {}): Promise<Blob> => {
+  const { data } = await $authHost.post("/api/beryll/export/passports", options, {
+    responseType: "blob"
+  });
+  return data;
+};
+
+export const exportSelectedPassports = async (serverIds: number[]): Promise<Blob> => {
+  const { data } = await $authHost.post("/api/beryll/export/passports/selected", { serverIds }, {
+    responseType: "blob"
+  });
+  return data;
+};
+
+export const exportBatchPassports = async (batchId: number | string): Promise<Blob> => {
+  const { data } = await $authHost.get(`/api/beryll/export/passports/batch/${batchId}`, {
+    responseType: "blob"
+  });
+  return data;
+};
 // ============================================
 // ЭКСПОРТ ПО УМОЛЧАНИЮ
 // ============================================
@@ -856,6 +891,10 @@ export default {
   // Паспорт
   downloadPassport,
   generatePassport,
+    // Экспорт паспортов
+  exportPassports,
+  exportSelectedPassports,
+  exportBatchPassports,
   // Утилиты
   formatDuration,
   formatDateTime,

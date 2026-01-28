@@ -39,6 +39,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/components/Header/Header.tsx
 - MES-Kryptonit-Client-main/src/components/Modal/ConfirmModal.tsx
 - MES-Kryptonit-Client-main/src/components/Modal/Modal.tsx
+- MES-Kryptonit-Client-main/src/components/RepairPartTypeSelect.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/BMCSyncPanel.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/DefectComments.tsx
 - MES-Kryptonit-Client-main/src/components/beryll/MonitoringDashboard.tsx
@@ -350,6 +351,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/migrations/seeders/20260121-seed-defect-categories.js
 - MES-Kryptonit-Server-master/models/BeryllExtended.js
 - MES-Kryptonit-Server-master/models/ProductionOutput.js
+- MES-Kryptonit-Server-master/models/beryll/BeryllDefectRecordFile.js
 - MES-Kryptonit-Server-master/models/definitions/Assembly.js
 - MES-Kryptonit-Server-master/models/definitions/Beryll.js
 - MES-Kryptonit-Server-master/models/definitions/BeryllExtended.js
@@ -397,6 +399,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/seeders/beryllSeeder.js
 - MES-Kryptonit-Server-master/services/ExcelImportService.js
 - MES-Kryptonit-Server-master/services/PdfService.js
+- MES-Kryptonit-Server-master/static/defect-records/2/1769537183976_README.md
 - MES-Kryptonit-Server-master/tests/controllers/box.test.js
 - MES-Kryptonit-Server-master/tests/controllers/movement.test.js
 - MES-Kryptonit-Server-master/tests/controllers/supply.test.js
@@ -3126,7 +3129,8 @@ export const getServerFiles = async (serverId: number): Promise<BeryllChecklistF
 
 
 export const downloadFile = (fileId: number): string => {
-  return `/api/beryll/files/${fileId}`;
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  return `${baseUrl}/api/beryll/files/${fileId}`;
 };
 
 
@@ -6651,6 +6655,248 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }
     </div>
   );
 };
+================================================================================
+FILE: MES-Kryptonit-Client-main/src/components/RepairPartTypeSelect.tsx
+================================================================================
+
+
+
+
+
+import React, { useState, useEffect, useRef } from "react";
+import { ChevronDown, Plus, X, Check, Loader2, Search } from "lucide-react";
+import toast from "react-hot-toast";
+import { getPartTypes, quickAddPartType, RepairPartType } from "../../api/repairPartTypeApi";
+
+interface Props {
+  value: string;
+  onChange: (value: string, type?: RepairPartType) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  error?: string;
+}
+
+const RepairPartTypeSelect: React.FC<Props> = ({
+  value,
+  onChange,
+  placeholder = "Выберите тип детали",
+  disabled = false,
+  className = "",
+  error
+}) => {
+  const [types, setTypes] = useState<RepairPartType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [adding, setAdding] = useState(false);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadTypes();
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && searchRef.current) {
+      setTimeout(() => searchRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const loadTypes = async () => {
+    try {
+      setLoading(true);
+      const data = await getPartTypes();
+      setTypes(data);
+    } catch (err) {
+      console.error("Ошибка загрузки типов:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddType = async () => {
+    if (!newTypeLabel.trim()) return;
+    
+    try {
+      setAdding(true);
+      const result = await quickAddPartType(newTypeLabel.trim());
+      
+      if (result.created) {
+        toast.success(`Тип "${result.type.label}" создан`);
+      }
+      
+      setTypes(prev => [...prev, result.type]);
+      onChange(result.type.value, result.type);
+      setShowAddModal(false);
+      setNewTypeLabel("");
+      setIsOpen(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Ошибка");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleSelect = (type: RepairPartType) => {
+    onChange(type.value, type);
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const filtered = types.filter(t =>
+    t.label.toLowerCase().includes(search.toLowerCase()) ||
+    t.value.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selected = types.find(t => t.value === value);
+
+  return (
+    <div ref={containerRef} className={`relative ${className}`}>
+      {}
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`
+          w-full px-3 py-2 text-left border rounded-lg text-sm
+          flex items-center justify-between gap-2 transition-all
+          ${disabled ? "bg-gray-100 cursor-not-allowed" : "bg-white hover:border-gray-400"}
+          ${error ? "border-red-300" : "border-gray-300"}
+          ${isOpen ? "ring-2 ring-blue-200 border-blue-400" : ""}
+        `}
+      >
+        <span className={selected ? "text-gray-800" : "text-gray-400"}>
+          {loading ? "Загрузка..." : selected?.label || placeholder}
+        </span>
+        <ChevronDown size={18} className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+
+      {}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg overflow-hidden">
+          {}
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск..."
+                className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+          </div>
+
+          {}
+          <div className="max-h-60 overflow-y-auto">
+            {filtered.length > 0 ? (
+              filtered.map(type => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => handleSelect(type)}
+                  className={`
+                    w-full px-3 py-2 text-left text-sm flex items-center justify-between
+                    hover:bg-gray-50 ${type.value === value ? "bg-blue-50" : ""}
+                  `}
+                >
+                  <span className={type.value === value ? "text-blue-700 font-medium" : ""}>
+                    {type.label}
+                  </span>
+                  {type.value === value && <Check size={16} className="text-blue-600" />}
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center text-sm text-gray-500">
+                {search ? `"${search}" не найден` : "Нет типов"}
+              </div>
+            )}
+          </div>
+
+          {}
+          <div className="p-2 border-t">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddModal(true);
+                setNewTypeLabel(search);
+              }}
+              className="w-full px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg flex items-center justify-center gap-2"
+            >
+              <Plus size={16} />
+              Добавить новый тип
+            </button>
+          </div>
+        </div>
+      )}
+
+      {}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Добавить тип детали</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Название *</label>
+              <input
+                type="text"
+                value={newTypeLabel}
+                onChange={(e) => setNewTypeLabel(e.target.value)}
+                placeholder="Например: Контроллер питания"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleAddType()}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="flex-1 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleAddType}
+                disabled={adding || !newTypeLabel.trim()}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {adding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default RepairPartTypeSelect;
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/beryll/BMCSyncPanel.tsx
 ================================================================================
@@ -20404,7 +20650,8 @@ FILE: MES-Kryptonit-Client-main/src/pages/Beryll/components/ServerChecklistSecti
 
 
 
-import { useState, useRef } from "react";
+
+import { useState, useRef, useEffect } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -20418,7 +20665,12 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
-  Eye
+  Eye,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Loader2
 } from "lucide-react";
 import {
   BeryllServerChecklist,
@@ -20427,9 +20679,9 @@ import {
   CHECKLIST_GROUP_LABELS,
   toggleChecklistItem,
   uploadChecklistFile,
-  deleteChecklistFile,
-  downloadFile
+  deleteChecklistFile
 } from "src/api/beryllApi";
+import { $authHost } from "src/api/index";
 
 interface ServerChecklistSectionProps {
   serverId: number;
@@ -20449,9 +20701,25 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   );
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
-  const [previewFile, setPreviewFile] = useState<BeryllChecklistFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadId, setActiveUploadId] = useState<number | null>(null);
+
+  
+  const [previewFile, setPreviewFile] = useState<BeryllChecklistFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+
+  
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   
   const groupedChecklists = checklists.reduce((acc, item) => {
@@ -20553,15 +20821,78 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   };
 
   
-  const handleDownloadFile = (fileId: number, originalName: string) => {
-    const url = downloadFile(fileId);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = originalName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownloadFile = async (fileId: number, originalName: string) => {
+    console.log("=== handleDownloadFile called ===", { fileId, originalName });
+    try {
+      const response = await $authHost.get(`/api/beryll/files/${fileId}?download=true`, {
+        responseType: 'blob'
+      });
+      
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = originalName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("Download error:", e);
+      alert("Ошибка скачивания файла");
+    }
   };
+
+  
+  const handleOpenPreview = async (file: BeryllChecklistFile) => {
+    console.log("=== handleOpenPreview called ===", file);
+    
+    setPreviewFile(file);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setZoom(1);
+    setRotation(0);
+
+    
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
+    try {
+      console.log("Fetching file...", `/api/beryll/files/${file.id}`);
+      const response = await $authHost.get(`/api/beryll/files/${file.id}`, {
+        responseType: 'blob'
+      });
+      
+      console.log("Response received:", response);
+      const url = URL.createObjectURL(response.data);
+      console.log("Blob URL created:", url);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      console.error("Preview error:", e);
+      setPreviewError("Не удалось загрузить изображение");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  
+  const handleClosePreview = () => {
+    console.log("=== handleClosePreview called ===");
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewFile(null);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setZoom(1);
+    setRotation(0);
+  };
+
+  
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
+  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
 
   
   const totalCount = checklists.length;
@@ -20575,6 +20906,14 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
            ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
              file.originalName?.toLowerCase().endsWith(`.${ext}`)
            );
+  };
+
+  
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "0 KB";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -20633,6 +20972,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
             >
               {}
               <button
+                type="button"
                 onClick={() => toggleGroup(groupCode)}
                 className="w-full px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
               >
@@ -20669,6 +21009,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                         <div className="flex items-start gap-3">
                           {}
                           <button
+                            type="button"
                             onClick={() => handleToggle(item.checklistTemplateId, item.completed, requiresFile, !!hasFiles)}
                             disabled={readOnly || togglingId === item.checklistTemplateId}
                             className={`mt-0.5 shrink-0 ${readOnly ? "cursor-default" : "cursor-pointer"}`}
@@ -20706,7 +21047,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                                     : "bg-amber-100 text-amber-700"
                                 }`}>
                                   <Camera className="w-3 h-3" />
-                                  {hasFiles ? "СКРИН ✓" : "НУЖЕН СКРИН"}
+                                  {hasFiles ? "Скрин загружен" : "Нужен скрин"}
                                 </span>
                               )}
                             </div>
@@ -20729,57 +21070,71 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
 
                             {}
                             {hasFiles && (
-                              <div className="mt-3 space-y-2">
+                              <div className="mt-3 flex flex-wrap gap-2">
                                 {item.files!.map((file) => (
                                   <div 
                                     key={file.id} 
-                                    className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
+                                    className="group relative flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
                                   >
                                     {}
                                     {isImageFile(file) ? (
-                                      <ImageIcon className="w-4 h-4 text-indigo-500" />
+                                      <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
                                     ) : (
-                                      <FileText className="w-4 h-4 text-red-500" />
+                                      <FileText className="w-4 h-4 text-red-500 shrink-0" />
                                     )}
 
                                     {}
-                                    <span className="flex-1 text-sm text-gray-600 truncate">
+                                    <span className="text-sm text-gray-700 max-w-[120px] truncate" title={file.originalName}>
                                       {file.originalName}
                                     </span>
 
                                     {}
-                                    <span className="text-xs text-gray-400">
-                                      {(file.size / 1024).toFixed(1)} KB
-                                    </span>
-
-                                    {}
-                                    {isImageFile(file) && (
+                                    <div className="flex items-center gap-1 ml-1">
+                                      {isImageFile(file) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            console.log("👁 Eye button clicked for file:", file.id, file.originalName);
+                                            handleOpenPreview(file);
+                                          }}
+                                          className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                          title="Просмотр"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      
                                       <button
-                                        onClick={() => setPreviewFile(file)}
-                                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                                        title="Просмотр"
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          console.log("⬇ Download button clicked for file:", file.id, file.originalName);
+                                          handleDownloadFile(file.id, file.originalName);
+                                        }}
+                                        className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                                        title="Скачать"
                                       >
-                                        <Eye className="w-4 h-4" />
+                                        <Download className="w-4 h-4" />
                                       </button>
-                                    )}
-                                    
-                                    <button
-                                      onClick={() => handleDownloadFile(file.id, file.originalName)}
-                                      className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                                      title="Скачать"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                    </button>
 
-                                    {!readOnly && (
-                                      <button
-                                        onClick={() => handleDeleteFile(file.id, item.completed)}
-                                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                        title="Удалить"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    )}
+                                      {!readOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleDeleteFile(file.id, item.completed);
+                                          }}
+                                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Удалить"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -20797,6 +21152,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                           {}
                           {!readOnly && (
                             <button
+                              type="button"
                               onClick={() => handleUploadClick(item.checklistTemplateId)}
                               disabled={uploadingId === item.checklistTemplateId}
                               className={`px-3 py-1.5 text-sm rounded-lg flex items-center gap-1.5 transition-colors ${
@@ -20810,7 +21166,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                               ) : (
                                 <Upload className="w-4 h-4" />
                               )}
-                              Файл
+                              Скрин
                             </button>
                           )}
                         </div>
@@ -20827,37 +21183,126 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
       {}
       {previewFile && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setPreviewFile(null)}
+          className="fixed inset-0 bg-black/90 flex flex-col z-50"
+          onClick={handleClosePreview}
         >
+          {}
           <div 
-            className="relative max-w-4xl max-h-[90vh] bg-white rounded-xl overflow-hidden"
+            className="flex items-center justify-between px-4 py-3 bg-black/50 backdrop-blur-sm"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <span className="font-medium text-gray-800">{previewFile.originalName}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleDownloadFile(previewFile.id, previewFile.originalName)}
-                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
-                >
-                  <Download className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setPreviewFile(null)}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  ×
-                </button>
+            <div className="flex items-center gap-3 text-white">
+              <ImageIcon className="w-5 h-5 text-indigo-400" />
+              <div>
+                <p className="font-medium">{previewFile.originalName}</p>
+                <p className="text-sm text-gray-400">{formatFileSize(previewFile.fileSize)}</p>
               </div>
             </div>
-            <div className="p-4 flex items-center justify-center bg-gray-100">
-              <img 
-                src={downloadFile(previewFile.id)} 
-                alt={previewFile.originalName}
-                className="max-w-full max-h-[70vh] object-contain"
-              />
+            
+            <div className="flex items-center gap-2">
+              {}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
+                disabled={zoom <= 0.5}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                title="Уменьшить"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </button>
+              
+              <span className="text-white/70 text-sm min-w-[60px] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
+                disabled={zoom >= 3}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                title="Увеличить"
+              >
+                <ZoomIn className="w-5 h-5" />
+              </button>
+              
+              <div className="w-px h-6 bg-white/20 mx-2" />
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleRotate(); }}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Повернуть"
+              >
+                <RotateCw className="w-5 h-5" />
+              </button>
+              
+              <div className="w-px h-6 bg-white/20 mx-2" />
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDownloadFile(previewFile.id, previewFile.originalName); }}
+                className="p-2 text-white/70 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
+                title="Скачать"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleClosePreview(); }}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors ml-2"
+                title="Закрыть (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+          </div>
+
+          {}
+          <div 
+            className="flex-1 flex items-center justify-center overflow-auto p-4"
+            onClick={e => e.stopPropagation()}
+          >
+            {previewLoading && (
+              <div className="flex flex-col items-center gap-3 text-white">
+                <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+                <span className="text-gray-400">Загрузка...</span>
+              </div>
+            )}
+
+            {previewError && (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <X className="w-8 h-8 text-red-400" />
+                </div>
+                <p className="text-white font-medium">Ошибка загрузки</p>
+                <p className="text-gray-400 text-sm">{previewError}</p>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleOpenPreview(previewFile); }}
+                  className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                >
+                  Повторить
+                </button>
+              </div>
+            )}
+
+            {previewUrl && !previewLoading && (
+              <img 
+                src={previewUrl}
+                alt={previewFile.originalName}
+                className="max-w-full max-h-full object-contain transition-transform duration-200 select-none"
+                style={{
+                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                }}
+                draggable={false}
+              />
+            )}
+          </div>
+
+          {}
+          <div className="text-center py-2 text-gray-500 text-sm bg-black/50">
+            Нажмите в любом месте или Esc для закрытия
           </div>
         </div>
       )}
@@ -63699,8 +64144,25 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/DefectRecordCon
 
 
 
+
+
+
+
+
+
+
+const path = require("path");
+const fs = require("fs");
 const ApiError = require("../../../error/ApiError");
 const DefectRecordService = require("../services/DefectRecordService");
+
+
+const DEFECT_FILES_DIR = path.join(__dirname, "../../../static/defect-records");
+
+
+if (!fs.existsSync(DEFECT_FILES_DIR)) {
+    fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
+}
 
 class DefectRecordController {
     
@@ -63924,6 +64386,159 @@ class DefectRecordController {
     
     
     
+    
+
+
+
+    async getFiles(req, res, next) {
+        try {
+            const { id } = req.params;
+            
+            
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            const files = await DefectRecordService.getFiles(id);
+            return res.json(files);
+        } catch (error) {
+            console.error("[DefectRecordController] getFiles error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    
+
+
+
+    async uploadFile(req, res, next) {
+        try {
+            const { id } = req.params;
+            const userId = req.user?.id;
+            
+            
+            const defect = await DefectRecordService.getById(id);
+            if (!defect) {
+                return next(ApiError.notFound("Запись о браке не найдена"));
+            }
+            
+            
+            if (!req.files || !req.files.file) {
+                return next(ApiError.badRequest("Файл не загружен"));
+            }
+            
+            const file = req.files.file;
+            
+            
+            const maxSize = 50 * 1024 * 1024;
+            if (file.size > maxSize) {
+                return next(ApiError.badRequest("Файл слишком большой (максимум 50MB)"));
+            }
+            
+            
+            const recordDir = path.join(DEFECT_FILES_DIR, String(id));
+            if (!fs.existsSync(recordDir)) {
+                fs.mkdirSync(recordDir, { recursive: true });
+            }
+            
+            
+            const ext = path.extname(file.name);
+            const timestamp = Date.now();
+            const safeOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fileName = `${timestamp}_${safeOriginalName}`;
+            const filePath = path.join(recordDir, fileName);
+            
+            
+            await file.mv(filePath);
+            
+            
+            const fileRecord = await DefectRecordService.addFile(id, {
+                fileName,
+                originalName: file.name,
+                filePath: path.join(String(id), fileName),
+                mimeType: file.mimetype,
+                fileSize: file.size,
+                uploadedById: userId
+            });
+            
+            return res.json({
+                success: true,
+                file: fileRecord
+            });
+        } catch (error) {
+            console.error("[DefectRecordController] uploadFile error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    
+
+
+
+    async downloadFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            
+            const fileRecord = await DefectRecordService.getFileById(fileId);
+            if (!fileRecord) {
+                return next(ApiError.notFound("Файл не найден"));
+            }
+            
+            const fullPath = path.join(DEFECT_FILES_DIR, fileRecord.filePath);
+            
+            if (!fs.existsSync(fullPath)) {
+                return next(ApiError.notFound("Файл не найден на диске"));
+            }
+            
+            
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileRecord.originalName)}"`);
+            res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
+            
+            return res.download(fullPath, fileRecord.originalName);
+        } catch (error) {
+            console.error("[DefectRecordController] downloadFile error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    
+
+
+
+    async deleteFile(req, res, next) {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user?.id;
+            
+            const fileRecord = await DefectRecordService.getFileById(fileId);
+            if (!fileRecord) {
+                return next(ApiError.notFound("Файл не найден"));
+            }
+            
+            
+            const fullPath = path.join(DEFECT_FILES_DIR, fileRecord.filePath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+            
+            
+            await DefectRecordService.deleteFile(fileId, userId);
+            
+            return res.json({
+                success: true,
+                message: "Файл удалён"
+            });
+        } catch (error) {
+            console.error("[DefectRecordController] deleteFile error:", error);
+            next(ApiError.internal(error.message));
+        }
+    }
+    
+    
+    
+    
+    
     async getRepairPartTypes(req, res, next) {
         try {
             const types = DefectRecordService.getRepairPartTypes();
@@ -63963,7 +64578,6 @@ class DefectRecordController {
 }
 
 module.exports = new DefectRecordController();
-
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/DhcpController.js
 ================================================================================
@@ -69007,6 +69621,7 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/services/DefectRecordServic
 
 
 
+
 const { Op } = require("sequelize");
 const sequelize = require("../../../db");
 const {
@@ -70006,6 +70621,161 @@ class DefectRecordService {
             CLOSED: "Закрыт"
         };
         return labels[status] || status;
+    }
+    
+    
+    
+    
+    
+    
+
+
+
+
+    async getFiles(defectRecordId) {
+        const files = await BeryllDefectRecordFile.findAll({
+            where: { defectRecordId },
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname", "login"],
+                    required: false
+                }
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+        
+        return files;
+    }
+    
+    
+
+
+
+
+    async getFileById(fileId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [
+                {
+                    model: User,
+                    as: "uploadedBy",
+                    attributes: ["id", "name", "surname", "login"],
+                    required: false
+                }
+            ]
+        });
+        
+        return file;
+    }
+    
+    
+
+
+
+
+
+    async addFile(defectRecordId, fileData) {
+        
+        const defect = await BeryllDefectRecord.findByPk(defectRecordId, {
+            include: [{ model: BeryllServer, as: "server" }]
+        });
+        
+        if (!defect) {
+            throw new Error("Запись о браке не найдена");
+        }
+        
+        
+        const file = await BeryllDefectRecordFile.create({
+            defectRecordId,
+            fileName: fileData.fileName,
+            originalName: fileData.originalName,
+            filePath: fileData.filePath,
+            mimeType: fileData.mimeType,
+            fileSize: fileData.fileSize,
+            uploadedById: fileData.uploadedById
+        });
+        
+        
+        try {
+            const { BeryllHistory } = require("../../../models");
+            await BeryllHistory.create({
+                serverId: defect.serverId,
+                serverIp: defect.server?.ipAddress,
+                serverHostname: defect.server?.hostname,
+                userId: fileData.uploadedById,
+                action: "DEFECT_RECORD_FILE_UPLOADED",
+                comment: `Загружен файл: ${fileData.originalName}`,
+                metadata: {
+                    defectRecordId,
+                    fileId: file.id,
+                    fileName: fileData.originalName,
+                    fileSize: fileData.fileSize,
+                    mimeType: fileData.mimeType
+                }
+            });
+        } catch (historyError) {
+            console.error("[DefectRecordService] Ошибка записи в историю:", historyError.message);
+        }
+        
+        return file;
+    }
+    
+    
+
+
+
+
+
+    async deleteFile(fileId, userId) {
+        const file = await BeryllDefectRecordFile.findByPk(fileId, {
+            include: [{
+                model: BeryllDefectRecord,
+                as: "defectRecord",
+                include: [{ model: BeryllServer, as: "server" }]
+            }]
+        });
+        
+        if (!file) {
+            throw new Error("Файл не найден");
+        }
+        
+        
+        const fullPath = path.join(UPLOADS_DIR, file.filePath);
+        if (fs.existsSync(fullPath)) {
+            try {
+                fs.unlinkSync(fullPath);
+            } catch (e) {
+                console.warn("[DefectRecordService] Ошибка удаления файла с диска:", e.message);
+            }
+        }
+        
+        
+        try {
+            const { BeryllHistory } = require("../../../models");
+            if (file.defectRecord) {
+                await BeryllHistory.create({
+                    serverId: file.defectRecord.serverId,
+                    serverIp: file.defectRecord.server?.ipAddress,
+                    serverHostname: file.defectRecord.server?.hostname,
+                    userId,
+                    action: "DEFECT_RECORD_FILE_DELETED",
+                    comment: `Удалён файл: ${file.originalName}`,
+                    metadata: {
+                        defectRecordId: file.defectRecordId,
+                        fileId: file.id,
+                        fileName: file.originalName
+                    }
+                });
+            }
+        } catch (historyError) {
+            console.error("[DefectRecordService] Ошибка записи в историю:", historyError.message);
+        }
+        
+        
+        await file.destroy();
+        
+        return { success: true, message: "Файл удалён" };
     }
 }
 
@@ -81155,6 +81925,85 @@ module.exports = {
     OUTPUT_STATUSES 
 };
 ================================================================================
+FILE: MES-Kryptonit-Server-master/models/beryll/BeryllDefectRecordFile.js
+================================================================================
+
+const { DataTypes } = require("sequelize");
+
+module.exports = (sequelize) => {
+    const BeryllDefectRecordFile = sequelize.define(
+        "BeryllDefectRecordFile",
+        {
+            id: {
+                type: DataTypes.INTEGER,
+                primaryKey: true,
+                autoIncrement: true
+            },
+            defectRecordId: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                field: "defect_record_id",
+                references: {
+                    model: "beryll_defect_records",
+                    key: "id"
+                },
+                onDelete: "CASCADE"
+            },
+            fileName: {
+                type: DataTypes.STRING(255),
+                allowNull: false,
+                field: "file_name",
+                comment: "Имя файла на диске"
+            },
+            originalName: {
+                type: DataTypes.STRING(255),
+                allowNull: false,
+                field: "original_name",
+                comment: "Оригинальное имя файла"
+            },
+            filePath: {
+                type: DataTypes.STRING(500),
+                allowNull: false,
+                field: "file_path",
+                comment: "Относительный путь к файлу"
+            },
+            mimeType: {
+                type: DataTypes.STRING(100),
+                allowNull: true,
+                field: "mime_type",
+                comment: "MIME-тип файла"
+            },
+            fileSize: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+                field: "file_size",
+                comment: "Размер файла в байтах"
+            },
+            uploadedById: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+                field: "uploaded_by_id",
+                references: {
+                    model: "users",
+                    key: "id"
+                },
+                onDelete: "SET NULL"
+            }
+        },
+        {
+            tableName: "beryll_defect_record_files",
+            timestamps: true,
+            underscored: true,
+            indexes: [
+                { fields: ["defect_record_id"] },
+                { fields: ["uploaded_by_id"] }
+            ]
+        }
+    );
+
+    return BeryllDefectRecordFile;
+};
+================================================================================
 FILE: MES-Kryptonit-Server-master/models/definitions/Assembly.js
 ================================================================================
 
@@ -84602,6 +85451,7 @@ FILE: MES-Kryptonit-Server-master/models/index.js
 
 
 
+
 const { User, PC, Session, AuditLog, Role, Ability, RoleAbility } = require("./definitions/General");
 const { Section, Team } = require("./definitions/Structure");
 const { 
@@ -84896,6 +85746,14 @@ OperationType.hasMany(ProductionOutput, { foreignKey: "operationTypeId", as: "ou
 
 Project.belongsTo(User, { foreignKey: "createdById", as: "author" });
 User.hasMany(Project, { foreignKey: "createdById", as: "projects" });
+
+
+
+
+
+
+
+
 
 
 
@@ -85831,6 +86689,22 @@ router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work
 
 
 
+
+router.get("/defect-records/:id/files", ...protect, checkAbility("beryll.view"), DefectRecordController.getFiles);
+
+
+router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
+
+
+router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
+
+
+router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
+
+
+
+
+
 router.get("/yadro/logs", ...protect, checkAbility("beryll.view"), YadroController.getAllLogs);
 router.get("/yadro/logs/open", ...protect, checkAbility("beryll.view"), YadroController.getOpenLogs);
 router.get("/yadro/logs/stats", ...protect, checkAbility("beryll.view"), YadroController.getLogStats);
@@ -86159,8 +87033,6 @@ router.post(
 
 router.get(
   "/files/:fileId",
-  ...protect,
-  checkAbility("beryll.view"),
   ChecklistController.downloadFile
 );
 
@@ -89469,6 +90341,264 @@ class PdfService {
 }
 
 module.exports = new PdfService();
+================================================================================
+FILE: MES-Kryptonit-Server-master/static/defect-records/2/1769537183976_README.md
+================================================================================
+
+# MES Kryptonit PWA
+
+Progressive Web Application для системы управления производством MES Kryptonit.
+
+## 🚀 Возможности
+
+- **PWA** — установка на главный экран, работа офлайн
+- **Keycloak SSO** — единая авторизация через корпоративный SSO
+- **Локальный логин** — fallback авторизация по логину/паролю
+- **Адаптивный дизайн** — работает на телефонах, планшетах, ПК
+- **Тёмная тема** — современный дизайн для производственных условий
+
+## 📱 Модули
+
+| Модуль | Описание |
+|--------|----------|
+| Главная | Dashboard со статистикой и быстрыми действиями |
+| Склад | Управление запасами, приход/расход |
+| Производство | Сканирование, чеклисты, контроль качества |
+| Задачи | Управление задачами |
+| Рейтинги | Статистика сотрудников и команд |
+| Профиль | Настройки пользователя, установка PWA |
+
+## ⚙️ Конфигурация
+
+Настройки находятся в `src/config/index.ts`:
+
+```typescript
+export const config = {
+  // API бэкенда MES (через Vite прокси)
+  API_URL: '/api',
+  
+  // Keycloak
+  KEYCLOAK: {
+    URL: 'http://10.11.0.16:8080',
+    REALM: 'MES-Realm',
+    CLIENT_ID: 'mes-web-client',
+  },
+  
+  // Прямой URL API
+  API_DIRECT_URL: 'http://10.11.0.16:5001',
+}
+```
+
+## 🛠 Установка и запуск
+
+### Требования
+- Node.js 18+
+- npm или yarn
+
+### Установка зависимостей
+
+```bash
+cd mes-pwa
+npm install
+```
+
+### Режим разработки
+
+```bash
+npm run dev
+```
+
+Приложение будет доступно на `http://localhost:3000` и `http://<ваш-ip>:3000`.
+
+### Production сборка
+
+```bash
+npm run build
+```
+
+Статические файлы появятся в папке `dist/`.
+
+### Предпросмотр сборки
+
+```bash
+npm run preview
+```
+
+## 🌐 Развёртывание
+
+### Вариант 1: Vite Preview (простой)
+
+```bash
+npm run preview -- --host
+```
+
+### Вариант 2: Nginx (production)
+
+```nginx
+server {
+    listen 3000;
+    server_name _;
+    root /var/www/mes-pwa/dist;
+    index index.html;
+
+    # PWA assets
+    location /assets {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Service Worker
+    location /sw.js {
+        expires off;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # API Proxy
+    location /api {
+        proxy_pass http://10.11.0.16:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+### Вариант 3: Docker
+
+```dockerfile
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 3000
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+## 🔧 Keycloak настройка
+
+1. Создайте клиент `mes-web-client` в Keycloak
+2. Настройки клиента:
+   - **Client Protocol:** openid-connect
+   - **Access Type:** public
+   - **Valid Redirect URIs:** `http://10.11.0.16:3000/*`
+   - **Web Origins:** `http://10.11.0.16:3000`
+   - **Standard Flow:** Enabled
+   - **Direct Access Grants:** Disabled
+
+3. Добавьте mappers для ролей в token
+
+## 📂 Структура проекта
+
+```
+mes-pwa/
+├── public/
+│   ├── favicon.svg
+│   ├── icon-192.png
+│   ├── icon-512.png
+│   ├── robots.txt
+│   └── silent-check-sso.html
+├── src/
+│   ├── api/
+│   │   ├── client.ts          # Axios клиент
+│   │   └── keycloak.ts        # Keycloak интеграция
+│   ├── components/
+│   │   ├── common/
+│   │   │   └── Layout.tsx     # Главный layout
+│   │   └── ui/
+│   │       └── index.tsx      # UI компоненты
+│   ├── config/
+│   │   └── index.ts           # Конфигурация
+│   ├── hooks/
+│   │   └── useDebounce.ts     # Custom hooks
+│   ├── pages/
+│   │   ├── Auth/
+│   │   ├── Home/
+│   │   ├── Production/
+│   │   ├── Profile/
+│   │   ├── Rankings/
+│   │   ├── Tasks/
+│   │   └── Warehouse/
+│   ├── store/
+│   │   └── authStore.ts       # Zustand store
+│   ├── types/
+│   │   └── index.ts           # TypeScript типы
+│   ├── App.tsx
+│   ├── index.css
+│   └── main.tsx
+├── index.html
+├── package.json
+├── tailwind.config.js
+├── tsconfig.json
+└── vite.config.ts
+```
+
+## 📲 Установка PWA
+
+### Android
+1. Откройте приложение в Chrome
+2. Нажмите "Добавить на главный экран" или иконку установки в адресной строке
+
+### iOS
+1. Откройте приложение в Safari
+2. Нажмите "Поделиться" → "На экран Домой"
+
+### Desktop
+1. Откройте в Chrome/Edge
+2. Нажмите иконку установки в адресной строке
+
+## 🔌 API Endpoints
+
+Приложение ожидает следующие endpoints на бэкенде:
+
+```
+POST   /api/users/login           # Локальный логин
+GET    /api/users/auth            # Проверка авторизации
+GET    /api/warehouse/boxes       # Список коробок
+GET    /api/warehouse/boxes/:id   # Детали коробки
+POST   /api/warehouse/boxes/:id/movements  # Движение товара
+GET    /api/products              # Список продуктов
+POST   /api/products/scan         # Сканирование продукта
+POST   /api/products/:id/complete-step     # Завершение этапа
+GET    /api/production-steps/:id  # Детали этапа
+GET    /api/tasks                 # Список задач
+GET    /api/rankings/users        # Рейтинг пользователей
+GET    /api/rankings/teams        # Рейтинг команд
+GET    /api/rankings/my-stats     # Моя статистика
+```
+
+## 🐛 Troubleshooting
+
+### Не работает Keycloak SSO
+- Проверьте URL Keycloak в конфиге
+- Убедитесь, что клиент `mes-web-client` настроен правильно
+- Проверьте CORS настройки в Keycloak
+
+### Ошибка CORS при API запросах
+- Убедитесь, что Vite proxy настроен (dev режим)
+- В production используйте Nginx proxy
+
+### PWA не устанавливается
+- Приложение должно работать по HTTPS (или localhost)
+- Проверьте manifest.json в DevTools → Application
+
+## 📄 Лицензия
+
+MIT
+
 ================================================================================
 FILE: MES-Kryptonit-Server-master/tests/controllers/box.test.js
 ================================================================================

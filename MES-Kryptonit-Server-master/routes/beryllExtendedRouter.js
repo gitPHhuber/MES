@@ -97,50 +97,56 @@ router.get("/components/:id/history", ...protect, checkAbility("beryll.view"), g
 // УЧЁТ БРАКА (DEFECT RECORDS)
 // ============================================
 
-// Справочники
+// Справочники (ВАЖНО: перед роутами с :id)
 router.get("/defect-records/part-types", ...protect, checkAbility("beryll.view"), DefectRecordController.getRepairPartTypes);
 router.get("/defect-records/statuses", ...protect, checkAbility("beryll.view"), DefectRecordController.getStatuses);
-router.get("/defect-records-stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
+router.get("/defect-records/stats", ...protect, checkAbility("beryll.view"), DefectRecordController.getStats);
 
-// ============================================
-// ЭКСПОРТ БРАКА В EXCEL
-// ВАЖНО: Должен быть ПЕРЕД /defect-records/:id
-// ============================================
+// Экспорт в Excel (ВАЖНО: перед роутами с :id)
 router.get("/defect-records/export", ...protect, checkAbility("beryll.view"), DefectExportController.exportDefects);
 router.get("/defect-records/export/stats", ...protect, checkAbility("beryll.view"), DefectExportController.exportStats);
 
-// CRUD
+// CRUD операции
 router.get("/defect-records", ...protect, checkAbility("beryll.view"), DefectRecordController.getAll);
-router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
 router.post("/defect-records", ...protect, checkAbility("beryll.work"), DefectRecordController.create);
+router.get("/defect-records/:id", ...protect, checkAbility("beryll.view"), DefectRecordController.getById);
+router.put("/defect-records/:id", ...protect, checkAbility("beryll.work"), DefectRecordController.update);
+router.delete("/defect-records/:id", ...protect, checkAbility("beryll.manage"), DefectRecordController.delete);
 
-// Workflow
+// Workflow: Смена статуса
+router.put("/defect-records/:id/status", ...protect, checkAbility("beryll.work"), DefectRecordController.changeStatus);
+
+// Workflow: Диагностика
 router.post("/defect-records/:id/start-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.startDiagnosis);
 router.post("/defect-records/:id/complete-diagnosis", ...protect, checkAbility("beryll.work"), DefectRecordController.completeDiagnosis);
+
+// Workflow: Ожидание/резерв запчастей
 router.post("/defect-records/:id/waiting-parts", ...protect, checkAbility("beryll.work"), DefectRecordController.setWaitingParts);
 router.post("/defect-records/:id/reserve-component", ...protect, checkAbility("beryll.work"), DefectRecordController.reserveComponent);
+
+// Workflow: Ремонт
 router.post("/defect-records/:id/start-repair", ...protect, checkAbility("beryll.work"), DefectRecordController.startRepair);
 router.post("/defect-records/:id/perform-replacement", ...protect, checkAbility("beryll.work"), DefectRecordController.performReplacement);
+
+// Workflow: Отправка в Ядро
 router.post("/defect-records/:id/send-to-yadro", ...protect, checkAbility("beryll.work"), DefectRecordController.sendToYadro);
 router.post("/defect-records/:id/return-from-yadro", ...protect, checkAbility("beryll.work"), DefectRecordController.returnFromYadro);
+
+// Workflow: Подменные серверы
 router.post("/defect-records/:id/issue-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.issueSubstitute);
 router.post("/defect-records/:id/return-substitute", ...protect, checkAbility("beryll.work"), DefectRecordController.returnSubstitute);
+
+// Workflow: Закрытие
 router.post("/defect-records/:id/resolve", ...protect, checkAbility("beryll.work"), DefectRecordController.resolve);
+router.post("/defect-records/:id/mark-repeated", ...protect, checkAbility("beryll.work"), DefectRecordController.markAsRepeated);
 
 // ============================================
 // ФАЙЛЫ ЗАПИСЕЙ О БРАКЕ
 // ============================================
 
-// Получить список файлов записи о браке
 router.get("/defect-records/:id/files", ...protect, checkAbility("beryll.view"), DefectRecordController.getFiles);
-
-// Загрузить файл к записи о браке
 router.post("/defect-records/:id/files", ...protect, checkAbility("beryll.work"), DefectRecordController.uploadFile);
-
-// Скачать файл записи о браке
 router.get("/defect-record-files/:fileId", ...protect, checkAbility("beryll.view"), DefectRecordController.downloadFile);
-
-// Удалить файл записи о браке
 router.delete("/defect-record-files/:fileId", ...protect, checkAbility("beryll.work"), DefectRecordController.deleteFile);
 
 // ============================================

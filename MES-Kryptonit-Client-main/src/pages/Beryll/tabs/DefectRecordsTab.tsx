@@ -4,7 +4,7 @@ import {
   Clock, CheckCircle, XCircle, Send, RotateCcw, Repeat,
   ChevronDown, Trash2, Edit, Paperclip, Eye, Calendar,
   Truck, Package, ChevronLeft, ChevronRight, RefreshCw,
-  FileSpreadsheet, BarChart3, Loader2
+  FileSpreadsheet, BarChart3, Loader2, X
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -357,6 +357,11 @@ const DefectRecordsTab: React.FC = () => {
   }, []);
   
   const totalPages = Math.ceil(totalCount / LIMIT);
+  
+  // Закрытие боковой панели
+  const closeDetails = () => {
+    setSelectedRecord(null);
+  };
   
   // Форматирование даты
   const formatDate = (dateStr: string | null) => {
@@ -754,6 +759,7 @@ const DefectRecordsTab: React.FC = () => {
               onEdit={() => setShowEditModal(true)}
               onDelete={() => setShowDeleteConfirm(true)}
               onStatusChange={() => setShowStatusModal(true)}
+              onClose={closeDetails}
             />
           </div>
         )}
@@ -799,6 +805,7 @@ const DefectRecordsTab: React.FC = () => {
             }}
           />
           
+          {/* Модалка подтверждения удаления записи */}
           <ConfirmModal
             isOpen={showDeleteConfirm}
             title="Удалить запись?"
@@ -816,6 +823,7 @@ const DefectRecordsTab: React.FC = () => {
               setShowDeleteConfirm(false);
             }}
             onCancel={() => setShowDeleteConfirm(false)}
+            confirmColor="red"
           />
         </>
       )}
@@ -824,7 +832,7 @@ const DefectRecordsTab: React.FC = () => {
 };
 
 // ============================================
-// КОМПОНЕНТ ДЕТАЛЕЙ ЗАПИСИ
+// КОМПОНЕНТ ДЕТАЛЕЙ ЗАПИСИ (ИСПРАВЛЕННЫЙ)
 // ============================================
 
 const RecordDetails: React.FC<{
@@ -834,9 +842,12 @@ const RecordDetails: React.FC<{
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: () => void;
-}> = ({ record, users, onUpdate, onEdit, onDelete, onStatusChange }) => {
+  onClose: () => void;
+}> = ({ record, users, onUpdate, onEdit, onDelete, onStatusChange, onClose }) => {
   const statusConfig = STATUS_CONFIG[record.status];
   const [uploading, setUploading] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{id: number; name: string} | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
@@ -856,6 +867,10 @@ const RecordDetails: React.FC<{
       toast.error(error.response?.data?.message || "Ошибка загрузки");
     } finally {
       setUploading(false);
+      // Сбрасываем input через ref
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
   
@@ -873,20 +888,22 @@ const RecordDetails: React.FC<{
     }
   };
   
-  const handleFileDelete = async (fileId: number) => {
-    if (!confirm("Удалить файл?")) return;
+  const confirmDeleteFile = async () => {
+    if (!fileToDelete) return;
     try {
-      await deleteDefectRecordFile(fileId);
+      await deleteDefectRecordFile(fileToDelete.id);
       toast.success("Файл удалён");
       onUpdate();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Ошибка");
+      toast.error(error.response?.data?.message || "Ошибка удаления");
+    } finally {
+      setFileToDelete(null);
     }
   };
   
   return (
     <div className="bg-white rounded-lg shadow">
-      {/* Заголовок */}
+      {/* Заголовок с кнопкой закрытия */}
       <div className="p-4 border-b">
         <div className="flex items-center justify-between mb-2">
           <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${statusConfig.bg} ${statusConfig.color}`}>
@@ -899,6 +916,10 @@ const RecordDetails: React.FC<{
             </button>
             <button onClick={onDelete} className="p-1.5 hover:bg-red-100 text-red-500 rounded" title="Удалить">
               <Trash2 size={16} />
+            </button>
+            {/* КНОПКА ЗАКРЫТИЯ */}
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded ml-2" title="Закрыть">
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -1058,8 +1079,21 @@ const RecordDetails: React.FC<{
             Файлы ({record.files?.length || 0})
           </span>
           <label className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer">
-            {uploading ? "Загрузка..." : "+ Добавить"}
-            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+            {uploading ? (
+              <span className="flex items-center gap-1">
+                <Loader2 size={14} className="animate-spin" />
+                Загрузка...
+              </span>
+            ) : (
+              "+ Добавить"
+            )}
+            <input 
+              type="file" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileUpload} 
+              disabled={uploading} 
+            />
           </label>
         </div>
         
@@ -1079,7 +1113,7 @@ const RecordDetails: React.FC<{
                     <Download size={14} />
                   </button>
                   <button
-                    onClick={() => handleFileDelete(file.id)}
+                    onClick={() => setFileToDelete({ id: file.id, name: file.originalName })}
                     className="p-1 hover:bg-red-100 text-red-500 rounded"
                     title="Удалить"
                   >
@@ -1091,6 +1125,16 @@ const RecordDetails: React.FC<{
           </div>
         )}
       </div>
+      
+      {/* Модалка подтверждения удаления файла */}
+      <ConfirmModal
+        isOpen={!!fileToDelete}
+        title="Удалить файл?"
+        message={`Вы уверены, что хотите удалить файл "${fileToDelete?.name}"?`}
+        onConfirm={confirmDeleteFile}
+        onCancel={() => setFileToDelete(null)}
+        confirmColor="red"
+      />
     </div>
   );
 };
