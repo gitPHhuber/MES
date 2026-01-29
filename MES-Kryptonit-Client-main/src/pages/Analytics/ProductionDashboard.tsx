@@ -29,7 +29,7 @@ interface DashboardData {
   activeUsers: number;
   activeUsersToday: number;
   stock: { totalItems: number; totalBoxes: number };
-  productionByDay: { date: string; name: string; fullDate: string; output: number; defects: number }[];
+  productionByDay: { date: string; name: string; fullDate: string; output: number; isWeekend?: boolean }[];
   defectTypes: { name: string; value: number }[];
   topUsers: { id: number; name: string; output: number }[];
   teamStats: { id: number; name: string; output: number; members: number }[];
@@ -355,17 +355,72 @@ export const ProductionDashboard: React.FC = () => {
                     dataKey={data.productionByDay.length > 14 ? "fullDate" : "name"} 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#94a3b8', fontSize: 11}} 
-                    dy={10}
+                    tick={(props: any) => {
+                      const { x, y, payload } = props;
+                      const item = data.productionByDay.find(d => 
+                        d.name === payload.value || d.fullDate === payload.value
+                      );
+                      const isWeekend = item?.isWeekend;
+                      return (
+                        <text 
+                          x={x} 
+                          y={y + 12} 
+                          textAnchor="middle" 
+                          fill={isWeekend ? '#f87171' : '#94a3b8'}
+                          fontSize={11}
+                          fontWeight={isWeekend ? 600 : 400}
+                        >
+                          {payload.value}
+                        </text>
+                      );
+                    }}
                     interval={data.productionByDay.length > 14 ? Math.floor(data.productionByDay.length / 7) : 0}
                   />
                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}}/>
                   <Tooltip 
                     contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    formatter={(value: number) => [value.toLocaleString(), 'Выработка']}
-                    labelFormatter={(label) => `Дата: ${label}`}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const item = data.productionByDay.find(d => 
+                        d.name === label || d.fullDate === label
+                      );
+                      return (
+                        <div className="bg-white p-3 rounded-xl shadow-lg border border-slate-100">
+                          <p className="text-sm font-bold text-slate-700">
+                            {item?.fullDate} ({item?.name})
+                            {item?.isWeekend && <span className="ml-2 text-xs text-red-400">выходной</span>}
+                          </p>
+                          <p className="text-lg font-black text-indigo-600">
+                            {payload[0].value?.toLocaleString()} ед.
+                          </p>
+                        </div>
+                      );
+                    }}
                   />
-                  <Area type="monotone" dataKey="output" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOutput)" />
+                  <Area 
+                    type="monotone" 
+                    dataKey="output" 
+                    stroke="#6366f1" 
+                    strokeWidth={2} 
+                    fillOpacity={1} 
+                    fill="url(#colorOutput)"
+                    dot={(props: any) => {
+                      const item = data.productionByDay.find(d => d.fullDate === props.payload.fullDate);
+                      if (item?.isWeekend && item?.output === 0) {
+                        return (
+                          <circle 
+                            cx={props.cx} 
+                            cy={props.cy} 
+                            r={3} 
+                            fill="#f87171" 
+                            stroke="#fff" 
+                            strokeWidth={1}
+                          />
+                        );
+                      }
+                      return null;
+                    }}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
