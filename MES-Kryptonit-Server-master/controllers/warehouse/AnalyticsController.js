@@ -1,10 +1,10 @@
 /**
  * AnalyticsController.js
- * ИСПРАВЛЕНО: график заполняет пропущенные дни нулями
+ * ИСПРАВЛЕНО: бригады + логирование
  */
 
 const { Op } = require("sequelize");
-const { WarehouseBox, WarehouseMovement, User, Team } = require("../../models/index");
+const { WarehouseBox, WarehouseMovement, User, Team, Project } = require("../../models/index");
 const { ProductionOutput, OUTPUT_STATUSES } = require("../../models/ProductionOutput");
 const sequelize = require("../../db");
 const ApiError = require("../../error/ApiError");
@@ -61,9 +61,6 @@ function calculateDateRange(period, customStartDate, customEndDate) {
   return { startDate, endDate };
 }
 
-/**
- * Генерирует массив всех дат между start и end
- */
 function generateDateRange(startDate, endDate) {
   const dates = [];
   const current = new Date(startDate);
@@ -84,13 +81,20 @@ class AnalyticsController {
   
   async getDashboardStats(req, res, next) {
     try {
-      const { period = 'week', startDate: customStart, endDate: customEnd } = req.query;
+      const { 
+        period = 'week', 
+        startDate: customStart, 
+        endDate: customEnd,
+        projectId 
+      } = req.query;
       
       const { startDate, endDate } = calculateDateRange(period, customStart, customEnd);
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
 
-      console.log(`>>> [Analytics] период=${period}, с ${startDateStr} по ${endDateStr}`);
+      const parsedProjectId = projectId ? Number(projectId) : null;
+
+      console.log(`>>> [Analytics] период=${period}, проект=${parsedProjectId || 'все'}, с ${startDateStr} по ${endDateStr}`);
 
       const now = new Date();
       const todayStart = new Date(now);
@@ -107,6 +111,10 @@ class AnalyticsController {
         ? { [Op.gte]: startDateStr }
         : { [Op.gte]: startDateStr, [Op.lte]: endDateStr };
 
+      const productionProjectCondition = parsedProjectId 
+        ? { projectId: parsedProjectId }
+        : {};
+
       // === Склад ===
       const stockStats = await WarehouseBox.findOne({
         attributes: [
@@ -117,8 +125,8 @@ class AnalyticsController {
         raw: true
       });
 
-      // === Выработка за период ===
-      const periodWarehouse = await WarehouseMovement.findOne({
+      // === Выработка за период (склад) ===
+      const periodWarehouse = parsedProjectId ? null : await WarehouseMovement.findOne({
         attributes: [[sequelize.fn("SUM", sequelize.col("goodQty")), "goodQty"]],
         where: {
           performedAt: warehouseDateCondition,
@@ -128,17 +136,19 @@ class AnalyticsController {
         raw: true
       });
 
+      // === Выработка за период (производство) ===
       const periodProduction = await ProductionOutput.findOne({
         attributes: [[sequelize.fn("SUM", sequelize.col("approvedQty")), "approvedQty"]],
         where: {
           date: productionDateCondition,
-          status: OUTPUT_STATUSES.APPROVED
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
         raw: true
       });
 
       // === Выработка сегодня ===
-      const todayWarehouse = await WarehouseMovement.findOne({
+      const todayWarehouse = parsedProjectId ? null : await WarehouseMovement.findOne({
         attributes: [[sequelize.fn("SUM", sequelize.col("goodQty")), "goodQty"]],
         where: {
           performedAt: { [Op.gte]: todayStart },
@@ -152,13 +162,14 @@ class AnalyticsController {
         attributes: [[sequelize.fn("SUM", sequelize.col("approvedQty")), "approvedQty"]],
         where: {
           date: todayStart.toISOString().split('T')[0],
-          status: OUTPUT_STATUSES.APPROVED
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
         raw: true
       });
 
       // === Выработка вчера ===
-      const yesterdayWarehouse = await WarehouseMovement.findOne({
+      const yesterdayWarehouse = parsedProjectId ? null : await WarehouseMovement.findOne({
         attributes: [[sequelize.fn("SUM", sequelize.col("goodQty")), "goodQty"]],
         where: {
           performedAt: { [Op.gte]: yesterdayStart, [Op.lt]: todayStart },
@@ -172,7 +183,8 @@ class AnalyticsController {
         attributes: [[sequelize.fn("SUM", sequelize.col("approvedQty")), "approvedQty"]],
         where: {
           date: yesterdayStart.toISOString().split('T')[0],
-          status: OUTPUT_STATUSES.APPROVED
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
         raw: true
       });
@@ -225,39 +237,81 @@ class AnalyticsController {
       }
 
       // === Активные пользователи ===
-      const activeUsers = await WarehouseMovement.count({
-        distinct: true,
-        col: 'performedById',
-        where: {
-          performedAt: warehouseDateCondition,
-          performedById: { [Op.ne]: null }
-        }
-      });
+      let warehouseUsers = [];
+      if (!parsedProjectId) {
+        warehouseUsers = await WarehouseMovement.findAll({
+          attributes: [[sequelize.fn("DISTINCT", sequelize.col("performedById")), "userId"]],
+          where: {
+            performedAt: warehouseDateCondition,
+            performedById: { [Op.ne]: null }
+          },
+          raw: true
+        });
+      }
 
-      const activeUsersToday = await WarehouseMovement.count({
-        distinct: true,
-        col: 'performedById',
+      const productionUsers = await ProductionOutput.findAll({
+        attributes: [[sequelize.fn("DISTINCT", sequelize.col("userId")), "userId"]],
         where: {
-          performedAt: { [Op.gte]: todayStart },
-          performedById: { [Op.ne]: null }
-        }
-      });
-
-      // === График по дням (с заполнением пропусков) ===
-      const chartByDay = await WarehouseMovement.findAll({
-        attributes: [
-          [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
-          [sequelize.fn("SUM", sequelize.col("goodQty")), "output"],
-        ],
-        where: {
-          performedAt: warehouseDateCondition,
-          performedById: { [Op.ne]: null },
-          goodQty: { [Op.gt]: 0 }
+          date: productionDateCondition,
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
-        group: [sequelize.fn("DATE", sequelize.col("performedAt"))],
-        order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
         raw: true
       });
+
+      const allUserIds = new Set([
+        ...warehouseUsers.map(u => u.userId),
+        ...productionUsers.map(u => u.userId)
+      ]);
+      const activeUsers = allUserIds.size;
+
+      // Активные сегодня
+      let todayWarehouseUsers = [];
+      if (!parsedProjectId) {
+        todayWarehouseUsers = await WarehouseMovement.findAll({
+          attributes: [[sequelize.fn("DISTINCT", sequelize.col("performedById")), "userId"]],
+          where: {
+            performedAt: { [Op.gte]: todayStart },
+            performedById: { [Op.ne]: null }
+          },
+          raw: true
+        });
+      }
+
+      const todayProductionUsers = await ProductionOutput.findAll({
+        attributes: [[sequelize.fn("DISTINCT", sequelize.col("userId")), "userId"]],
+        where: {
+          date: todayStart.toISOString().split('T')[0],
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
+        },
+        raw: true
+      });
+
+      const todayUserIds = new Set([
+        ...todayWarehouseUsers.map(u => u.userId),
+        ...todayProductionUsers.map(u => u.userId)
+      ]);
+      const activeUsersToday = todayUserIds.size;
+
+      // === График по дням ===
+      let chartByDay = [];
+      if (!parsedProjectId) {
+        chartByDay = await WarehouseMovement.findAll({
+          attributes: [
+            [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
+            [sequelize.fn("SUM", sequelize.col("goodQty")), "output"],
+          ],
+          where: {
+            performedAt: warehouseDateCondition,
+            performedById: { [Op.ne]: null },
+            goodQty: { [Op.gt]: 0 }
+          },
+          group: [sequelize.fn("DATE", sequelize.col("performedAt"))],
+          order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
+          raw: true
+        });
+      }
 
       const productionByDayRaw = await ProductionOutput.findAll({
         attributes: [
@@ -266,14 +320,14 @@ class AnalyticsController {
         ],
         where: {
           date: productionDateCondition,
-          status: OUTPUT_STATUSES.APPROVED
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
         group: ["date"],
         order: [["date", "ASC"]],
         raw: true
       });
 
-      // Собираем данные в Map
       const daysMap = new Map();
 
       chartByDay.forEach(row => {
@@ -288,11 +342,9 @@ class AnalyticsController {
         daysMap.get(dateKey).output += Number(row.output) || 0;
       });
 
-      // Генерируем полный диапазон дат и заполняем пропуски нулями
       const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
       const allDates = generateDateRange(startDate, endDate);
       
-      // Ограничиваем для очень длинных периодов (>90 дней показываем каждый 3й день)
       let filteredDates = allDates;
       let skipFactor = 1;
       
@@ -306,7 +358,6 @@ class AnalyticsController {
         const dayOfWeek = d.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         
-        // Суммируем данные за skipFactor дней если агрегируем
         let output = 0;
         if (skipFactor > 1) {
           const idx = allDates.indexOf(date);
@@ -327,86 +378,156 @@ class AnalyticsController {
       });
 
       // === ТОП-5 СОТРУДНИКОВ ===
-      const topUsersRaw = await WarehouseMovement.findAll({
+      
+      // Склад
+      let warehouseByUser = [];
+      if (!parsedProjectId) {
+        warehouseByUser = await WarehouseMovement.findAll({
+          attributes: [
+            "performedById",
+            [sequelize.fn("SUM", sequelize.col("goodQty")), "output"],
+          ],
+          where: {
+            performedAt: warehouseDateCondition,
+            performedById: { [Op.ne]: null },
+            goodQty: { [Op.gt]: 0 }
+          },
+          group: ["performedById"],
+          raw: true
+        });
+      }
+
+      // Производство
+      const productionByUser = await ProductionOutput.findAll({
         attributes: [
-          "performedById",
-          [sequelize.fn("SUM", sequelize.col("goodQty")), "output"],
+          "userId",
+          [sequelize.fn("SUM", sequelize.col("approvedQty")), "output"],
         ],
         where: {
-          performedAt: warehouseDateCondition,
-          performedById: { [Op.ne]: null },
-          goodQty: { [Op.gt]: 0 }
+          date: productionDateCondition,
+          status: OUTPUT_STATUSES.APPROVED,
+          ...productionProjectCondition
         },
-        include: [{
-          model: User,
-          as: "performedBy",
-          attributes: ["id", "name", "surname"]
-        }],
-        group: ["performedById", "performedBy.id"],
-        order: [[sequelize.fn("SUM", sequelize.col("goodQty")), "DESC"]],
-        limit: 5,
-        raw: false
-      });
-
-      const formattedTopUsers = topUsersRaw.map(row => {
-        const plain = row.get({ plain: true });
-        const user = plain.performedBy;
-        return {
-          id: plain.performedById,
-          name: user ? `${user.surname || ''} ${(user.name || '')[0] || ''}.`.trim() : `ID: ${plain.performedById}`,
-          output: Number(plain.output) || 0
-        };
-      }).filter(u => u.output > 0);
-
-      // === БРИГАДЫ ===
-      const userOutputs = await WarehouseMovement.findAll({
-        attributes: [
-          "performedById",
-          [sequelize.fn("SUM", sequelize.col("goodQty")), "output"],
-        ],
-        where: {
-          performedAt: warehouseDateCondition,
-          performedById: { [Op.ne]: null },
-          goodQty: { [Op.gt]: 0 }
-        },
-        group: ["performedById"],
+        group: ["userId"],
         raw: true
       });
 
-      const userIds = userOutputs.map(u => u.performedById);
-      const usersWithTeams = await User.findAll({
-        attributes: ["id", "teamId"],
-        where: { id: { [Op.in]: userIds } },
-        include: [{
-          model: Team,
-          attributes: ["id", "title"]
-        }],
-        raw: false
-      });
-
-      const userTeamMap = new Map();
-      usersWithTeams.forEach(u => {
-        const plain = u.get({ plain: true });
-        if (plain.Team) {
-          userTeamMap.set(plain.id, plain.Team);
+      // Объединяем
+      const userOutputMap = new Map();
+      
+      warehouseByUser.forEach(row => {
+        const userId = row.performedById;
+        if (!userOutputMap.has(userId)) {
+          userOutputMap.set(userId, { output: 0 });
         }
+        userOutputMap.get(userId).output += Number(row.output) || 0;
       });
 
+      productionByUser.forEach(row => {
+        const userId = row.userId;
+        if (!userOutputMap.has(userId)) {
+          userOutputMap.set(userId, { output: 0 });
+        }
+        userOutputMap.get(userId).output += Number(row.output) || 0;
+      });
+
+      // Данные пользователей С БРИГАДАМИ
+      const allUserIdsList = [...userOutputMap.keys()].filter(id => id != null);
+      
+      let usersData = [];
+      if (allUserIdsList.length > 0) {
+        usersData = await User.findAll({
+          attributes: ["id", "name", "surname", "teamId"],
+          where: { id: { [Op.in]: allUserIdsList } },
+          include: [{
+            model: Team,
+            attributes: ["id", "title"],
+            required: false
+          }],
+          raw: false
+        });
+      }
+
+      // Создаём карту пользователей
+      const userDataMap = new Map();
+      usersData.forEach(u => {
+        const plain = u.get({ plain: true });
+        // Sequelize без alias возвращает как Team (с большой буквы)
+        const teamData = plain.Team || plain.team || null;
+        userDataMap.set(plain.id, {
+          name: plain.name,
+          surname: plain.surname,
+          teamId: plain.teamId,
+          team: teamData
+        });
+      });
+
+      console.log(`>>> [Analytics] Загружено ${usersData.length} пользователей`);
+      
+      // Для отладки - сколько с бригадами
+      let usersWithTeams = 0;
+      userDataMap.forEach((data) => {
+        if (data.team) usersWithTeams++;
+      });
+      console.log(`>>> [Analytics] Из них с бригадами: ${usersWithTeams}`);
+
+      // Топ-5
+      const formattedTopUsers = Array.from(userOutputMap.entries())
+        .map(([userId, data]) => {
+          const user = userDataMap.get(userId);
+          return {
+            id: userId,
+            name: user 
+              ? `${user.surname || ''} ${(user.name || '')[0] || ''}.`.trim() 
+              : `ID: ${userId}`,
+            output: data.output
+          };
+        })
+        .filter(u => u.output > 0)
+        .sort((a, b) => b.output - a.output)
+        .slice(0, 5);
+
+      // === БРИГАДЫ - альтернативный подход через teamId ===
       const teamsMap = new Map();
-      userOutputs.forEach(uo => {
-        const team = userTeamMap.get(uo.performedById);
-        if (team) {
-          if (!teamsMap.has(team.id)) {
-            teamsMap.set(team.id, {
-              id: team.id,
-              name: team.title,
-              output: 0,
-              members: new Set()
-            });
+      
+      // Собираем уникальные teamId
+      const teamIds = new Set();
+      userDataMap.forEach((data) => {
+        if (data.teamId) teamIds.add(data.teamId);
+      });
+
+      // Загружаем бригады отдельно если нужно
+      let teamsData = new Map();
+      if (teamIds.size > 0) {
+        const teams = await Team.findAll({
+          attributes: ["id", "title"],
+          where: { id: { [Op.in]: [...teamIds] } },
+          raw: true
+        });
+        teams.forEach(t => teamsData.set(t.id, t));
+      }
+
+      // Агрегируем выработку по бригадам
+      userOutputMap.forEach((data, userId) => {
+        const user = userDataMap.get(userId);
+        const teamId = user?.teamId;
+        
+        if (teamId) {
+          const team = user.team || teamsData.get(teamId);
+          
+          if (team) {
+            if (!teamsMap.has(teamId)) {
+              teamsMap.set(teamId, {
+                id: teamId,
+                name: team.title,
+                output: 0,
+                members: new Set()
+              });
+            }
+            const t = teamsMap.get(teamId);
+            t.output += data.output;
+            t.members.add(userId);
           }
-          const t = teamsMap.get(team.id);
-          t.output += Number(uo.output) || 0;
-          t.members.add(uo.performedById);
         }
       });
 
@@ -414,6 +535,8 @@ class AnalyticsController {
         .map(t => ({ id: t.id, name: t.name, output: t.output, members: t.members.size }))
         .sort((a, b) => b.output - a.output)
         .slice(0, 5);
+
+      console.log(`>>> [Analytics] Бригад с данными: ${teamStats.length}`);
 
       // === Итоги ===
       const periodOutput = (Number(periodWarehouse?.goodQty) || 0) + (Number(periodProduction?.approvedQty) || 0);
@@ -426,8 +549,17 @@ class AnalyticsController {
 
       const daysDiff = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
 
+      // Название проекта
+      let projectName = null;
+      if (parsedProjectId) {
+        const project = await Project.findByPk(parsedProjectId, { attributes: ["title"] });
+        projectName = project?.title || null;
+      }
+
       res.json({
         period,
+        projectId: parsedProjectId,
+        projectName,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         daysInPeriod: daysDiff,

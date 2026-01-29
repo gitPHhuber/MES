@@ -2,13 +2,14 @@ import React, { useState, useEffect, useMemo } from "react";
 import { 
   Users, AlertTriangle, CheckCircle, 
   TrendingUp, TrendingDown, Calendar, BarChart3, Loader2,
-  Package, Factory, Boxes, RefreshCw, Clock, CalendarDays
+  Package, Factory, Boxes, RefreshCw, Clock, CalendarDays, FolderKanban
 } from "lucide-react";
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { $authHost } from "src/api";
+import { fetchProjects } from "src/api/projectsApi";
 import dayjs from "dayjs";
 import clsx from "clsx";
 
@@ -16,8 +17,16 @@ const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4'
 
 type Period = "day" | "week" | "month" | "year" | "all" | "custom";
 
+interface ProjectOption {
+  id: number;
+  title: string;
+  code?: string;
+}
+
 interface DashboardData {
   period: string;
+  projectId: number | null;
+  projectName: string | null;
   startDate: string;
   endDate: string;
   daysInPeriod: number;
@@ -50,14 +59,25 @@ export const ProductionDashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   
+  // Проекты
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  
   // Период
   const [period, setPeriod] = useState<Period>("week");
   const [customStart, setCustomStart] = useState(dayjs().subtract(7, 'day').format('YYYY-MM-DD'));
   const [customEnd, setCustomEnd] = useState(dayjs().format('YYYY-MM-DD'));
   const [showCustomPicker, setShowCustomPicker] = useState(false);
 
+  // Загрузка проектов
+  useEffect(() => {
+    fetchProjects()
+      .then(setProjects)
+      .catch(e => console.error("Ошибка загрузки проектов:", e));
+  }, []);
+
   // Загрузка данных
-  const loadDashboard = async (selectedPeriod: Period = period) => {
+  const loadDashboard = async (selectedPeriod: Period = period, projectId: string = selectedProjectId) => {
     setLoading(true);
     setError(null);
     
@@ -66,6 +86,10 @@ export const ProductionDashboard: React.FC = () => {
       
       if (selectedPeriod === 'custom') {
         url += `&startDate=${customStart}&endDate=${customEnd}`;
+      }
+      
+      if (projectId) {
+        url += `&projectId=${projectId}`;
       }
       
       console.log("[Dashboard] Загрузка:", url);
@@ -81,8 +105,8 @@ export const ProductionDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    loadDashboard(period);
-  }, [period]);
+    loadDashboard(period, selectedProjectId);
+  }, [period, selectedProjectId]);
 
   // Смена периода
   const handlePeriodChange = (newPeriod: Period) => {
@@ -94,9 +118,14 @@ export const ProductionDashboard: React.FC = () => {
     setPeriod(newPeriod);
   };
 
+  // Смена проекта
+  const handleProjectChange = (projectId: string) => {
+    setSelectedProjectId(projectId);
+  };
+
   // Применить кастомный период
   const applyCustomPeriod = () => {
-    loadDashboard('custom');
+    loadDashboard('custom', selectedProjectId);
   };
 
   // Расчёт изменения к вчера
@@ -109,9 +138,15 @@ export const ProductionDashboard: React.FC = () => {
     return { value: percent, isPositive: percent >= 0 };
   }, [data]);
 
-  // Норма брака (2%)
   const DEFECT_NORM = 2.0;
   const isDefectOverNorm = (data?.defectRate || 0) > DEFECT_NORM;
+
+  // Название выбранного проекта
+  const selectedProjectName = useMemo(() => {
+    if (!selectedProjectId) return "Все проекты";
+    const project = projects.find(p => p.id === Number(selectedProjectId));
+    return project?.title || "Проект";
+  }, [selectedProjectId, projects]);
 
   if (loading && !data) {
     return (
@@ -153,7 +188,9 @@ export const ProductionDashboard: React.FC = () => {
             </div>
             <div>
               <h1 className="text-3xl font-extrabold text-slate-900">Дашборд Производства</h1>
-              <p className="text-slate-500 font-medium">Оперативная сводка и метрики эффективности</p>
+              <p className="text-slate-500 font-medium">
+                {selectedProjectId ? data?.projectName || selectedProjectName : "Все проекты"}
+              </p>
             </div>
           </div>
           
@@ -176,11 +213,30 @@ export const ProductionDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Селектор периода */}
+      {/* Фильтры: Проект + Период */}
       <div className="max-w-7xl mx-auto mb-6">
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            
+            {/* Селектор проекта */}
+            <div className="flex items-center gap-3">
+              <FolderKanban size={20} className="text-emerald-500" />
+              <span className="font-medium text-slate-700">Проект:</span>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                disabled={loading}
+                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
+              >
+                <option value="">Все проекты</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Селектор периода */}
+            <div className="flex items-center gap-2 flex-wrap">
               <CalendarDays size={20} className="text-indigo-500" />
               <span className="font-medium text-slate-700">Период:</span>
               
@@ -191,7 +247,7 @@ export const ProductionDashboard: React.FC = () => {
                     onClick={() => handlePeriodChange(p)}
                     disabled={loading}
                     className={clsx(
-                      "px-4 py-2 rounded-lg text-sm font-medium transition",
+                      "px-3 py-1.5 rounded-lg text-sm font-medium transition",
                       period === p
                         ? "bg-indigo-600 text-white shadow-md"
                         : "text-slate-600 hover:bg-slate-200",
@@ -203,7 +259,10 @@ export const ProductionDashboard: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
 
+          {/* Кастомный диапазон и инфо */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-100">
             {/* Кастомный диапазон */}
             {showCustomPicker && (
               <div className="flex items-center gap-3">
@@ -232,7 +291,7 @@ export const ProductionDashboard: React.FC = () => {
 
             {/* Инфо о периоде */}
             {data && (
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-slate-500 ml-auto">
                 {dayjs(data.startDate).format("DD.MM.YYYY")} — {dayjs(data.endDate).format("DD.MM.YYYY")}
                 <span className="text-slate-400 ml-2">({data.daysInPeriod} дн.)</span>
               </div>
@@ -339,6 +398,7 @@ export const ProductionDashboard: React.FC = () => {
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <Calendar size={20} className="text-indigo-500"/> Динамика производства
+            {selectedProjectId && <span className="text-sm font-normal text-slate-400">({selectedProjectName})</span>}
           </h3>
           <div className="h-80 w-full">
             {data?.productionByDay && data.productionByDay.length > 0 ? (
@@ -450,7 +510,7 @@ export const ProductionDashboard: React.FC = () => {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {data.defectTypes.map((entry, index) => (
+                      {data.defectTypes.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -494,6 +554,7 @@ export const ProductionDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <Users size={20} className="text-purple-500"/> Топ-5 сотрудников
+            {selectedProjectId && <span className="text-sm font-normal text-slate-400">({selectedProjectName})</span>}
           </h3>
           <div className="h-64">
             {data?.topUsers && data.topUsers.length > 0 ? (
@@ -507,7 +568,7 @@ export const ProductionDashboard: React.FC = () => {
                     axisLine={false} 
                     tickLine={false} 
                     tick={{fill: '#64748b', fontSize: 12}} 
-                    width={100}
+                    width={120}
                   />
                   <Tooltip 
                     contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
