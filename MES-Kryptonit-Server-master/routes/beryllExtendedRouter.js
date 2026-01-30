@@ -27,7 +27,7 @@ const {
 const protect = [authMiddleware, syncUserMiddleware];
 
 // ============================================
-// СТОЙКИ (RACKS)
+// СТОЙКИ (RACKS) - БАЗОВЫЕ ОПЕРАЦИИ
 // ============================================
 
 router.get("/racks", ...protect, checkAbility("beryll.view"), RackController.getAllRacks);
@@ -36,13 +36,55 @@ router.post("/racks", ...protect, checkAbility("beryll.manage"), RackController.
 router.put("/racks/:id", ...protect, checkAbility("beryll.manage"), RackController.updateRack);
 router.delete("/racks/:id", ...protect, checkAbility("beryll.manage"), RackController.deleteRack);
 router.get("/racks/:id/history", ...protect, checkAbility("beryll.view"), RackController.getRackHistory);
+
+// ============================================
+// СТОЙКИ - РАСШИРЕННЫЕ ОПЕРАЦИИ (НОВЫЕ)
+// ============================================
+
+// Получить сводку по стойке (статистика по статусам, кто разместил и т.д.)
+router.get("/racks/:rackId/summary", ...protect, checkAbility("beryll.view"), RackController.getRackSummary);
+
+// Синхронизировать стойку с DHCP - найти IP для всех серверов
+router.post("/racks/:rackId/sync-dhcp", ...protect, checkAbility("beryll.work"), RackController.syncWithDhcp);
+
+// ============================================
+// ЮНИТЫ - БАЗОВЫЕ ОПЕРАЦИИ
+// ============================================
+
 router.get("/racks/:rackId/free-units", ...protect, checkAbility("beryll.view"), RackController.getFreeUnits);
 router.get("/racks/:rackId/units/:unitNumber", ...protect, checkAbility("beryll.view"), RackController.getUnit);
-router.post("/racks/:rackId/units/:unitNumber/install", ...protect, checkAbility("beryll.work"), RackController.installServer);
-router.post("/racks/:rackId/units/:unitNumber/remove", ...protect, checkAbility("beryll.work"), RackController.removeServer);
 router.put("/rack-units/:unitId", ...protect, checkAbility("beryll.work"), RackController.updateUnit);
 router.post("/rack-units/move", ...protect, checkAbility("beryll.work"), RackController.moveServer);
+
+// ============================================
+// ЮНИТЫ - РАСШИРЕННЫЕ ОПЕРАЦИИ (НОВЫЕ)
+// ============================================
+
+// Получить юниты по статусу сервера (IN_WORK, DEFECT, DONE и т.д.)
+router.get("/racks/:rackId/units-by-status", ...protect, checkAbility("beryll.view"), RackController.getUnitsByStatus);
+
+// ============================================
+// СЕРВЕРЫ В СТОЙКАХ
+// ============================================
+
+// НОВЫЙ: Разместить сервер в стойку БЕЗ взятия в работу
+router.post("/racks/:rackId/units/:unitNumber/place", ...protect, checkAbility("beryll.work"), RackController.placeServer);
+
+// Установить сервер и взять в работу
+router.post("/racks/:rackId/units/:unitNumber/install", ...protect, checkAbility("beryll.work"), RackController.installServer);
+
+// Извлечь сервер из стойки
+router.post("/racks/:rackId/units/:unitNumber/remove", ...protect, checkAbility("beryll.work"), RackController.removeServer);
+
+// Найти сервер в стойках
 router.get("/servers/:serverId/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
+
+// ============================================
+// DHCP ИНТЕГРАЦИЯ (НОВЫЕ)
+// ============================================
+
+// Найти IP по MAC адресу в DHCP
+router.get("/dhcp/find-ip/:mac", ...protect, checkAbility("beryll.view"), RackController.findIpByMac);
 
 // ============================================
 // КОМПЛЕКТЫ / ОТГРУЗКИ (SHIPMENTS)

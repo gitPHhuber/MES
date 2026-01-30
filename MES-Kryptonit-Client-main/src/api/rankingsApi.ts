@@ -32,6 +32,7 @@ export interface RankingUser {
   teamName: string;
   teamId: number | null;
   sectionName: string;
+  sectionId: number | null;
   teamLeadName: string;
   
   warehouseOutput: number;
@@ -42,7 +43,7 @@ export interface RankingUser {
   efficiency: number;
   place: number;
   
-  // Новые поля для графиков
+  // Поля для графиков
   sparkline: SparklinePoint[];
   dailyChange: DailyChange;
 }
@@ -51,6 +52,7 @@ export interface RankingTeam {
   id: number;
   title: string;
   section: string;
+  sectionId: number | null;
   teamLead: string;
   
   totalOutput: number;
@@ -59,6 +61,17 @@ export interface RankingTeam {
   avgEfficiency: number;
   membersCount: number;
   progress: number;
+  sparkline: SparklinePoint[];
+}
+
+export interface RankingSection {
+  id: number;
+  title: string;
+  totalOutput: number;
+  teamsCount: number;
+  membersCount: number;
+  avgOutput: number;
+  sparkline: SparklinePoint[];
 }
 
 export interface RankingTotals {
@@ -68,15 +81,19 @@ export interface RankingTotals {
   totalDefects: number;
   usersCount: number;
   teamsCount: number;
+  sectionsCount: number;
 }
 
 export interface RankingResponse {
   users: RankingUser[];
   teams: RankingTeam[];
+  sections: RankingSection[];
   totals: RankingTotals;
   period: string;
+  projectId: number | null;
+  projectName: string | null;
   startDate: string;
-  endDate?: string;
+  endDate: string;
 }
 
 export interface UserDailyStats {
@@ -96,8 +113,10 @@ export interface UserDetailsResponse {
     section: string | null;
   };
   period: string;
+  projectId: number | null;
+  projectName: string | null;
   startDate: string;
-  endDate?: string;
+  endDate: string;
   dailyStats: UserDailyStats[];
   byOperation: {
     operation: string;
@@ -115,6 +134,7 @@ export interface RankingsParams {
   period?: Period;
   startDate?: string;
   endDate?: string;
+  projectId?: string | number;
 }
 
 /**
@@ -126,7 +146,7 @@ export const fetchRankings = async (
   const queryParams: RankingsParams = typeof params === "string" 
     ? { period: params } 
     : params;
-
+  
   const { data } = await $authHost.get("/api/warehouse/rankings", {
     params: queryParams
   });
@@ -143,7 +163,7 @@ export const fetchUserRankingDetails = async (
   const queryParams: RankingsParams = typeof params === "string" 
     ? { period: params } 
     : params;
-
+  
   const { data } = await $authHost.get(`/api/warehouse/rankings/user/${userId}`, {
     params: queryParams
   });

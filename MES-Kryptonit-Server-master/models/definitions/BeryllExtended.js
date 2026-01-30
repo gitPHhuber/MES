@@ -1,5 +1,20 @@
+/**
+ * BeryllExtended.js - Расширенные модели системы Берилл
+ * 
+ * Модели: Стойки, Кластеры, Отгрузки, Учёт брака
+ * 
+ * ОБНОВЛЕНО: Добавлены поля placedById, placedAt, dhcp* в BeryllRackUnit
+ *            Добавлена ассоциация placedBy
+ * 
+ * Положить в: models/definitions/BeryllExtended.js
+ */
+
 const sequelize = require("../../db");
 const { DataTypes } = require("sequelize");
+
+// ============================================
+// КОНСТАНТЫ
+// ============================================
 
 const RACK_STATUSES = {
   ACTIVE: "ACTIVE",
@@ -58,6 +73,9 @@ const DEFECT_RECORD_STATUSES = {
   CLOSED: "CLOSED"
 };
 
+// ============================================
+// Модель стойки (Rack)
+// ============================================
 const BeryllRack = sequelize.define("BeryllRack", {
   id: {
     type: DataTypes.INTEGER,
@@ -110,6 +128,9 @@ const BeryllRack = sequelize.define("BeryllRack", {
   ]
 });
 
+// ============================================
+// Модель юнита стойки (Rack Unit) - ОБНОВЛЕНО
+// ============================================
 const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
   id: {
     type: DataTypes.INTEGER,
@@ -175,7 +196,44 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
   installedById: {
     type: DataTypes.INTEGER,
     allowNull: true
+  },
+  
+  // ========== НОВЫЕ ПОЛЯ ==========
+  
+  // Кто поставил сервер в стойку (БЕЗ взятия в работу)
+  placedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  // Когда поставлен в стойку
+  placedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  
+  // DHCP интеграция - автоматически определённые данные
+  dhcpIpAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  dhcpMacAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  dhcpHostname: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  dhcpLeaseActive: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false
+  },
+  dhcpLastSync: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
+  
 }, {
   tableName: "beryll_rack_units",
   timestamps: true,
@@ -184,10 +242,16 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
     { fields: ["serverId"] },
     { fields: ["unitNumber"] },
     { unique: true, fields: ["rackId", "unitNumber"] },
-    { fields: ["hostname"] }
+    { fields: ["hostname"] },
+    { fields: ["placedById"] },
+    { fields: ["dhcpIpAddress"] },
+    { fields: ["dhcpMacAddress"] }
   ]
 });
 
+// ============================================
+// Модель отгрузки (Shipment)
+// ============================================
 const BeryllShipment = sequelize.define("BeryllShipment", {
   id: {
     type: DataTypes.INTEGER,
@@ -272,6 +336,9 @@ const BeryllShipment = sequelize.define("BeryllShipment", {
   ]
 });
 
+// ============================================
+// Модель кластера (Cluster)
+// ============================================
 const BeryllCluster = sequelize.define("BeryllCluster", {
   id: {
     type: DataTypes.INTEGER,
@@ -331,6 +398,9 @@ const BeryllCluster = sequelize.define("BeryllCluster", {
   ]
 });
 
+// ============================================
+// Модель связи кластер-сервер (ClusterServer)
+// ============================================
 const BeryllClusterServer = sequelize.define("BeryllClusterServer", {
   id: {
     type: DataTypes.INTEGER,
@@ -394,6 +464,9 @@ const BeryllClusterServer = sequelize.define("BeryllClusterServer", {
   ]
 });
 
+// ============================================
+// Модель записи о браке (DefectRecord)
+// ============================================
 const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
   id: {
     type: DataTypes.INTEGER,
@@ -438,18 +511,6 @@ const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
     type: DataTypes.INTEGER,
     allowNull: true
   },
-  diagnosisStartedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  diagnosisCompletedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  diagnosisResult: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
   repairPartType: {
     type: DataTypes.ENUM(...Object.values(REPAIR_PART_TYPES)),
     allowNull: true
@@ -474,14 +535,6 @@ const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
     type: DataTypes.TEXT,
     allowNull: true
   },
-  repairStartedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  repairCompletedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
   status: {
     type: DataTypes.ENUM(...Object.values(DEFECT_RECORD_STATUSES)),
     allowNull: false,
@@ -499,14 +552,6 @@ const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
   repeatedDefectDate: {
     type: DataTypes.DATE,
     allowNull: true
-  },
-  previousDefectId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: "beryll_defect_records",
-      key: "id"
-    }
   },
   sentToYadroRepair: {
     type: DataTypes.BOOLEAN,
@@ -526,37 +571,8 @@ const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
     type: DataTypes.DATE,
     allowNull: true
   },
-  substituteServerId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: "beryll_servers",
-      key: "id"
-    }
-  },
   substituteServerSerial: {
     type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  substituteIssuedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  substituteReturnedAt: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  slaDeadline: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  slaBreached: {
-    type: DataTypes.BOOLEAN,
-    allowNull: true,
-    defaultValue: false
-  },
-  totalDowntimeMinutes: {
-    type: DataTypes.INTEGER,
     allowNull: true
   },
   resolvedAt: {
@@ -590,14 +606,13 @@ const BeryllDefectRecord = sequelize.define("BeryllDefectRecord", {
     { fields: ["detectedAt"] },
     { fields: ["repairPartType"] },
     { fields: ["diagnosticianId"] },
-    { fields: ["isRepeatedDefect"] },
-    { fields: ["slaDeadline"] },
-    { fields: ["slaBreached"] },
-    { fields: ["substituteServerId"] },
-    { fields: ["previousDefectId"] }
+    { fields: ["isRepeatedDefect"] }
   ]
 });
 
+// ============================================
+// Модель файлов записи о браке
+// ============================================
 const BeryllDefectRecordFile = sequelize.define("BeryllDefectRecordFile", {
   id: {
     type: DataTypes.INTEGER,
@@ -644,6 +659,9 @@ const BeryllDefectRecordFile = sequelize.define("BeryllDefectRecordFile", {
   ]
 });
 
+// ============================================
+// Модель расширенной истории
+// ============================================
 const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
   id: {
     type: DataTypes.INTEGER,
@@ -688,54 +706,69 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
   ]
 });
 
-const setupAssociations = (models) => {
+// ============================================
+// Настройка связей - ОБНОВЛЕНО
+// ============================================
+const setupExtendedAssociations = (models) => {
   const { User, BeryllServer } = models;
-
+  
+  // --- Стойки и юниты ---
   BeryllRack.hasMany(BeryllRackUnit, { as: "units", foreignKey: "rackId", onDelete: "CASCADE" });
   BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
-
+  
   BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   if (BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
   }
-
+  
+  // Кто установил (взял в работу)
   BeryllRackUnit.belongsTo(User, { as: "installedBy", foreignKey: "installedById" });
-
+  
+  // НОВОЕ: Кто разместил (без взятия в работу)
+  BeryllRackUnit.belongsTo(User, { as: "placedBy", foreignKey: "placedById" });
+  
+  // --- Отгрузки ---
   BeryllShipment.belongsTo(User, { as: "createdBy", foreignKey: "createdById" });
   BeryllShipment.hasMany(BeryllCluster, { as: "clusters", foreignKey: "shipmentId" });
-
+  
+  // --- Кластеры ---
   BeryllCluster.belongsTo(BeryllShipment, { as: "shipment", foreignKey: "shipmentId" });
   BeryllCluster.belongsTo(User, { as: "createdBy", foreignKey: "createdById" });
   BeryllCluster.hasMany(BeryllClusterServer, { as: "clusterServers", foreignKey: "clusterId", onDelete: "CASCADE" });
-
+  
+  // --- Серверы в кластерах ---
   BeryllClusterServer.belongsTo(BeryllCluster, { as: "cluster", foreignKey: "clusterId" });
   BeryllClusterServer.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllClusterServer.belongsTo(User, { as: "addedBy", foreignKey: "addedById" });
-
+  
   if (BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
   }
-
+  
+  // --- Записи о браке ---
   BeryllDefectRecord.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
-  BeryllDefectRecord.belongsTo(BeryllServer, { as: "substituteServer", foreignKey: "substituteServerId" });
   BeryllDefectRecord.belongsTo(User, { as: "detectedBy", foreignKey: "detectedById" });
   BeryllDefectRecord.belongsTo(User, { as: "diagnostician", foreignKey: "diagnosticianId" });
   BeryllDefectRecord.belongsTo(User, { as: "resolvedBy", foreignKey: "resolvedById" });
-  BeryllDefectRecord.belongsTo(BeryllDefectRecord, { as: "previousDefect", foreignKey: "previousDefectId" });
-  BeryllDefectRecord.hasMany(BeryllDefectRecord, { as: "repeatedDefects", foreignKey: "previousDefectId" });
   BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", foreignKey: "defectRecordId", onDelete: "CASCADE" });
-
+  
   if (BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
   }
-
+  
+  // --- Файлы записей о браке ---
   BeryllDefectRecordFile.belongsTo(BeryllDefectRecord, { as: "defectRecord", foreignKey: "defectRecordId" });
   BeryllDefectRecordFile.belongsTo(User, { as: "uploadedBy", foreignKey: "uploadedById" });
-
+  
+  // --- История ---
   BeryllExtendedHistory.belongsTo(User, { as: "user", foreignKey: "userId" });
 };
 
+// ============================================
+// Экспорт
+// ============================================
 module.exports = {
+  // Модели
   BeryllRack,
   BeryllRackUnit,
   BeryllShipment,
@@ -744,12 +777,15 @@ module.exports = {
   BeryllDefectRecord,
   BeryllDefectRecordFile,
   BeryllExtendedHistory,
+  
+  // Константы
   RACK_STATUSES,
   CLUSTER_STATUSES,
   SHIPMENT_STATUSES,
   SERVER_ROLES,
   REPAIR_PART_TYPES,
   DEFECT_RECORD_STATUSES,
-  setupAssociations,
-  setupExtendedAssociations: setupAssociations
+  
+  // Функция настройки связей (импортируется как setupExtendedAssociations в index.js)
+  setupAssociations: setupExtendedAssociations
 };

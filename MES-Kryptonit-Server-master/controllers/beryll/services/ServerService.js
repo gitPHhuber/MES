@@ -12,7 +12,7 @@ class ServerService {
    * ДОБАВЛЕНО: параметр assignedToId для фильтра "Мои серверы"
    */
   async getServers(filters = {}) {
-    const { status, search, onlyActive, batchId, assignedToId } = filters; // ДОБАВЛЕНО: assignedToId
+    const { status, search, onlyActive, batchId, assignedToId } = filters;
     
     const where = {};
     
@@ -28,7 +28,7 @@ class ServerService {
       where.batchId = batchId === "null" ? null : parseInt(batchId);
     }
     
-    // ДОБАВЛЕНО: Фильтр по исполнителю (для функционала "Мои серверы")
+    // Фильтр по исполнителю (для функционала "Мои серверы")
     if (assignedToId) {
       where.assignedToId = parseInt(assignedToId);
     }
@@ -68,7 +68,6 @@ class ServerService {
           include: [
             { model: BeryllChecklistTemplate, as: "template" },
             { model: User, as: "completedBy", attributes: ["id", "login", "name", "surname"] },
-            // ✅ Добавлено: загружаем файлы для каждого пункта чек-листа
             { 
               model: BeryllChecklistFile, 
               as: "files",
@@ -93,33 +92,81 @@ class ServerService {
   
   /**
    * Взять сервер в работу
+   * 
+   * ОБНОВЛЕНО:
+   * - Можно взять из статусов: NEW, CLARIFYING, DEFECT
+   * - SUPER_ADMIN может забрать сервер у другого пользователя
+   * - Добавлен параметр userRole
+   * 
+   * @param {number} id - ID сервера
+   * @param {number} userId - ID пользователя
+   * @param {string} userRole - Роль пользователя (для проверки SUPER_ADMIN)
    */
-  async takeServer(id, userId) {
+  async takeServer(id, userId, userRole) {
     const server = await BeryllServer.findByPk(id);
     
     if (!server) {
       throw new Error("Сервер не найден");
     }
     
+    // Разрешённые статусы для взятия в работу
+    const allowedStatuses = [
+      SERVER_STATUSES.NEW, 
+      SERVER_STATUSES.CLARIFYING, 
+      SERVER_STATUSES.DEFECT
+    ];
+    
+    // Проверка: сервер уже в работе у другого пользователя
     if (server.assignedToId && server.status === SERVER_STATUSES.IN_WORK) {
-      throw new Error("Сервер уже взят в работу");
+      // SUPER_ADMIN может забрать сервер у другого пользователя
+      if (server.assignedToId !== userId && userRole !== "SUPER_ADMIN") {
+        throw new Error("Сервер уже взят в работу другим пользователем");
+      }
+    }
+    
+    // Если сервер в CLARIFYING или DEFECT и назначен другому - только суперадмин может взять
+    if (server.assignedToId && server.assignedToId !== userId) {
+      if (userRole !== "SUPER_ADMIN") {
+        throw new Error("Сервер назначен другому исполнителю");
+      }
+    }
+    
+    // Проверка допустимого статуса (кроме IN_WORK - его уже проверили выше)
+    if (!allowedStatuses.includes(server.status) && server.status !== SERVER_STATUSES.IN_WORK) {
+      throw new Error(`Нельзя взять сервер из статуса "${server.status}"`);
     }
     
     const previousStatus = server.status;
+    const previousAssignee = server.assignedToId;
+    
+    // Определяем тип действия для логирования
+    const isReturning = server.assignedToId === userId && 
+      (server.status === SERVER_STATUSES.CLARIFYING || server.status === SERVER_STATUSES.DEFECT);
+    const isTakingFromOther = server.assignedToId && server.assignedToId !== userId;
     
     await server.update({
       status: SERVER_STATUSES.IN_WORK,
       assignedToId: userId,
-      assignedAt: new Date()
+      // Если возвращаем свой сервер - сохраняем время начала работы
+      assignedAt: isReturning ? server.assignedAt : new Date()
     });
     
     // Создаём пункты чек-листа для сервера если их нет
     await ChecklistService.initializeServerChecklist(server.id);
     
+    // Формируем комментарий для истории
+    let comment = null;
+    if (isReturning) {
+      comment = `Возвращён в работу из статуса "${previousStatus}"`;
+    } else if (isTakingFromOther) {
+      comment = `Сервер переназначен администратором с пользователя ID:${previousAssignee}`;
+    }
+    
     // Логируем
     await HistoryService.logHistory(server.id, userId, HISTORY_ACTIONS.TAKEN, {
       fromStatus: previousStatus,
-      toStatus: SERVER_STATUSES.IN_WORK
+      toStatus: SERVER_STATUSES.IN_WORK,
+      comment
     });
     
     const updated = await BeryllServer.findByPk(id, {
@@ -131,6 +178,11 @@ class ServerService {
   
   /**
    * Освободить сервер
+   * SUPER_ADMIN может освободить любой сервер
+   * 
+   * @param {number} id - ID сервера
+   * @param {number} userId - ID пользователя
+   * @param {string} userRole - Роль пользователя (для проверки SUPER_ADMIN)
    */
   async releaseServer(id, userId, userRole) {
     const server = await BeryllServer.findByPk(id);
@@ -139,12 +191,14 @@ class ServerService {
       throw new Error("Сервер не найден");
     }
     
+    // SUPER_ADMIN может освободить любой сервер
     if (server.assignedToId !== userId && userRole !== "SUPER_ADMIN") {
       throw new Error("Нет прав для освобождения этого сервера");
     }
     
     const duration = calculateDuration(server.assignedAt);
     const previousStatus = server.status;
+    const previousAssignee = server.assignedToId;
     
     await server.update({
       status: SERVER_STATUSES.NEW,
@@ -152,10 +206,16 @@ class ServerService {
       assignedAt: null
     });
     
+    // Если суперадмин отпускает чужой сервер - добавляем комментарий
+    const comment = (userRole === "SUPER_ADMIN" && previousAssignee !== userId) 
+      ? "Сервер снят с исполнителя администратором" 
+      : undefined;
+    
     await HistoryService.logHistory(server.id, userId, HISTORY_ACTIONS.RELEASED, {
       fromStatus: previousStatus,
       toStatus: SERVER_STATUSES.NEW,
-      durationMinutes: duration
+      durationMinutes: duration,
+      comment
     });
     
     return server;

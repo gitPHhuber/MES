@@ -7,6 +7,7 @@
  * - Замена комплектующих
  * - Сканирование/ввод серийного номера Yadro
  * - Редактирование серийных номеров
+ * - Синхронизация с BMC с выбором режима (compare/force/merge)
  * 
  * Положить в: src/components/beryll/ServerComponentsManager.tsx
  */
@@ -16,7 +17,7 @@ import {
   Cpu, MemoryStick, HardDrive, Network, CircuitBoard, Zap, Server,
   RefreshCw, Download, ChevronDown, ChevronUp, Copy, AlertCircle,
   CheckCircle, AlertTriangle, HelpCircle, Trash2, Settings, Plus,
-  Edit2, X, Save, ScanLine, ArrowRightLeft, Search, Package
+  Edit2, X, Save, ScanLine, ArrowRightLeft, Search, Package, GitMerge
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -34,8 +35,16 @@ async function checkBMC(serverId: number) {
   return data;
 }
 
-async function fetchComponentsFromBMC(serverId: number) {
-  const { data } = await $authHost.post(`${BASE_URL}/servers/${serverId}/components/fetch`);
+// Обновленная функция с поддержкой режимов синхронизации
+async function fetchComponentsFromBMC(
+  serverId: number,
+  mode: 'compare' | 'force' | 'merge' = 'compare',
+  preserveManual: boolean = true
+) {
+  const { data } = await $authHost.post(
+    `${BASE_URL}/servers/${serverId}/components/fetch`,
+    { mode, preserveManual }
+  );
   return data;
 }
 
@@ -108,6 +117,27 @@ interface ComponentsResponse {
   };
   grouped: any;
   components: ServerComponent[];
+}
+
+// Тип для результата сравнения с BMC
+interface BMCComparisonResult {
+  success: boolean;
+  mode: 'compare';
+  hasDiscrepancies: boolean;
+  summary: {
+    total: { inDb: number; inBmc: number };
+    matched: number;
+    missingInBmc: number;
+    newInBmc: number;
+    mismatches: number;
+  };
+  details: {
+    matched: any[];
+    missingInBmc: any[];
+    newInBmc: any[];
+    mismatches: any[];
+  };
+  message?: string;
 }
 
 interface Props {
@@ -741,6 +771,162 @@ const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
 };
 
 // ============================================
+// МОДАЛЬНОЕ ОКНО ВЫБОРА РЕЖИМА СИНХРОНИЗАЦИИ
+// ============================================
+
+interface SyncModeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectMode: (mode: 'force' | 'merge', preserveManual: boolean) => void;
+  comparisonResult: BMCComparisonResult | null;
+  syncing: boolean;
+}
+
+const SyncModeModal: React.FC<SyncModeModalProps> = ({
+  isOpen, onClose, onSelectMode, comparisonResult, syncing
+}) => {
+  if (!isOpen || !comparisonResult) return null;
+
+  const totalDiscrepancies = 
+    (comparisonResult.summary?.missingInBmc || 0) + 
+    (comparisonResult.summary?.newInBmc || 0) + 
+    (comparisonResult.summary?.mismatches || 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b bg-amber-50">
+          <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-800">Обнаружены расхождения</h3>
+            <p className="text-sm text-gray-500">Выберите способ синхронизации с BMC</p>
+          </div>
+          <button 
+            onClick={onClose}
+            disabled={syncing}
+            className="p-2 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Статистика */}
+        <div className="px-6 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <div className="text-xl font-bold text-gray-700">
+                {comparisonResult.summary?.total?.inDb || 0}
+              </div>
+              <div className="text-xs text-gray-500">В базе</div>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <div className="text-xl font-bold text-gray-700">
+                {comparisonResult.summary?.total?.inBmc || 0}
+              </div>
+              <div className="text-xs text-gray-500">В BMC</div>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <div className="text-xl font-bold text-green-600">
+                {comparisonResult.summary?.matched || 0}
+              </div>
+              <div className="text-xs text-gray-500">Совпадают</div>
+            </div>
+            <div className="text-center p-3 bg-amber-50 rounded-lg">
+              <div className="text-xl font-bold text-amber-600">
+                {totalDiscrepancies}
+              </div>
+              <div className="text-xs text-gray-500">Различий</div>
+            </div>
+          </div>
+
+          {/* Детали расхождений */}
+          <div className="space-y-2 text-sm mb-4 p-3 bg-slate-50 rounded-lg">
+            {comparisonResult.summary?.newInBmc > 0 && (
+              <div className="flex items-center gap-2 text-blue-600">
+                <Plus size={14} />
+                <span>Новых в BMC: <strong>{comparisonResult.summary.newInBmc}</strong></span>
+              </div>
+            )}
+            {comparisonResult.summary?.missingInBmc > 0 && (
+              <div className="flex items-center gap-2 text-amber-600">
+                <AlertTriangle size={14} />
+                <span>Нет в BMC: <strong>{comparisonResult.summary.missingInBmc}</strong></span>
+              </div>
+            )}
+            {comparisonResult.summary?.mismatches > 0 && (
+              <div className="flex items-center gap-2 text-orange-600">
+                <ArrowRightLeft size={14} />
+                <span>Различия в данных: <strong>{comparisonResult.summary.mismatches}</strong></span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Кнопки действий */}
+        <div className="px-6 py-4 border-t bg-gray-50 space-y-3">
+          {/* Умное слияние - рекомендуемый вариант */}
+          <button
+            onClick={() => onSelectMode('merge', true)}
+            disabled={syncing}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 font-medium transition-colors shadow-lg shadow-green-200"
+          >
+            <GitMerge className="w-5 h-5" />
+            <div className="text-left">
+              <div>Умное слияние</div>
+              <div className="text-xs font-normal opacity-80">Добавит новые, обновит изменённые</div>
+            </div>
+          </button>
+
+          {/* Перезапись с сохранением ручных */}
+          <button
+            onClick={() => onSelectMode('force', true)}
+            disabled={syncing}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className="w-5 h-5" />
+            <div className="text-left">
+              <div>Перезаписать</div>
+              <div className="text-xs font-normal opacity-80">Сохранить ручные записи</div>
+            </div>
+          </button>
+
+          {/* Полная перезапись */}
+          <button
+            onClick={() => onSelectMode('force', false)}
+            disabled={syncing}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2 border-2 border-red-300 text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 className="w-5 h-5" />
+            <div className="text-left">
+              <div>Полная перезапись</div>
+              <div className="text-xs font-normal opacity-70">Удалить ручные записи</div>
+            </div>
+          </button>
+
+          {/* Отмена */}
+          <button
+            onClick={onClose}
+            disabled={syncing}
+            className="w-full px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            Отмена
+          </button>
+        </div>
+
+        {/* Индикатор загрузки */}
+        {syncing && (
+          <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center rounded-2xl">
+            <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+            <p className="text-gray-600 font-medium">Синхронизация...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
 // КАРТОЧКА КОМПЛЕКТУЮЩЕГО
 // ============================================
 
@@ -948,6 +1134,11 @@ const ServerComponentsManager: React.FC<Props> = ({
   const [replacingComponent, setReplacingComponent] = useState<ServerComponent | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ServerComponent | null>(null);
 
+  // BMC Sync modal states
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<BMCComparisonResult | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
   // Фильтрация по типам
   const [typeFilter, setTypeFilter] = useState<ComponentType | 'ALL'>('ALL');
 
@@ -968,17 +1159,66 @@ const ServerComponentsManager: React.FC<Props> = ({
     loadComponents();
   }, [loadComponents]);
 
-  // Выгрузка с BMC
+  // Выгрузка с BMC - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const handleFetchFromBmc = async () => {
     setFetchingFromBmc(true);
     try {
-      const result = await fetchComponentsFromBMC(serverId);
-      toast.success(result.message || 'Комплектующие выгружены');
-      await loadComponents();
+      // Сначала делаем сравнение (compare)
+      const result = await fetchComponentsFromBMC(serverId, 'compare');
+      
+      if (result.hasDiscrepancies) {
+        // Если есть расхождения - показываем модальное окно выбора режима
+        setComparisonResult(result);
+        setSyncModalOpen(true);
+      } else if (result.summary?.total?.inBmc > 0) {
+        // Расхождений нет, но есть данные в BMC - синхронизируем с force
+        const syncResult = await fetchComponentsFromBMC(serverId, 'force', true);
+        toast.success(syncResult.message || `Загружено ${syncResult.components?.length || 0} комплектующих`);
+        await loadComponents();
+      } else {
+        // Нет данных в BMC
+        toast.info('BMC не вернул данных о комплектующих');
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Ошибка выгрузки с BMC');
     } finally {
       setFetchingFromBmc(false);
+    }
+  };
+
+  // Обработка выбора режима синхронизации
+  const handleSyncWithMode = async (mode: 'force' | 'merge', preserveManual: boolean) => {
+    setSyncing(true);
+    try {
+      const result = await fetchComponentsFromBMC(serverId, mode, preserveManual);
+      
+      if (mode === 'merge') {
+        const { actions } = result;
+        toast.success(
+          `Слияние завершено: обновлено ${actions?.updated?.length || 0}, добавлено ${actions?.added?.length || 0}`
+        );
+        if (actions?.flaggedForReview?.length > 0) {
+          toast.warning(`${actions.flaggedForReview.length} компонент(ов) требуют проверки`);
+        }
+      } else {
+        toast.success(result.message || `Синхронизировано ${result.components?.length || 0} комплектующих`);
+      }
+      
+      setSyncModalOpen(false);
+      setComparisonResult(null);
+      await loadComponents();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Ошибка синхронизации');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Закрытие модалки синхронизации
+  const handleCloseSyncModal = () => {
+    if (!syncing) {
+      setSyncModalOpen(false);
+      setComparisonResult(null);
     }
   };
 
@@ -1196,13 +1436,27 @@ const ServerComponentsManager: React.FC<Props> = ({
             {searchQuery ? 'Ничего не найдено' : 'Комплектующие не добавлены'}
           </p>
           {!readOnly && !searchQuery && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium inline-flex items-center gap-2"
-            >
-              <Plus size={18} />
-              Добавить комплектующее
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium inline-flex items-center gap-2"
+              >
+                <Plus size={18} />
+                Добавить вручную
+              </button>
+              <button
+                onClick={handleFetchFromBmc}
+                disabled={fetchingFromBmc}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium inline-flex items-center gap-2 disabled:opacity-50"
+              >
+                {fetchingFromBmc ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Download size={18} />
+                )}
+                Загрузить с BMC
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1298,6 +1552,15 @@ const ServerComponentsManager: React.FC<Props> = ({
           component={editingSerialsComponent}
         />
       )}
+
+      {/* BMC Sync Mode Selection Modal */}
+      <SyncModeModal
+        isOpen={syncModalOpen}
+        onClose={handleCloseSyncModal}
+        onSelectMode={handleSyncWithMode}
+        comparisonResult={comparisonResult}
+        syncing={syncing}
+      />
 
       {/* Delete Confirmation */}
       {confirmDelete && (

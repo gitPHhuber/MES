@@ -1,9 +1,9 @@
 /**
  * RankingsController.js
- * Контроллер рейтингов сотрудников
+ * Контроллер рейтингов сотрудников с фильтром по проектам
  */
 
-const { WarehouseMovement, User, Team, Section } = require("../models/index");
+const { WarehouseMovement, User, Team, Section, Project } = require("../models/index");
 const { ProductionOutput, OUTPUT_STATUSES } = require("../models/ProductionOutput");
 const { Op } = require("sequelize");
 const sequelize = require("../db");
@@ -64,16 +64,32 @@ function calculateDateRange(period, customStartDate, customEndDate) {
 }
 
 /**
- * Определяет максимальное количество точек для sparkline в зависимости от периода
+ * Генерирует массив всех дат между start и end
  */
-function getSparklineLimit(period) {
+function generateDateRange(startDate, endDate) {
+    const dates = [];
+    const current = new Date(startDate);
+    current.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    while (current <= end) {
+        dates.push(current.toISOString().split('T')[0]);
+        current.setDate(current.getDate() + 1);
+    }
+    return dates;
+}
+
+/**
+ * Определяет максимальное количество точек для sparkline
+ */
+function getSparklineLimit(period, totalDays) {
     switch (period) {
         case 'day': return 1;
         case 'week': return 7;
         case 'month': return 31;
-        case 'year': return 52; // по неделям
-        case 'all': return 100;
-        case 'custom': return 90;
+        case 'year': return Math.min(totalDays, 365);
+        case 'all': return Math.min(totalDays, 365);
+        case 'custom': return Math.min(totalDays, 90);
         default: return 14;
     }
 }
@@ -83,70 +99,110 @@ function getSparklineLimit(period) {
  */
 async function getStats(req, res, next) {
     try {
-        const { period = 'week', startDate: customStartDate, endDate: customEndDate } = req.query;
+        const { 
+            period = 'week', 
+            startDate: customStartDate, 
+            endDate: customEndDate,
+            projectId 
+        } = req.query;
 
         const { startDate, endDate } = calculateDateRange(period, customStartDate, customEndDate);
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
-        const sparklineLimit = getSparklineLimit(period);
+        const parsedProjectId = projectId ? Number(projectId) : null;
 
-        console.log(`>>> [Rankings] период=${period}, с ${startDateStr} по ${endDateStr}, sparkline limit=${sparklineLimit}`);
+        // Генерируем полный диапазон дат для sparkline
+        const allDates = generateDateRange(startDate, endDate);
+        const sparklineLimit = getSparklineLimit(period, allDates.length);
+
+        console.log(`>>> [Rankings] период=${period}, проект=${parsedProjectId || 'все'}, дней=${allDates.length}, с ${startDateStr} по ${endDateStr}`);
 
         const warehouseDateCondition = period === 'all' 
             ? { [Op.gte]: startDate }
             : { [Op.gte]: startDate, [Op.lte]: endDate };
 
-        // Статистика склада
-        const warehouseStats = await WarehouseMovement.findAll({
-            attributes: [
-                "performedById",
-                [sequelize.fn("SUM", sequelize.col("goodQty")), "warehouseGood"],
-                [sequelize.fn("SUM", sequelize.col("scrapQty")), "warehouseScrap"],
-                [sequelize.fn("COUNT", sequelize.col("warehouse_movement.id")), "warehouseOps"],
-            ],
-            where: {
-                performedAt: warehouseDateCondition,
-                performedById: { [Op.ne]: null }
-            },
-            include: [
-                {
-                    model: User,
-                    as: "performedBy",
-                    attributes: ["id", "name", "surname", "img"],
-                    include: [
-                        {
-                            model: Team,
-                            attributes: ["id", "title"],
-                            include: [
-                                { 
-                                    model: Section, 
-                                    as: "production_section",
-                                    attributes: ["id", "title"] 
-                                },
-                                { 
-                                    model: User, 
-                                    as: "teamLead", 
-                                    attributes: ["id", "name", "surname"] 
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ],
-            group: [
-                "performedById", 
-                "performedBy.id", 
-                "performedBy.production_team.id",
-                "performedBy.production_team.production_section.id",
-                "performedBy.production_team.teamLead.id"
-            ],
-            raw: false
-        });
-
         const productionDateCondition = period === 'all'
             ? { [Op.gte]: startDateStr }
             : { [Op.gte]: startDateStr, [Op.lte]: endDateStr };
 
+        // Условие фильтра по проекту для ProductionOutput
+        const productionProjectCondition = parsedProjectId 
+            ? { projectId: parsedProjectId }
+            : {};
+
+        // ========== СКЛАД (без фильтра по проекту - нет связи) ==========
+        let warehouseStats = [];
+        let warehouseByDay = [];
+        
+        if (!parsedProjectId) {
+            // Статистика склада
+            warehouseStats = await WarehouseMovement.findAll({
+                attributes: [
+                    "performedById",
+                    [sequelize.fn("SUM", sequelize.col("goodQty")), "warehouseGood"],
+                    [sequelize.fn("SUM", sequelize.col("scrapQty")), "warehouseScrap"],
+                    [sequelize.fn("COUNT", sequelize.col("warehouse_movement.id")), "warehouseOps"],
+                ],
+                where: {
+                    performedAt: warehouseDateCondition,
+                    performedById: { [Op.ne]: null },
+                    goodQty: { [Op.gt]: 0 }
+                },
+                include: [
+                    {
+                        model: User,
+                        as: "performedBy",
+                        attributes: ["id", "name", "surname", "img"],
+                        include: [
+                            {
+                                model: Team,
+                                attributes: ["id", "title"],
+                                include: [
+                                    { 
+                                        model: Section, 
+                                        as: "production_section",
+                                        attributes: ["id", "title"] 
+                                    },
+                                    { 
+                                        model: User, 
+                                        as: "teamLead", 
+                                        attributes: ["id", "name", "surname"] 
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                group: [
+                    "performedById", 
+                    "performedBy.id", 
+                    "performedBy.production_team.id",
+                    "performedBy.production_team.production_section.id",
+                    "performedBy.production_team.teamLead.id"
+                ],
+                raw: false
+            });
+
+            // Склад по дням для sparkline
+            warehouseByDay = await WarehouseMovement.findAll({
+                attributes: [
+                    "performedById",
+                    [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
+                    [sequelize.fn("SUM", sequelize.col("goodQty")), "good"],
+                ],
+                where: {
+                    performedAt: warehouseDateCondition,
+                    performedById: { [Op.ne]: null },
+                    goodQty: { [Op.gt]: 0 }
+                },
+                group: ["performedById", sequelize.fn("DATE", sequelize.col("performedAt"))],
+                order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
+                raw: true
+            });
+        }
+
+        // ========== ПРОИЗВОДСТВО (с фильтром по проекту) ==========
+        
         // Статистика производства
         const productionStats = await ProductionOutput.findAll({
             attributes: [
@@ -156,31 +212,14 @@ async function getStats(req, res, next) {
             ],
             where: {
                 date: productionDateCondition,
-                status: OUTPUT_STATUSES.APPROVED
+                status: OUTPUT_STATUSES.APPROVED,
+                ...productionProjectCondition
             },
             group: ["userId"],
             raw: true
         });
 
-        // ========== Данные по дням для спарклайна ==========
-        
-        // Склад по дням
-        const warehouseByDay = await WarehouseMovement.findAll({
-            attributes: [
-                "performedById",
-                [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
-                [sequelize.fn("SUM", sequelize.col("goodQty")), "good"],
-            ],
-            where: {
-                performedAt: warehouseDateCondition,
-                performedById: { [Op.ne]: null }
-            },
-            group: ["performedById", sequelize.fn("DATE", sequelize.col("performedAt"))],
-            order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
-            raw: true
-        });
-
-        // Производство по дням
+        // Производство по дням для sparkline
         const productionByDay = await ProductionOutput.findAll({
             attributes: [
                 "userId",
@@ -189,14 +228,15 @@ async function getStats(req, res, next) {
             ],
             where: {
                 date: productionDateCondition,
-                status: OUTPUT_STATUSES.APPROVED
+                status: OUTPUT_STATUSES.APPROVED,
+                ...productionProjectCondition
             },
             group: ["userId", "date"],
             order: [["date", "ASC"]],
             raw: true
         });
 
-        // Собираем историю по пользователям
+        // ========== Собираем историю по пользователям для sparkline ==========
         const userDailyMap = new Map();
 
         warehouseByDay.forEach(row => {
@@ -223,16 +263,18 @@ async function getStats(req, res, next) {
             dayMap.set(date, (dayMap.get(date) || 0) + good);
         });
 
-        // Преобразуем в массив для спарклайна (с учётом лимита периода)
+        // Функция для получения sparkline с заполнением пропущенных дней
         function getSparklineData(userId) {
             const dayMap = userDailyMap.get(userId);
             if (!dayMap || dayMap.size === 0) return [];
             
-            const entries = [...dayMap.entries()]
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(-sparklineLimit); // Динамический лимит
+            // Заполняем пропущенные дни нулями
+            const sparkline = allDates.map(date => ({
+                date,
+                value: dayMap.get(date) || 0
+            })).slice(-sparklineLimit);
             
-            return entries.map(([date, value]) => ({ date, value }));
+            return sparkline;
         }
 
         // Вычисляем изменение (последний день vs предпоследний)
@@ -250,8 +292,7 @@ async function getStats(req, res, next) {
             return { change, percent, today, yesterday };
         }
 
-        // ========== Конец блока спарклайна ==========
-
+        // ========== Объединяем данные пользователей ==========
         const productionMap = new Map();
         productionStats.forEach(p => {
             productionMap.set(p.userId, {
@@ -260,6 +301,7 @@ async function getStats(req, res, next) {
             });
         });
 
+        // Собираем все userId
         const allUserIds = new Set();
         
         warehouseStats.forEach(item => {
@@ -271,6 +313,7 @@ async function getStats(req, res, next) {
             allUserIds.add(p.userId);
         });
 
+        // Загружаем пользователей которых нет в warehouseStats
         const missingUserIds = [...allUserIds].filter(
             id => !warehouseStats.some(ws => ws.performedBy?.id === id)
         );
@@ -301,8 +344,10 @@ async function getStats(req, res, next) {
             });
         }
 
+        // ========== Формируем итоговый список пользователей ==========
         const usersMap = new Map();
 
+        // Добавляем пользователей со склада
         warehouseStats.forEach(item => {
             const plainItem = item.get({ plain: true });
             const user = plainItem.performedBy;
@@ -312,7 +357,7 @@ async function getStats(req, res, next) {
             const warehouseScrap = Number(plainItem.warehouseScrap) || 0;
             const productionData = productionMap.get(user.id) || { productionGood: 0, productionOps: 0 };
 
-            const team = user.production_team || user.team;
+            const team = user.production_team || user.Team;
             const section = team ? (team.production_section || team.section) : null;
             const lead = team ? team.teamLead : null;
 
@@ -324,6 +369,7 @@ async function getStats(req, res, next) {
                 teamName: team ? team.title : "Без бригады",
                 teamId: team ? team.id : null,
                 sectionName: section ? section.title : "Не распределен",
+                sectionId: section ? section.id : null,
                 teamLeadName: lead ? `${lead.surname} ${lead.name[0]}.` : "—",
                 
                 warehouseOutput: warehouseGood,
@@ -338,14 +384,15 @@ async function getStats(req, res, next) {
             });
         });
 
+        // Добавляем пользователей только из производства
         additionalUsers.forEach(user => {
             if (usersMap.has(user.id)) return;
             
             const productionData = productionMap.get(user.id) || { productionGood: 0 };
             if (productionData.productionGood === 0) return;
 
-            const team = user.production_team;
-            const section = team ? team.production_section : null;
+            const team = user.production_team || user.Team;
+            const section = team ? (team.production_section || team.section) : null;
             const lead = team ? team.teamLead : null;
 
             usersMap.set(user.id, {
@@ -356,6 +403,7 @@ async function getStats(req, res, next) {
                 teamName: team ? team.title : "Без бригады",
                 teamId: team ? team.id : null,
                 sectionName: section ? section.title : "Не распределен",
+                sectionId: section ? section.id : null,
                 teamLeadName: lead ? `${lead.surname} ${lead.name[0]}.` : "—",
                 
                 warehouseOutput: 0,
@@ -370,7 +418,9 @@ async function getStats(req, res, next) {
             });
         });
 
+        // Сортируем и добавляем места
         const usersRank = [...usersMap.values()]
+            .filter(u => u.output > 0)
             .sort((a, b) => b.output - a.output)
             .map((u, index) => {
                 const total = u.output + u.defects;
@@ -383,6 +433,7 @@ async function getStats(req, res, next) {
                 };
             });
 
+        // ========== Агрегация по бригадам ==========
         const teamsMap = {};
 
         usersRank.forEach(u => {
@@ -393,13 +444,15 @@ async function getStats(req, res, next) {
                     id: u.teamId,
                     title: u.teamName,
                     section: u.sectionName,
+                    sectionId: u.sectionId,
                     teamLead: u.teamLeadName,
                     totalOutput: 0,
                     warehouseOutput: 0,
                     productionOutput: 0,
                     totalDefects: 0,
                     membersCount: 0,
-                    efficiencies: []
+                    efficiencies: [],
+                    sparklineMap: new Map()
                 };
             }
             
@@ -410,6 +463,14 @@ async function getStats(req, res, next) {
             t.totalDefects += u.defects;
             t.membersCount += 1;
             t.efficiencies.push(u.efficiency);
+            
+            // Собираем sparkline для бригады
+            u.sparkline.forEach(point => {
+                if (!t.sparklineMap.has(point.date)) {
+                    t.sparklineMap.set(point.date, 0);
+                }
+                t.sparklineMap.set(point.date, t.sparklineMap.get(point.date) + point.value);
+            });
         });
 
         function getPlanPerPerson(period) {
@@ -433,34 +494,99 @@ async function getStats(req, res, next) {
             const totalPlan = t.membersCount * PLAN_PER_PERSON;
             const progress = totalPlan > 0 ? Math.min(100, Math.round((t.totalOutput / totalPlan) * 100)) : 0;
 
+            // Формируем sparkline для бригады
+            const sparkline = allDates.map(date => ({
+                date,
+                value: t.sparklineMap.get(date) || 0
+            })).slice(-sparklineLimit);
+
             return {
                 id: t.id,
                 title: t.title,
                 section: t.section,
+                sectionId: t.sectionId,
                 teamLead: t.teamLead,
                 totalOutput: t.totalOutput,
                 warehouseOutput: t.warehouseOutput,
                 productionOutput: t.productionOutput,
                 avgEfficiency: Number(avgEff.toFixed(1)),
                 membersCount: t.membersCount,
-                progress: progress
+                progress: progress,
+                sparkline
             };
         }).sort((a, b) => b.totalOutput - a.totalOutput);
 
+        // ========== Агрегация по участкам ==========
+        const sectionsMap = new Map();
+        
+        teamsRank.forEach(team => {
+            if (!team.sectionId) return;
+            
+            if (!sectionsMap.has(team.sectionId)) {
+                sectionsMap.set(team.sectionId, {
+                    id: team.sectionId,
+                    title: team.section || `Участок ${team.sectionId}`,
+                    totalOutput: 0,
+                    teamsCount: 0,
+                    membersCount: 0,
+                    sparklineMap: new Map()
+                });
+            }
+            
+            const section = sectionsMap.get(team.sectionId);
+            section.totalOutput += team.totalOutput;
+            section.teamsCount++;
+            section.membersCount += team.membersCount;
+            
+            team.sparkline.forEach(point => {
+                if (!section.sparklineMap.has(point.date)) {
+                    section.sparklineMap.set(point.date, 0);
+                }
+                section.sparklineMap.set(point.date, section.sparklineMap.get(point.date) + point.value);
+            });
+        });
+
+        const sectionsRank = Array.from(sectionsMap.values())
+            .map(section => ({
+                id: section.id,
+                title: section.title,
+                totalOutput: section.totalOutput,
+                teamsCount: section.teamsCount,
+                membersCount: section.membersCount,
+                avgOutput: section.membersCount > 0 ? Math.round(section.totalOutput / section.membersCount) : 0,
+                sparkline: allDates.map(date => ({
+                    date,
+                    value: section.sparklineMap.get(date) || 0
+                })).slice(-sparklineLimit)
+            }))
+            .sort((a, b) => b.totalOutput - a.totalOutput);
+
+        // ========== Итоги ==========
         const totals = {
             totalOutput: usersRank.reduce((sum, u) => sum + u.output, 0),
             warehouseOutput: usersRank.reduce((sum, u) => sum + u.warehouseOutput, 0),
             productionOutput: usersRank.reduce((sum, u) => sum + u.productionOutput, 0),
             totalDefects: usersRank.reduce((sum, u) => sum + u.defects, 0),
             usersCount: usersRank.length,
-            teamsCount: teamsRank.length
+            teamsCount: teamsRank.length,
+            sectionsCount: sectionsRank.length
         };
+
+        // Название проекта
+        let projectName = null;
+        if (parsedProjectId) {
+            const project = await Project.findByPk(parsedProjectId, { attributes: ["title"] });
+            projectName = project?.title || null;
+        }
 
         return res.json({ 
             users: usersRank, 
             teams: teamsRank,
+            sections: sectionsRank,
             totals,
             period,
+            projectId: parsedProjectId,
+            projectName,
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString()
         });
@@ -477,11 +603,12 @@ async function getStats(req, res, next) {
 async function getUserDetails(req, res, next) {
     try {
         const { userId } = req.params;
-        const { period = 'week', startDate: customStartDate, endDate: customEndDate } = req.query;
+        const { period = 'week', startDate: customStartDate, endDate: customEndDate, projectId } = req.query;
 
         const { startDate, endDate } = calculateDateRange(period, customStartDate, customEndDate);
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
+        const parsedProjectId = projectId ? Number(projectId) : null;
 
         const user = await User.findByPk(userId, {
             attributes: ["id", "name", "surname", "img"],
@@ -512,21 +639,30 @@ async function getUserDetails(req, res, next) {
             ? { [Op.gte]: startDateStr }
             : { [Op.gte]: startDateStr, [Op.lte]: endDateStr };
 
-        const warehouseByDay = await WarehouseMovement.findAll({
-            attributes: [
-                [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
-                [sequelize.fn("SUM", sequelize.col("goodQty")), "good"],
-                [sequelize.fn("SUM", sequelize.col("scrapQty")), "scrap"],
-            ],
-            where: {
-                performedById: userId,
-                performedAt: warehouseDateCondition
-            },
-            group: [sequelize.fn("DATE", sequelize.col("performedAt"))],
-            order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
-            raw: true
-        });
+        const productionProjectCondition = parsedProjectId 
+            ? { projectId: parsedProjectId }
+            : {};
 
+        // Склад по дням (без фильтра по проекту)
+        let warehouseByDay = [];
+        if (!parsedProjectId) {
+            warehouseByDay = await WarehouseMovement.findAll({
+                attributes: [
+                    [sequelize.fn("DATE", sequelize.col("performedAt")), "date"],
+                    [sequelize.fn("SUM", sequelize.col("goodQty")), "good"],
+                    [sequelize.fn("SUM", sequelize.col("scrapQty")), "scrap"],
+                ],
+                where: {
+                    performedById: userId,
+                    performedAt: warehouseDateCondition
+                },
+                group: [sequelize.fn("DATE", sequelize.col("performedAt"))],
+                order: [[sequelize.fn("DATE", sequelize.col("performedAt")), "ASC"]],
+                raw: true
+            });
+        }
+
+        // Производство по дням (с фильтром по проекту)
         const productionByDay = await ProductionOutput.findAll({
             attributes: [
                 "date",
@@ -535,7 +671,8 @@ async function getUserDetails(req, res, next) {
             where: {
                 userId,
                 date: productionDateCondition,
-                status: OUTPUT_STATUSES.APPROVED
+                status: OUTPUT_STATUSES.APPROVED,
+                ...productionProjectCondition
             },
             group: ["date"],
             order: [["date", "ASC"]],
@@ -550,7 +687,8 @@ async function getUserDetails(req, res, next) {
             where: {
                 userId,
                 date: productionDateCondition,
-                status: OUTPUT_STATUSES.APPROVED
+                status: OUTPUT_STATUSES.APPROVED,
+                ...productionProjectCondition
             },
             include: [
                 { 
@@ -593,16 +731,25 @@ async function getUserDetails(req, res, next) {
             total: dailyStats.reduce((sum, d) => sum + d.total, 0)
         };
 
+        // Название проекта
+        let projectName = null;
+        if (parsedProjectId) {
+            const project = await Project.findByPk(parsedProjectId, { attributes: ["title"] });
+            projectName = project?.title || null;
+        }
+
         return res.json({
             user: {
                 id: user.id,
                 name: user.name,
                 surname: user.surname,
                 avatar: user.img,
-                team: user.production_team?.title || null,
-                section: user.production_team?.production_section?.title || null
+                team: user.production_team?.title || user.Team?.title || null,
+                section: user.production_team?.production_section?.title || user.Team?.production_section?.title || null
             },
             period,
+            projectId: parsedProjectId,
+            projectName,
             startDate: startDate.toISOString(),
             endDate: endDate.toISOString(),
             dailyStats,

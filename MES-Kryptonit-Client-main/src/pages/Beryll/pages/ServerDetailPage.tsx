@@ -36,7 +36,9 @@ import {
   X,
   AlertCircle,
   File as FileIcon,
-  Loader2
+  Loader2,
+  RotateCcw,
+  UserMinus
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Context } from "src/main";
@@ -118,6 +120,9 @@ export const ServerDetailPage: React.FC = observer(() => {
     fileName: ""
   });
 
+  // ============ ПРОВЕРКА РОЛИ SUPER_ADMIN ============
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+
   const loadServer = async () => {
     if (!id) return;
     setLoading(true);
@@ -146,27 +151,85 @@ export const ServerDetailPage: React.FC = observer(() => {
     };
   }, []);
 
+  // Обработчик ESC для закрытия модальных окон
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (previewImage) {
+          handleClosePreview();
+        } else if (uploadModal.open) {
+          closeUploadModal();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [previewImage, uploadModal.open]);
+
+  // ============ ВЗЯТЬ В РАБОТУ ============
   const handleTake = async () => {
     if (!server) return;
     setActionLoading(true);
     try {
       await takeServer(server.id);
       await loadServer();
+      toast.success("Сервер взят в работу");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(false);
     }
   };
 
+  // ============ ВЕРНУТЬ В РАБОТУ (из CLARIFYING/DEFECT) ============
+  const handleReturnToWork = async () => {
+    if (!server) return;
+    setActionLoading(true);
+    try {
+      await takeServer(server.id);
+      await loadServer();
+      toast.success("Сервер возвращён в работу");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Ошибка");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ============ ОТПУСТИТЬ СЕРВЕР ============
   const handleRelease = async () => {
     if (!server) return;
     setActionLoading(true);
     try {
       await releaseServer(server.id);
       await loadServer();
+      toast.success("Сервер освобождён");
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ============ СНЯТЬ С ИСПОЛНИТЕЛЯ (для SUPER_ADMIN) ============
+  const handleForceRelease = async () => {
+    if (!server) return;
+    const assigneeName = server.assignedTo 
+      ? `${server.assignedTo.surname} ${server.assignedTo.name}` 
+      : "неизвестного пользователя";
+    
+    if (!confirm(`Снять сервер с исполнителя ${assigneeName}?`)) {
+      return;
+    }
+    
+    setActionLoading(true);
+    try {
+      await releaseServer(server.id);
+      await loadServer();
+      toast.success("Сервер снят с исполнителя");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(false);
     }
@@ -178,8 +241,9 @@ export const ServerDetailPage: React.FC = observer(() => {
     try {
       await updateServerStatus(server.id, status);
       await loadServer();
+      toast.success(`Статус изменён на "${STATUS_LABELS[status]}"`);
     } catch (e: any) {
-      alert(e.response?.data?.message || "Ошибка");
+      toast.error(e.response?.data?.message || "Ошибка");
     } finally {
       setActionLoading(false);
     }
@@ -585,6 +649,20 @@ export const ServerDetailPage: React.FC = observer(() => {
   const isAssignedToMe = server.assignedToId === currentUser?.id;
   const canWork = server.status === "IN_WORK" && isAssignedToMe;
 
+  // ============ НОВАЯ ЛОГИКА КНОПОК ============
+  
+  // Можно вернуть в работу если сервер в CLARIFYING/DEFECT и назначен текущему пользователю
+  const canReturnToWork = (server.status === "CLARIFYING" || server.status === "DEFECT") && isAssignedToMe;
+  
+  // SUPER_ADMIN может снять сервер с любого исполнителя (кроме себя)
+  const canForceRelease = isSuperAdmin && server.assignedToId && server.assignedToId !== currentUser?.id;
+  
+  // SUPER_ADMIN может вернуть в работу чужой сервер из CLARIFYING/DEFECT
+  const canSuperAdminReturnToWork = isSuperAdmin && 
+    (server.status === "CLARIFYING" || server.status === "DEFECT") && 
+    server.assignedToId && 
+    server.assignedToId !== currentUser?.id;
+
   // Подсчёт чек-листа
   const checklistTotal = server.checklists?.length || 0;
   const checklistCompleted = server.checklists?.filter(c => c.completed).length || 0;
@@ -601,173 +679,231 @@ export const ServerDetailPage: React.FC = observer(() => {
         className="hidden"
       />
       
-      {/* Модалка просмотра изображения */}
+      {/* ==================== МОДАЛКА ПРОСМОТРА ИЗОБРАЖЕНИЯ ==================== */}
       {(previewImage || previewLoading) && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 flex items-center justify-center"
           style={{ zIndex: 9999 }}
           onClick={handleClosePreview}
         >
-          <button
-            onClick={handleClosePreview}
-            className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20"
+          {/* Хедер с информацией и кнопкой закрытия */}
+          <div 
+            className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/70 to-transparent"
+            onClick={(e) => e.stopPropagation()}
           >
-            <X className="w-6 h-6" />
-          </button>
-          
-          {previewLoading ? (
-            <div className="flex flex-col items-center gap-3 text-white">
-              <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
-              <span className="text-gray-400">Загрузка...</span>
+            <div className="text-white">
+              <p className="text-sm opacity-70">Просмотр скриншота</p>
+              <p className="text-xs opacity-50 mt-1">
+                Нажмите <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs">ESC</kbd> или кликните за пределами изображения для закрытия
+              </p>
             </div>
-          ) : previewImage ? (
-            <img 
-              src={previewImage} 
-              alt="Preview" 
-              className="max-w-full max-h-full object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : null}
+            
+            {/* Заметная кнопка закрытия */}
+            <button
+              onClick={handleClosePreview}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 
+                         backdrop-blur-sm rounded-lg text-white transition-all duration-200
+                         border border-white/20 hover:border-white/40"
+            >
+              <X className="w-5 h-5" />
+              <span className="font-medium">Закрыть</span>
+            </button>
+          </div>
+          
+          {/* Контент */}
+          <div className="flex items-center justify-center p-8 max-w-[90vw] max-h-[85vh]">
+            {previewLoading ? (
+              <div className="flex flex-col items-center gap-4 text-white">
+                <Loader2 className="w-12 h-12 animate-spin text-indigo-400" />
+                <span className="text-gray-300">Загрузка изображения...</span>
+              </div>
+            ) : previewImage ? (
+              <img 
+                src={previewImage} 
+                alt="Preview" 
+                className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : null}
+          </div>
+
+          {/* Кнопка закрытия внизу */}
+          <div 
+            className="absolute bottom-0 left-0 right-0 flex justify-center py-6 bg-gradient-to-t from-black/70 to-transparent"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleClosePreview}
+              className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-sm 
+                         rounded-xl text-white font-medium transition-all duration-200
+                         border border-white/20 hover:border-white/40
+                         flex items-center gap-2"
+            >
+              <X className="w-5 h-5" />
+              Закрыть просмотр
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Модалка загрузки файла с превью и названием */}
+      {/* ==================== МОДАЛКА ЗАГРУЗКИ ФАЙЛА ==================== */}
       {uploadModal.open && (
         <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           style={{ zIndex: 9999 }}
           onClick={closeUploadModal}
         >
           <div 
-            className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Загрузка скриншота
-              </h3>
+            {/* Заголовок с заметной кнопкой закрытия */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Загрузка скриншота
+                </h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Нажмите <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-xs font-mono">ESC</kbd> для закрытия
+                </p>
+              </div>
+              
+              {/* Заметная кнопка закрытия */}
               <button
                 onClick={closeUploadModal}
-                className="p-1 text-gray-400 hover:text-gray-600"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 
+                           rounded-lg text-gray-700 transition-all duration-200"
               >
                 <X className="w-5 h-5" />
+                <span className="font-medium">Закрыть</span>
               </button>
             </div>
             
-            {/* Этап */}
-            <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <p className="text-sm text-amber-800">
-                <span className="font-medium">Этап:</span> {uploadModal.checklistTitle}
-              </p>
-            </div>
-            
-            {/* Зона для файла */}
-            {!uploadModal.file ? (
-              <div className="mb-4">
-                <div 
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-400 transition-colors cursor-pointer"
-                  onClick={handleSelectFile}
-                >
-                  <Camera className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600 font-medium mb-1">
-                    Выберите файл или вставьте из буфера
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Нажмите сюда или используйте <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">Ctrl+V</kbd>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectFile();
-                    }}
-                    className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
-                  >
-                    Выбрать файл
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-gray-500 text-center">
-                  JPG, PNG, GIF, WEBP или PDF • до 5 МБ
+            {/* Контент с прокруткой */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Этап */}
+              <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-amber-800">
+                  <span className="font-semibold">Этап:</span> {uploadModal.checklistTitle}
                 </p>
               </div>
-            ) : (
-              <>
-                {/* Превью изображения */}
-                {uploadModal.preview && (
-                  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-gray-100 relative group">
-                    <img 
-                      src={uploadModal.preview} 
-                      alt="Preview" 
-                      className="max-h-64 w-full object-contain"
-                    />
+              
+              {/* Зона для файла */}
+              {!uploadModal.file ? (
+                <div className="mb-6">
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center 
+                               hover:border-indigo-400 hover:bg-indigo-50/50 transition-all duration-200 cursor-pointer"
+                    onClick={handleSelectFile}
+                  >
+                    <Camera className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg text-gray-700 font-medium mb-2">
+                      Выберите файл или вставьте из буфера
+                    </p>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Нажмите сюда или используйте <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono border">Ctrl+V</kbd>
+                    </p>
                     <button
-                      onClick={() => setUploadModal(prev => ({ ...prev, file: null, preview: null }))}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Удалить"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectFile();
+                      }}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 
+                                 transition-colors font-medium shadow-lg hover:shadow-xl"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Выбрать файл
                     </button>
                   </div>
-                )}
-                
-                {/* Если PDF */}
-                {uploadModal.file && !uploadModal.preview && (
-                  <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-gray-50 flex items-center gap-3 relative group">
-                    <FileIcon className="w-8 h-8 text-red-500" />
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-800">{uploadModal.file.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {(uploadModal.file.size / 1024).toFixed(1)} КБ
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setUploadModal(prev => ({ ...prev, file: null, preview: null }))}
-                      className="p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Удалить"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                
-                {/* Название файла */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Название файла
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadModal.fileName}
-                    onChange={(e) => setUploadModal(prev => ({ ...prev, fileName: e.target.value }))}
-                    placeholder="Введите название"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && uploadModal.file) {
-                        confirmUpload();
-                      }
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Расширение файла добавится автоматически
+                  <p className="mt-3 text-sm text-gray-500 text-center">
+                    JPG, PNG, GIF, WEBP или PDF • до 5 МБ
                   </p>
                 </div>
-              </>
-            )}
+              ) : (
+                <>
+                  {/* Превью изображения */}
+                  {uploadModal.preview && (
+                    <div className="mb-6 border border-gray-200 rounded-xl overflow-hidden bg-gray-100 relative group">
+                      <img 
+                        src={uploadModal.preview} 
+                        alt="Preview" 
+                        className="max-h-80 w-full object-contain"
+                      />
+                      <button
+                        onClick={() => setUploadModal(prev => ({ ...prev, file: null, preview: null }))}
+                        className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-lg 
+                                   opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Если PDF */}
+                  {uploadModal.file && !uploadModal.preview && (
+                    <div className="mb-6 p-5 border border-gray-200 rounded-xl bg-gray-50 flex items-center gap-4 relative group">
+                      <FileIcon className="w-10 h-10 text-red-500" />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800 text-lg">{uploadModal.file.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {(uploadModal.file.size / 1024).toFixed(1)} КБ
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setUploadModal(prev => ({ ...prev, file: null, preview: null }))}
+                        className="p-2 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 
+                                   transition-opacity shadow-lg"
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Название файла */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Название файла
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadModal.fileName}
+                      onChange={(e) => setUploadModal(prev => ({ ...prev, fileName: e.target.value }))}
+                      placeholder="Введите название"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-lg
+                                 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && uploadModal.file) {
+                          confirmUpload();
+                        }
+                      }}
+                    />
+                    <p className="mt-2 text-sm text-gray-500">
+                      Расширение файла добавится автоматически
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
             
-            {/* Кнопки */}
-            <div className="flex justify-end gap-2">
+            {/* Футер с кнопками */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={closeUploadModal}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 
+                           transition-colors font-medium"
               >
                 Отмена
               </button>
               <button
                 onClick={confirmUpload}
                 disabled={!uploadModal.file || !uploadModal.fileName.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 
+                           transition-colors font-medium shadow-lg disabled:opacity-50 
+                           disabled:cursor-not-allowed flex items-center gap-2"
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="w-5 h-5" />
                 Загрузить
               </button>
             </div>
@@ -815,8 +951,10 @@ export const ServerDetailPage: React.FC = observer(() => {
             </div>
           </div>
 
-          {/* Действия */}
-          <div className="flex items-center gap-2">
+          {/* ============ ПАНЕЛЬ ДЕЙСТВИЙ ============ */}
+          <div className="flex flex-wrap items-center gap-2">
+            
+            {/* Взять в работу - для NEW */}
             {server.status === "NEW" && (
               <button
                 onClick={handleTake}
@@ -828,6 +966,32 @@ export const ServerDetailPage: React.FC = observer(() => {
               </button>
             )}
 
+            {/* Вернуть в работу - для CLARIFYING/DEFECT если назначен МНЕ */}
+            {canReturnToWork && (
+              <button
+                onClick={handleReturnToWork}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Вернуть в работу
+              </button>
+            )}
+
+            {/* Вернуть в работу чужой сервер - только SUPER_ADMIN */}
+            {canSuperAdminReturnToWork && (
+              <button
+                onClick={handleTake}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                title={`Забрать сервер у ${server.assignedTo?.surname} ${server.assignedTo?.name} и вернуть в работу`}
+              >
+                <RotateCcw className="w-4 h-4" />
+                Забрать и вернуть в работу
+              </button>
+            )}
+
+            {/* Кнопки для работающего */}
             {canWork && (
               <>
                 <button
@@ -847,6 +1011,19 @@ export const ServerDetailPage: React.FC = observer(() => {
                   Завершить
                 </button>
               </>
+            )}
+
+            {/* Снять с исполнителя - только SUPER_ADMIN */}
+            {canForceRelease && (
+              <button
+                onClick={handleForceRelease}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 border border-red-200"
+                title={`Снять сервер с исполнителя ${server.assignedTo?.surname} ${server.assignedTo?.name}`}
+              >
+                <UserMinus className="w-4 h-4" />
+                Снять с исполнителя
+              </button>
             )}
 
             <button

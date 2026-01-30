@@ -28,29 +28,41 @@ class ServerController {
     }
   }
   
+  /**
+   * Взять сервер в работу
+   * ОБНОВЛЕНО: передаём userRole для проверки SUPER_ADMIN
+   */
   async takeServer(req, res, next) {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
+      const userRole = req.user?.role;  // ДОБАВЛЕНО: передаём роль
       
       if (!userId) {
         return next(ApiError.unauthorized("Не авторизован"));
       }
       
-      const updated = await ServerService.takeServer(id, userId);
+      const updated = await ServerService.takeServer(id, userId, userRole);
       return res.json(updated);
     } catch (e) {
       console.error(e);
       if (e.message === "Сервер не найден") {
         return next(ApiError.notFound(e.message));
       }
-      if (e.message === "Сервер уже взят в работу") {
+      if (e.message === "Сервер уже взят в работу" || 
+          e.message === "Сервер уже взят в работу другим пользователем" ||
+          e.message === "Сервер назначен другому исполнителю" ||
+          e.message.includes("Нельзя взять")) {
         return next(ApiError.badRequest(e.message));
       }
       return next(ApiError.internal(e.message));
     }
   }
   
+  /**
+   * Освободить сервер
+   * SUPER_ADMIN может освободить любой сервер
+   */
   async releaseServer(req, res, next) {
     try {
       const { id } = req.params;
@@ -77,7 +89,7 @@ class ServerController {
       const { status, notes } = req.body;
       const userId = req.user?.id;
       
-      const { SERVER_STATUSES } = require("../../models/definitions/Beryll");
+      const { SERVER_STATUSES } = require("../../../models/definitions/Beryll");
       
       if (!status || !Object.values(SERVER_STATUSES).includes(status)) {
         return next(ApiError.badRequest("Некорректный статус"));

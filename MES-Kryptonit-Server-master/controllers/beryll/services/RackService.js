@@ -3,11 +3,19 @@
  * 
  * Сервис для работы со стойками и размещением серверов
  * 
+ * Новые возможности:
+ * - Размещение сервера в стойку БЕЗ взятия в работу (placeServerInRack)
+ * - Отслеживание кто поставил и кто взял в работу отдельно
+ * - Интеграция с DHCP для автоматического определения IP
+ * - Фильтрация по статусу сервера
+ * 
  * Положить в: controllers/beryll/services/RackService.js
  */
 
 const { Op } = require("sequelize");
-// Импортируем всё из models/index.js (после интеграции там будут все модели)
+const { NodeSSH } = require("node-ssh");
+
+// Импортируем всё из models/index.js
 const {
   BeryllRack,
   BeryllRackUnit,
@@ -17,6 +25,9 @@ const {
   User
 } = require("../../../models/index");
 
+const { DHCP_CONFIG } = require("../config/beryll.config");
+const { parseDhcpLeases } = require("../utils/dhcpParser");
+
 class RackService {
   
   // =============================================
@@ -24,7 +35,7 @@ class RackService {
   // =============================================
   
   /**
-   * Получить все стойки
+   * Получить все стойки с расширенной статистикой
    */
   async getAllRacks(options = {}) {
     const { status, search, includeUnits = false } = options;
@@ -44,7 +55,16 @@ class RackService {
         model: BeryllRackUnit,
         as: "units",
         include: [
-          { model: BeryllServer, as: "server", attributes: ["id", "ipAddress", "apkSerialNumber", "hostname", "status"] }
+          { 
+            model: BeryllServer, 
+            as: "server", 
+            attributes: ["id", "ipAddress", "apkSerialNumber", "hostname", "status", "macAddress", "assignedToId"],
+            include: [
+              { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] }
+            ]
+          },
+          { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] },
+          { model: User, as: "placedBy", attributes: ["id", "login", "name", "surname"] }
         ],
         order: [["unitNumber", "ASC"]]
       });
@@ -56,7 +76,7 @@ class RackService {
       order: [["name", "ASC"]]
     });
     
-    // Добавляем статистику по заполненности
+    // Добавляем расширенную статистику
     const result = await Promise.all(racks.map(async (rack) => {
       const rackData = rack.toJSON();
       
@@ -71,10 +91,34 @@ class RackService {
         where: { rackId: rack.id }
       });
       
+      // Считаем серверы в работе
+      const unitsInWork = await BeryllRackUnit.count({
+        where: { rackId: rack.id },
+        include: [{
+          model: BeryllServer,
+          as: "server",
+          where: { status: "IN_WORK" },
+          required: true
+        }]
+      });
+      
+      // Считаем серверы с браком
+      const unitsWithDefect = await BeryllRackUnit.count({
+        where: { rackId: rack.id },
+        include: [{
+          model: BeryllServer,
+          as: "server",
+          where: { status: "DEFECT" },
+          required: true
+        }]
+      });
+      
       return {
         ...rackData,
         filledUnits,
         totalUnitsCount: totalUnits,
+        unitsInWork,
+        unitsWithDefect,
         occupancyPercent: totalUnits > 0 ? Math.round((filledUnits / totalUnits) * 100) : 0
       };
     }));
@@ -83,7 +127,7 @@ class RackService {
   }
   
   /**
-   * Получить стойку по ID
+   * Получить стойку по ID с полной информацией
    */
   async getRackById(id) {
     const rack = await BeryllRack.findByPk(id, {
@@ -95,13 +139,17 @@ class RackService {
             { 
               model: BeryllServer, 
               as: "server", 
-              attributes: ["id", "ipAddress", "apkSerialNumber", "hostname", "status", "macAddress"] 
+              attributes: [
+                "id", "ipAddress", "apkSerialNumber", "hostname", "status", 
+                "macAddress", "assignedToId", "assignedAt", "leaseActive",
+                "serialNumber", "notes"
+              ],
+              include: [
+                { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] }
+              ]
             },
-            {
-              model: User,
-              as: "installedBy",
-              attributes: ["id", "login", "name", "surname"]
-            }
+            { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] },
+            { model: User, as: "placedBy", attributes: ["id", "login", "name", "surname"] }
           ],
           order: [["unitNumber", "ASC"]]
         }
@@ -208,20 +256,85 @@ class RackService {
   // =============================================
   
   /**
-   * Получить юнит по ID
+   * Получить юнит по ID с полной информацией
    */
   async getUnitById(unitId) {
     return BeryllRackUnit.findByPk(unitId, {
       include: [
         { model: BeryllRack, as: "rack" },
-        { model: BeryllServer, as: "server" },
-        { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] }
+        { 
+          model: BeryllServer, 
+          as: "server",
+          include: [
+            { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] }
+          ]
+        },
+        { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] },
+        { model: User, as: "placedBy", attributes: ["id", "login", "name", "surname"] }
       ]
     });
   }
   
   /**
-   * Установить сервер в юнит
+   * Получить юнит по номеру в стойке
+   */
+  async getUnitByNumber(rackId, unitNumber) {
+    return BeryllRackUnit.findOne({
+      where: { rackId, unitNumber },
+      include: [
+        { model: BeryllRack, as: "rack" },
+        { 
+          model: BeryllServer, 
+          as: "server",
+          include: [
+            { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] }
+          ]
+        },
+        { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] },
+        { model: User, as: "placedBy", attributes: ["id", "login", "name", "surname"] }
+      ]
+    });
+  }
+  
+  /**
+   * НОВЫЙ МЕТОД: Разместить сервер в стойку БЕЗ взятия в работу
+   * Просто физическое размещение сервера
+   */
+  async placeServerInRack(rackId, unitNumber, serverId, userId) {
+    const unit = await BeryllRackUnit.findOne({
+      where: { rackId, unitNumber }
+    });
+    
+    if (!unit) throw new Error("Юнит не найден");
+    if (unit.serverId) throw new Error(`Юнит ${unitNumber} уже занят`);
+    
+    // Проверяем что сервер не установлен в другую стойку
+    const existingInstallation = await BeryllRackUnit.findOne({
+      where: { serverId }
+    });
+    
+    if (existingInstallation) {
+      throw new Error(`Сервер уже установлен в стойку (Rack ID: ${existingInstallation.rackId}, Unit: ${existingInstallation.unitNumber})`);
+    }
+    
+    // Размещаем сервер (только физически, без взятия в работу)
+    await unit.update({
+      serverId,
+      placedById: userId,
+      placedAt: new Date()
+      // НЕ устанавливаем installedById и installedAt - это будет при взятии в работу
+    });
+    
+    await this.logHistory("RACK", rackId, "SERVER_PLACED", userId, 
+      `Сервер ${serverId} размещён в юнит ${unitNumber} (без взятия в работу)`, 
+      { serverId, unitNumber, action: "PLACED" }
+    );
+    
+    return this.getUnitById(unit.id);
+  }
+  
+  /**
+   * Установить сервер в юнит И взять в работу
    */
   async installServer(rackId, unitNumber, serverId, data, userId) {
     const unit = await BeryllRackUnit.findOne({
@@ -230,18 +343,23 @@ class RackService {
     
     if (!unit) throw new Error("Юнит не найден");
     
-    if (unit.serverId) {
+    // Если юнит занят другим сервером
+    if (unit.serverId && unit.serverId !== serverId) {
       throw new Error(`Юнит ${unitNumber} уже занят`);
     }
     
-    // Проверяем, что сервер не установлен в другую стойку
-    const existingInstallation = await BeryllRackUnit.findOne({
-      where: { serverId }
-    });
-    
-    if (existingInstallation) {
-      throw new Error(`Сервер уже установлен в стойку (Rack ID: ${existingInstallation.rackId}, Unit: ${existingInstallation.unitNumber})`);
+    // Проверяем что сервер не установлен в другую стойку
+    if (!unit.serverId) {
+      const existingInstallation = await BeryllRackUnit.findOne({
+        where: { serverId }
+      });
+      
+      if (existingInstallation) {
+        throw new Error(`Сервер уже установлен в стойку (Rack ID: ${existingInstallation.rackId}, Unit: ${existingInstallation.unitNumber})`);
+      }
     }
+    
+    const wasAlreadyPlaced = unit.serverId === serverId;
     
     await unit.update({
       serverId,
@@ -254,13 +372,18 @@ class RackService {
       accessPassword: data.accessPassword,
       notes: data.notes,
       installedAt: new Date(),
-      installedById: userId
+      installedById: userId,
+      // Если сервер ещё не был размещён, сохраняем кто его поставил
+      placedById: unit.placedById || userId,
+      placedAt: unit.placedAt || new Date()
     });
     
-    await this.logHistory("RACK", rackId, "SERVER_INSTALLED", userId, 
-      `Сервер ${serverId} установлен в юнит ${unitNumber}`, 
-      { serverId, unitNumber }
-    );
+    const action = wasAlreadyPlaced ? "SERVER_TAKEN_TO_WORK" : "SERVER_INSTALLED";
+    const comment = wasAlreadyPlaced 
+      ? `Сервер ${serverId} взят в работу в юните ${unitNumber}`
+      : `Сервер ${serverId} установлен в юнит ${unitNumber}`;
+    
+    await this.logHistory("RACK", rackId, action, userId, comment, { serverId, unitNumber });
     
     return this.getUnitById(unit.id);
   }
@@ -288,7 +411,14 @@ class RackService {
       accessLogin: null,
       accessPassword: null,
       installedAt: null,
-      installedById: null
+      installedById: null,
+      placedById: null,
+      placedAt: null,
+      dhcpIpAddress: null,
+      dhcpMacAddress: null,
+      dhcpHostname: null,
+      dhcpLeaseActive: false,
+      dhcpLastSync: null
     });
     
     await this.logHistory("RACK", rackId, "SERVER_REMOVED", userId, 
@@ -354,8 +484,15 @@ class RackService {
       accessLogin: sourceUnit.accessLogin,
       accessPassword: sourceUnit.accessPassword,
       notes: sourceUnit.notes,
-      installedAt: new Date(),
-      installedById: userId
+      installedAt: sourceUnit.installedAt,
+      installedById: sourceUnit.installedById,
+      placedById: sourceUnit.placedById,
+      placedAt: sourceUnit.placedAt,
+      dhcpIpAddress: sourceUnit.dhcpIpAddress,
+      dhcpMacAddress: sourceUnit.dhcpMacAddress,
+      dhcpHostname: sourceUnit.dhcpHostname,
+      dhcpLeaseActive: sourceUnit.dhcpLeaseActive,
+      dhcpLastSync: sourceUnit.dhcpLastSync
     };
     
     // Очищаем исходный юнит
@@ -369,7 +506,14 @@ class RackService {
       accessLogin: null,
       accessPassword: null,
       installedAt: null,
-      installedById: null
+      installedById: null,
+      placedById: null,
+      placedAt: null,
+      dhcpIpAddress: null,
+      dhcpMacAddress: null,
+      dhcpHostname: null,
+      dhcpLeaseActive: false,
+      dhcpLastSync: null
     });
     
     // Заполняем целевой юнит
@@ -403,9 +547,257 @@ class RackService {
     return BeryllRackUnit.findOne({
       where: { serverId },
       include: [
-        { model: BeryllRack, as: "rack" }
+        { model: BeryllRack, as: "rack" },
+        { model: User, as: "placedBy", attributes: ["id", "login", "name", "surname"] },
+        { model: User, as: "installedBy", attributes: ["id", "login", "name", "surname"] }
       ]
     });
+  }
+  
+  /**
+   * НОВЫЙ МЕТОД: Получить юниты по статусу сервера
+   */
+  async getUnitsByServerStatus(rackId, status) {
+    const where = { rackId };
+    
+    const serverWhere = status ? { status } : { id: { [Op.ne]: null } };
+    
+    return BeryllRackUnit.findAll({
+      where,
+      include: [{
+        model: BeryllServer,
+        as: "server",
+        where: serverWhere,
+        required: true,
+        include: [
+          { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] }
+        ]
+      }, {
+        model: User,
+        as: "placedBy",
+        attributes: ["id", "login", "name", "surname"]
+      }, {
+        model: User,
+        as: "installedBy",
+        attributes: ["id", "login", "name", "surname"]
+      }],
+      order: [["unitNumber", "ASC"]]
+    });
+  }
+  
+  /**
+   * НОВЫЙ МЕТОД: Получить сводку по стойке
+   */
+  async getRackSummary(rackId) {
+    const rack = await BeryllRack.findByPk(rackId);
+    if (!rack) throw new Error("Стойка не найдена");
+    
+    // Статистика по статусам серверов
+    const units = await BeryllRackUnit.findAll({
+      where: { 
+        rackId,
+        serverId: { [Op.ne]: null }
+      },
+      include: [{
+        model: BeryllServer,
+        as: "server",
+        attributes: ["status"],
+        required: true
+      }]
+    });
+    
+    const byStatus = {};
+    units.forEach(unit => {
+      const status = unit.server?.status || "UNKNOWN";
+      byStatus[status] = (byStatus[status] || 0) + 1;
+    });
+    
+    // Кто разместил серверы (уникальные пользователи)
+    const placedByUnits = await BeryllRackUnit.findAll({
+      where: { 
+        rackId,
+        placedById: { [Op.ne]: null }
+      },
+      include: [{
+        model: User,
+        as: "placedBy",
+        attributes: ["id", "login", "name", "surname"]
+      }],
+      attributes: ["placedById"]
+    });
+    
+    // Уникальные пользователи
+    const uniquePlacedBy = [];
+    const seenIds = new Set();
+    placedByUnits.forEach(unit => {
+      if (unit.placedBy && !seenIds.has(unit.placedBy.id)) {
+        seenIds.add(unit.placedBy.id);
+        uniquePlacedBy.push(unit.placedBy);
+      }
+    });
+    
+    // Серверы в работе
+    const serversInWork = byStatus["IN_WORK"] || 0;
+    
+    return {
+      rackId,
+      rackName: rack.name,
+      totalUnits: rack.totalUnits,
+      filledUnits: units.length,
+      byStatus,
+      placedByUsers: uniquePlacedBy,
+      serversInWork,
+      serversWithDefect: byStatus["DEFECT"] || 0
+    };
+  }
+  
+  // =============================================
+  // DHCP ИНТЕГРАЦИЯ
+  // =============================================
+  
+  /**
+   * НОВЫЙ МЕТОД: Синхронизировать IP-адреса с DHCP для стойки
+   */
+  async syncRackWithDhcp(rackId, userId) {
+    const rack = await BeryllRack.findByPk(rackId, {
+      include: [{
+        model: BeryllRackUnit,
+        as: "units",
+        where: { serverId: { [Op.ne]: null } },
+        required: false,
+        include: [{ model: BeryllServer, as: "server" }]
+      }]
+    });
+    
+    if (!rack) throw new Error("Стойка не найдена");
+    
+    const unitsWithServers = rack.units?.filter(u => u.serverId) || [];
+    
+    if (unitsWithServers.length === 0) {
+      return { success: true, message: "Нет серверов для синхронизации", synced: 0, total: 0 };
+    }
+    
+    const ssh = new NodeSSH();
+    
+    try {
+      await ssh.connect({
+        host: DHCP_CONFIG.host,
+        username: DHCP_CONFIG.username,
+        password: DHCP_CONFIG.password,
+        readyTimeout: 10000
+      });
+      
+      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
+      
+      if (result.stderr && !result.stdout) {
+        throw new Error(`SSH Error: ${result.stderr}`);
+      }
+      
+      const leases = parseDhcpLeases(result.stdout);
+      const syncTime = new Date();
+      let syncedCount = 0;
+      
+      for (const unit of unitsWithServers) {
+        if (!unit.server) continue;
+        
+        // Ищем lease по MAC адресу сервера или юнита
+        const serverMac = unit.server.macAddress?.toUpperCase();
+        const unitMac = unit.mgmtMacAddress?.toUpperCase();
+        
+        const matchingLease = leases.find(lease => {
+          const leaseMac = lease.macAddress?.toUpperCase();
+          return leaseMac === serverMac || leaseMac === unitMac;
+        });
+        
+        if (matchingLease) {
+          await unit.update({
+            dhcpIpAddress: matchingLease.ipAddress,
+            dhcpMacAddress: matchingLease.macAddress,
+            dhcpHostname: matchingLease.hostname,
+            dhcpLeaseActive: matchingLease.leaseActive,
+            dhcpLastSync: syncTime
+          });
+          syncedCount++;
+        } else {
+          // Обновляем время синхронизации даже если lease не найден
+          await unit.update({
+            dhcpLeaseActive: false,
+            dhcpLastSync: syncTime
+          });
+        }
+      }
+      
+      ssh.dispose();
+      
+      await this.logHistory("RACK", rackId, "DHCP_SYNC", userId, 
+        `Синхронизация с DHCP: обновлено ${syncedCount} серверов`,
+        { synced: syncedCount, total: unitsWithServers.length }
+      );
+      
+      return { 
+        success: true, 
+        message: `Синхронизировано ${syncedCount} из ${unitsWithServers.length} серверов`,
+        synced: syncedCount,
+        total: unitsWithServers.length
+      };
+      
+    } catch (error) {
+      ssh.dispose();
+      console.error("[RackService] DHCP Sync Error:", error);
+      throw new Error(`Ошибка синхронизации с DHCP: ${error.message}`);
+    }
+  }
+  
+  /**
+   * НОВЫЙ МЕТОД: Поиск IP по MAC в DHCP
+   */
+  async findIpByMac(macAddress) {
+    if (!macAddress) {
+      throw new Error("MAC адрес не указан");
+    }
+    
+    const ssh = new NodeSSH();
+    
+    try {
+      await ssh.connect({
+        host: DHCP_CONFIG.host,
+        username: DHCP_CONFIG.username,
+        password: DHCP_CONFIG.password,
+        readyTimeout: 10000
+      });
+      
+      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
+      ssh.dispose();
+      
+      if (result.stderr && !result.stdout) {
+        throw new Error(`SSH Error: ${result.stderr}`);
+      }
+      
+      const leases = parseDhcpLeases(result.stdout);
+      const normalizedMac = macAddress.toUpperCase().replace(/-/g, ":");
+      
+      const matchingLease = leases.find(lease => 
+        lease.macAddress?.toUpperCase() === normalizedMac
+      );
+      
+      if (matchingLease) {
+        return {
+          found: true,
+          ipAddress: matchingLease.ipAddress,
+          hostname: matchingLease.hostname,
+          leaseActive: matchingLease.leaseActive,
+          leaseStart: matchingLease.leaseStart,
+          leaseEnd: matchingLease.leaseEnd
+        };
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      ssh.dispose();
+      console.error("[RackService] Find IP Error:", error);
+      throw new Error(`Ошибка поиска IP: ${error.message}`);
+    }
   }
   
   // =============================================

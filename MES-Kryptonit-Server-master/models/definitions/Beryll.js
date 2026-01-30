@@ -113,6 +113,16 @@ const COMPONENT_STATUSES = {
 };
 
 // ============================================
+// КОНСТАНТЫ - СТОЙКИ
+// ============================================
+
+const RACK_STATUSES = {
+  ACTIVE: "ACTIVE",
+  MAINTENANCE: "MAINTENANCE",
+  DECOMMISSIONED: "DECOMMISSIONED"
+};
+
+// ============================================
 // Модель партии (Batch)
 // ============================================
 const BeryllBatch = sequelize.define("BeryllBatch", {
@@ -796,8 +806,227 @@ const BeryllServerComponent = sequelize.define("BeryllServerComponent", {
     { fields: ["serverId"] },
     { fields: ["componentType"] },
     { fields: ["status"] },
-    { fields: ["serialNumberYadro"] },  // НОВЫЙ ИНДЕКС
+    { fields: ["serialNumberYadro"] },
     { fields: ["serverId", "componentType", "slot"], unique: true }
+  ]
+});
+
+// ============================================
+// Модель стойки (Rack)
+// ============================================
+const BeryllRack = sequelize.define("BeryllRack", {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  name: {
+    type: DataTypes.STRING(100),
+    allowNull: false
+  },
+  location: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  totalUnits: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 42
+  },
+  networkSubnet: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  gateway: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.ENUM(...Object.values(RACK_STATUSES)),
+    allowNull: false,
+    defaultValue: RACK_STATUSES.ACTIVE
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  metadata: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: {}
+  }
+}, {
+  tableName: "beryll_racks",
+  timestamps: true
+});
+
+// ============================================
+// Модель юнита стойки (Rack Unit) - ОБНОВЛЕНО
+// ============================================
+const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  rackId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: "beryll_racks",
+      key: "id"
+    }
+  },
+  serverId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: "beryll_servers",
+      key: "id"
+    }
+  },
+  unitNumber: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  hostname: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  mgmtMacAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  mgmtIpAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  dataMacAddress: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  dataIpAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  accessLogin: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  accessPassword: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  installedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  installedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: "users",
+      key: "id"
+    }
+  },
+  
+  // ========== НОВЫЕ ПОЛЯ ==========
+  
+  // Кто поставил сервер в стойку (БЕЗ взятия в работу)
+  placedById: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: "users",
+      key: "id"
+    }
+  },
+  // Когда поставлен в стойку
+  placedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  
+  // DHCP интеграция - автоматически определённые данные
+  dhcpIpAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  dhcpMacAddress: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  dhcpHostname: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  dhcpLeaseActive: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false
+  },
+  dhcpLastSync: {
+    type: DataTypes.DATE,
+    allowNull: true
+  }
+  
+}, {
+  tableName: "beryll_rack_units",
+  timestamps: true,
+  indexes: [
+    { fields: ["rackId", "unitNumber"], unique: true },
+    { fields: ["serverId"] },
+    { fields: ["installedById"] },
+    { fields: ["placedById"] },
+    { fields: ["dhcpIpAddress"] },
+    { fields: ["dhcpMacAddress"] }
+  ]
+});
+
+// ============================================
+// Модель расширенной истории
+// ============================================
+const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  entityType: {
+    type: DataTypes.STRING(50),
+    allowNull: false
+  },
+  entityId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  action: {
+    type: DataTypes.STRING(50),
+    allowNull: false
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  comment: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  changes: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  }
+}, {
+  tableName: "beryll_extended_history",
+  timestamps: true,
+  updatedAt: false,
+  indexes: [
+    { fields: ["entityType", "entityId"] },
+    { fields: ["userId"] }
   ]
 });
 
@@ -855,8 +1084,23 @@ const setupAssociations = (User) => {
   // --- Компоненты серверов ---
   BeryllServer.hasMany(BeryllServerComponent, { as: "components", foreignKey: "serverId", onDelete: "CASCADE" });
   BeryllServerComponent.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
+
+  // --- Стойки и юниты ---
+  BeryllRack.hasMany(BeryllRackUnit, { as: "units", foreignKey: "rackId", onDelete: "CASCADE" });
+  BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
   
-  // ПРИМЕЧАНИЕ: связь installedBy определена в ComponentModels.js, не дублировать!
+  // --- Юниты -> Сервер ---
+  BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
+  BeryllServer.hasOne(BeryllRackUnit, { as: "rackUnit", foreignKey: "serverId" });
+  
+  // --- Юниты -> User (кто установил) ---
+  BeryllRackUnit.belongsTo(User, { as: "installedBy", foreignKey: "installedById" });
+  
+  // --- Юниты -> User (кто разместил) ---
+  BeryllRackUnit.belongsTo(User, { as: "placedBy", foreignKey: "placedById" });
+  
+  // --- Расширенная история -> User ---
+  BeryllExtendedHistory.belongsTo(User, { as: "user", foreignKey: "userId" });
 };
 
 // ============================================
@@ -873,12 +1117,16 @@ module.exports = {
   BeryllDefectComment,
   BeryllDefectFile,
   BeryllServerComponent,
+  BeryllRack,
+  BeryllRackUnit,
+  BeryllExtendedHistory,
   
   // Константы статусов
   SERVER_STATUSES,
   BATCH_STATUSES,
   HISTORY_ACTIONS,
   CHECKLIST_GROUPS,
+  RACK_STATUSES,
   
   // Константы дефектов
   DEFECT_CATEGORIES,
