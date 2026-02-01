@@ -1,9 +1,3 @@
-/**
- * utils/consts.ts - Константы маршрутов приложения
- * 
- * ОБНОВЛЕНО: Добавлен PRODUCTION_ROUTE для модуля учёта выработки
- */
-
 // =========================================================================
 // АДМИНКА
 // =========================================================================
@@ -76,6 +70,8 @@ export const BERYLL_ROUTE = '/beryll';
 export const BERYLL_SERVER_ROUTE = '/beryll/server/:id';
 export const BERYLL_BATCH_ROUTE = '/beryll/batch/:id';
 export const BERYLL_MONITORING_ROUTE = '/beryll/monitoring';
+export const BERYLL_REVISIONS_ROUTE = '/beryll/revisions';
+
 
 // =========================================================================
 // ОБЩЕЕ
@@ -126,7 +122,7 @@ export const TASKS_ROUTE = '/tasks';
 export const ANALYTICS_DASHBOARD_ROUTE = '/analytics/dashboard';
 
 // =========================================================================
-// НОВОЕ: ПРОИЗВОДСТВО (Учёт выработки)
+// ПРОИЗВОДСТВО (Учёт выработки)
 // =========================================================================
 
 export const PRODUCTION_ROUTE = '/production';

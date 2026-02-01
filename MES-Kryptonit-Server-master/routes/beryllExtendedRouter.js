@@ -10,6 +10,8 @@ const ClusterController = require("../controllers/beryll/controllers/ClusterCont
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
 const DefectExportController = require("../controllers/beryll/controllers/DefectExportController");
+const CatalogExtendedController = require("../controllers/beryll/CatalogExtendedController");
+const ComponentInventoryController = require("../controllers/beryll/controllers/ComponentInventoryController");
 const {
   addComponent,
   addComponentsBatch,
@@ -126,6 +128,28 @@ router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
 router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+
+// ============================================
+// КАТАЛОГ КОМПЛЕКТУЮЩИХ
+// (ВАЖНО: статические роуты ПЕРЕД параметризованными /catalog/:id)
+// ============================================
+
+// Расширенные эндпоинты (CatalogExtendedController)
+router.get("/catalog/grouped",       ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogGrouped);
+router.get("/catalog/stats",         ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogStats);
+router.get("/catalog/types",         ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogTypes);
+router.get("/catalog/search",        ...protect, checkAbility("beryll.view"),   CatalogExtendedController.searchCatalog);
+router.get("/catalog/export",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.exportCatalog);
+router.post("/catalog/batch",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.batchCreateCatalog);
+
+// Базовые CRUD (ComponentInventoryController)
+router.get("/catalog",               ...protect, checkAbility("beryll.view"),   ComponentInventoryController.getCatalog);
+router.post("/catalog",              ...protect, checkAbility("beryll.manage"), ComponentInventoryController.createCatalogEntry);
+router.put("/catalog/:id",           ...protect, checkAbility("beryll.manage"), ComponentInventoryController.updateCatalogEntry);
+
+// Мягкое удаление и восстановление (CatalogExtendedController)
+router.delete("/catalog/:id",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.deleteCatalogEntry);
+router.post("/catalog/:id/restore",  ...protect, checkAbility("beryll.manage"), CatalogExtendedController.restoreCatalogEntry);
 
 // ============================================
 // КОМПЛЕКТУЮЩИЕ СЕРВЕРОВ (COMPONENTS)

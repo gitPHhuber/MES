@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { 
   AlertTriangle, Plus, Search, Filter, FileText, Download,
@@ -57,6 +58,18 @@ const downloadBlob = (blob: Blob, filename: string): void => {
   link.remove();
   window.URL.revokeObjectURL(url);
 };
+
+// ============================================
+// УТИЛИТА: ПОЛУЧЕНИЕ СЕРИЙНИКА СЕРВЕРА
+// ============================================
+
+/**
+ * ИСПРАВЛЕНО: Получение серийного номера сервера
+ * Приоритет: serverSerial (ручной ввод) -> server.apkSerialNumber (из БД) -> #serverId
+ */
+function getServerDisplaySerial(record: BeryllDefectRecord): string {
+  return record.serverSerial || record.server?.apkSerialNumber || `#${record.serverId}`;
+}
 
 // Конфигурация статусов
 const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -399,9 +412,9 @@ const DefectRecordsTab: React.FC = () => {
           <div className="text-xs text-gray-400">#{record.id}</div>
         </td>
         
-        {/* 2. Сервер */}
+        {/* 2. Сервер — ИСПРАВЛЕНО: serverSerial вместо #serverId */}
         <td className="px-3 py-2 text-sm">
-          <div className="font-medium">{record.server?.apkSerialNumber || `#${record.serverId}`}</div>
+          <div className="font-medium font-mono">{getServerDisplaySerial(record)}</div>
         </td>
         
         {/* 3. СПиСИ */}
@@ -927,8 +940,9 @@ const RecordDetails: React.FC<{
         {record.yadroTicketNumber && (
           <div className="text-lg font-semibold">{record.yadroTicketNumber}</div>
         )}
+        {/* ИСПРАВЛЕНО: серийник сервера вместо #serverId */}
         <div className="text-sm text-gray-500">
-          Сервер: {record.server?.apkSerialNumber || `#${record.serverId}`}
+          Сервер: <span className="font-mono">{getServerDisplaySerial(record)}</span>
         </div>
       </div>
       
@@ -1141,6 +1155,7 @@ const RecordDetails: React.FC<{
 
 // ============================================
 // МОДАЛЬНОЕ ОКНО СОЗДАНИЯ - РАСШИРЕННОЕ
+// ИСПРАВЛЕНО: добавлено поле serverSerial
 // ============================================
 
 const CreateRecordModal: React.FC<{
@@ -1151,7 +1166,8 @@ const CreateRecordModal: React.FC<{
   onSuccess: () => void;
 }> = ({ isOpen, servers, users, onClose, onSuccess }) => {
   const [form, setForm] = useState({
-    serverId: 0,
+    serverId: null as number | null,
+    serverSerial: "",       // ДОБАВЛЕНО: поле для ручного ввода серийника
     problemDescription: "",
     yadroTicketNumber: "",
     hasSPISI: false,
@@ -1173,6 +1189,7 @@ const CreateRecordModal: React.FC<{
   });
   const [saving, setSaving] = useState(false);
   const [serverSearch, setServerSearch] = useState("");
+  const [manualSerialMode, setManualSerialMode] = useState(false);  // ДОБАВЛЕНО
   
   const filteredServers = servers.filter(s =>
     !serverSearch ||
@@ -1184,7 +1201,8 @@ const CreateRecordModal: React.FC<{
   useEffect(() => {
     if (isOpen) {
       setForm({
-        serverId: 0,
+        serverId: null,
+        serverSerial: "",
         problemDescription: "",
         yadroTicketNumber: "",
         hasSPISI: false,
@@ -1205,14 +1223,16 @@ const CreateRecordModal: React.FC<{
         returnedFromYadroAt: ""
       });
       setServerSearch("");
+      setManualSerialMode(false);
     }
   }, [isOpen]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.serverId) {
-      toast.error("Выберите сервер");
+    // ИСПРАВЛЕНО: допускаем либо serverId, либо serverSerial
+    if (!form.serverId && !form.serverSerial.trim()) {
+      toast.error("Выберите сервер или введите серийный номер вручную");
       return;
     }
     if (!form.problemDescription.trim()) {
@@ -1224,6 +1244,8 @@ const CreateRecordModal: React.FC<{
       setSaving(true);
       await createDefectRecord({
         ...form,
+        serverId: form.serverId || undefined,
+        serverSerial: form.serverSerial || undefined,
         repairPartType: form.repairPartType || undefined,
         diagnosticianId: form.diagnosticianId || undefined,
         sentToYadroAt: form.sentToYadroAt ? new Date(form.sentToYadroAt).toISOString() : undefined,
@@ -1249,28 +1271,70 @@ const CreateRecordModal: React.FC<{
           <div className="space-y-4">
             <h4 className="font-medium text-gray-700 border-b pb-2">Основная информация</h4>
             
-            {/* Выбор сервера */}
+            {/* ИСПРАВЛЕНО: Выбор сервера с режимом ручного ввода */}
             <div>
-              <label className="block text-sm font-medium mb-1">Сервер *</label>
-              <input
-                type="text"
-                placeholder="Поиск по S/N, hostname..."
-                value={serverSearch}
-                onChange={(e) => setServerSearch(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg mb-2"
-              />
-              <div className="max-h-28 overflow-y-auto border rounded-lg">
-                {filteredServers.slice(0, 10).map(server => (
-                  <div
-                    key={server.id}
-                    className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
-                    onClick={() => setForm({ ...form, serverId: server.id })}
-                  >
-                    <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
-                    <div className="text-xs text-gray-500">{server.hostname}</div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">Сервер *</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualSerialMode(!manualSerialMode);
+                    if (!manualSerialMode) {
+                      // Переключаемся в ручной режим — сбрасываем serverId
+                      setForm({ ...form, serverId: null });
+                    } else {
+                      // Переключаемся в режим выбора — сбрасываем serverSerial
+                      setForm({ ...form, serverSerial: "" });
+                    }
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {manualSerialMode ? "← Выбрать из списка" : "Ввести вручную →"}
+                </button>
               </div>
+              
+              {manualSerialMode ? (
+                /* Ручной ввод серийника */
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Введите серийный номер сервера"
+                    value={form.serverSerial}
+                    onChange={(e) => setForm({ ...form, serverSerial: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg border-orange-300 bg-orange-50"
+                  />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Ручной ввод — сервер может отсутствовать в базе
+                  </p>
+                </div>
+              ) : (
+                /* Выбор из списка */
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Поиск по S/N, hostname..."
+                    value={serverSearch}
+                    onChange={(e) => setServerSearch(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg mb-2"
+                  />
+                  <div className="max-h-28 overflow-y-auto border rounded-lg">
+                    {filteredServers.slice(0, 10).map(server => (
+                      <div
+                        key={server.id}
+                        className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
+                        onClick={() => setForm({ 
+                          ...form, 
+                          serverId: server.id,
+                          serverSerial: server.apkSerialNumber || ""  // Заполняем serverSerial
+                        })}
+                      >
+                        <div className="font-medium font-mono">{server.apkSerialNumber || `#${server.id}`}</div>
+                        <div className="text-xs text-gray-500">{server.hostname}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div>
@@ -1567,6 +1631,18 @@ const EditRecordModal: React.FC<{
         <div className="grid grid-cols-2 gap-6">
           {/* ЛЕВАЯ КОЛОНКА */}
           <div className="space-y-4">
+            {/* ДОБАВЛЕНО: Редактирование серийника */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Серийный номер сервера</label>
+              <input
+                type="text"
+                value={form.serverSerial || ""}
+                onChange={(e) => setForm({ ...form, serverSerial: e.target.value })}
+                placeholder="Серийный номер"
+                className="w-full px-3 py-2 border rounded-lg font-mono"
+              />
+            </div>
+            
             <div>
               <label className="block text-sm font-medium mb-1">Описание проблемы</label>
               <textarea

@@ -1,13 +1,3 @@
-/**
- * Header.tsx (обновлённый)
- * 
- * Изменения:
- * 1. Добавлено плавное скрытие при скролле вниз
- * 2. Header появляется обратно при скролле вверх
- * 3. Добавлен отступ через CSS переменную для координации с контентом
- * 
- * Заменить: src/components/Header/Header.tsx
- */
 
 import React, { useContext, Fragment, useState, useEffect, useRef } from "react";
 import Logo from "assets/images/logo.svg";
@@ -44,6 +34,7 @@ import {
   MQTT_CHECK_FC_ROUTE, MQTT_CHECK_ESC_ROUTE, PROFILE_ROUTE, RANKINGS_CHARTS_ROUTE,
   BERYLL_ROUTE,
   BERYLL_MONITORING_ROUTE,
+  BERYLL_REVISIONS_ROUTE,
   DEFECTS_ROUTE,
   PRODUCTION_ROUTE
 } from "src/utils/consts";
@@ -158,6 +149,7 @@ export const Header: React.FC = observer(() => {
       children: [
         { label: "Серверы", to: BERYLL_ROUTE, icon: Server },
         { label: "Мониторинг", to: BERYLL_MONITORING_ROUTE, icon: Activity },
+        { label: "Ревизии комплектующих", to: BERYLL_REVISIONS_ROUTE, icon: CircuitBoard },
       ]
     },
 

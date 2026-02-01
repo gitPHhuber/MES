@@ -11,6 +11,11 @@
  * - Комментарий
  * - Ответственный
  * 
+ * ИСПРАВЛЕНО:
+ * - serverSerial берётся из record.serverSerial ИЛИ record.server?.apkSerialNumber
+ * - Убран include substituteServer (используется поле substituteServerSerial)
+ * - Добавлен поиск по serverSerial
+ * 
  * Положить в: MES-Kryptonit-Server-master/controllers/beryll/services/DefectExportService.js
  */
 
@@ -205,14 +210,17 @@ const DefectExportService = {
         }
         
         if (search) {
+            // ИСПРАВЛЕНО: добавлен поиск по serverSerial
             where[Op.or] = [
                 { yadroTicketNumber: { [Op.iLike]: `%${search}%` } },
                 { problemDescription: { [Op.iLike]: `%${search}%` } },
-                { notes: { [Op.iLike]: `%${search}%` } }
+                { notes: { [Op.iLike]: `%${search}%` } },
+                { serverSerial: { [Op.iLike]: `%${search}%` } }
             ];
         }
         
         // Получаем записи
+        // ИСПРАВЛЕНО: убран substituteServer из include (ассоциация может отсутствовать)
         const records = await BeryllDefectRecord.findAll({
             where,
             include: [
@@ -239,13 +247,8 @@ const DefectExportService = {
                     as: "resolvedBy", 
                     attributes: ["id", "name", "surname"],
                     required: false 
-                },
-                { 
-                    model: BeryllServer, 
-                    as: "substituteServer", 
-                    attributes: ["id", "apkSerialNumber", "hostname"],
-                    required: false 
                 }
+                // УБРАНО: substituteServer - используем поле substituteServerSerial
             ],
             order: [["detectedAt", "DESC"]]
         });
@@ -296,10 +299,13 @@ const DefectExportService = {
             const steps = buildStepsHistory(record);
             const responsible = getResponsiblePerson(record);
             
+            // ИСПРАВЛЕНО: берём серийник из serverSerial или server.apkSerialNumber
+            const serverSerialValue = record.serverSerial || record.server?.apkSerialNumber || "";
+            
             const row = sheet.addRow({
                 num: rowNum++,
                 yadroTicket: record.yadroTicketNumber || "",
-                serverSerial: record.server?.apkSerialNumber || "",
+                serverSerial: serverSerialValue,  // ИСПРАВЛЕНО
                 hasSPISI: record.hasSPISI ? "Да" : "Нет",
                 cluster: record.clusterCode || "",
                 problem: record.problemDescription || "",
@@ -313,8 +319,7 @@ const DefectExportService = {
                 notes: record.notes || "",
                 repeated: record.isRepeatedDefect ? 
                     `Да: ${record.repeatedDefectReason || "причина не указана"}` : "",
-                substitute: record.substituteServer?.apkSerialNumber || 
-                    record.substituteServerSerial || "",
+                substitute: record.substituteServerSerial || "",  // ИСПРАВЛЕНО: только из поля
                 sentToYadro: record.sentToYadroAt ? new Date(record.sentToYadroAt) : "",
                 returnedFromYadro: record.returnedFromYadroAt ? new Date(record.returnedFromYadroAt) : "",
                 status: STATUS_LABELS[record.status] || record.status,

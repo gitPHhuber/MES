@@ -994,6 +994,8 @@ FILE: MES-Kryptonit-Client-main/src/api/beryll/beryllExtendedApi.ts
 
 
 
+
+
 import { $authHost } from "../index";
 
 
@@ -1036,6 +1038,14 @@ export interface BeryllRackUnit {
   notes: string | null;
   installedAt: string | null;
   installedById: number | null;
+  placedAt: string | null;
+  placedById: number | null;
+  
+  dhcpIpAddress: string | null;
+  dhcpMacAddress: string | null;
+  dhcpHostname: string | null;
+  dhcpLeaseActive: boolean | null;
+  dhcpLastSync: string | null;
   createdAt: string;
   updatedAt: string;
   
@@ -1049,6 +1059,7 @@ export interface BeryllRackUnit {
     macAddress?: string;
   };
   installedBy?: { id: number; login: string; name: string; surname: string };
+  placedBy?: { id: number; login: string; name: string; surname: string };
 }
 
 
@@ -1247,6 +1258,21 @@ export interface DefectRecordStats {
 
 
 
+export interface DhcpSearchResult {
+  found: boolean;
+  ipAddress?: string;
+  macAddress?: string;
+  hostname?: string;
+  leaseActive?: boolean;
+  leaseStart?: string;
+  leaseEnd?: string;
+  error?: string;
+}
+
+
+
+
+
 interface HistoryRecord {
   id: number;
   entityType: string;
@@ -1318,8 +1344,28 @@ export const getRackHistory = async (
   return data;
 };
 
+export const getRackSummary = async (rackId: number): Promise<any> => {
+  const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/summary`);
+  return data;
+};
+
+export const syncRackWithDhcp = async (rackId: number): Promise<{
+  success: boolean;
+  message: string;
+  synced: number;
+  total: number;
+}> => {
+  const { data } = await $authHost.post(`/api/beryll/racks/${rackId}/sync-dhcp`);
+  return data;
+};
+
 export const getFreeUnits = async (rackId: number): Promise<BeryllRackUnit[]> => {
   const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/free-units`);
+  return data;
+};
+
+export const getUnitsByServerStatus = async (rackId: number, status: string): Promise<BeryllRackUnit[]> => {
+  const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/units-by-status`, { params: { status } });
   return data;
 };
 
@@ -1341,6 +1387,18 @@ export const installServerInRack = async (
   const { data } = await $authHost.post(
     `/api/beryll/racks/${rackId}/units/${unitNumber}/install`,
     params
+  );
+  return data;
+};
+
+export const placeServerInRack = async (
+  rackId: number,
+  unitNumber: number,
+  serverId: number
+): Promise<BeryllRackUnit> => {
+  const { data } = await $authHost.post(
+    `/api/beryll/racks/${rackId}/units/${unitNumber}/place`,
+    { serverId }
   );
   return data;
 };
@@ -1375,6 +1433,74 @@ export const findServerRackLocation = async (
   serverId: number
 ): Promise<BeryllRackUnit | { found: false }> => {
   const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/rack-location`);
+  return data;
+};
+
+
+
+
+
+
+
+
+export const createServer = async (serverData: {
+  apkSerialNumber?: string;
+  serialNumber?: string;
+  macAddress?: string;
+  hostname?: string;
+  batchId?: number;
+  notes?: string;
+  searchDhcp?: boolean;
+}): Promise<any> => {
+  const { data } = await $authHost.post("/api/beryll/servers/create", serverData);
+  return data;
+};
+
+
+
+
+export const createAndPlaceServer = async (serverData: {
+  apkSerialNumber?: string;
+  serialNumber?: string;
+  macAddress?: string;
+  hostname?: string;
+  batchId?: number;
+  notes?: string;
+  searchDhcp?: boolean;
+  rackId?: number;
+  unitNumber?: number;
+  unitData?: {
+    hostname?: string;
+    mgmtMacAddress?: string;
+    mgmtIpAddress?: string;
+    dataMacAddress?: string;
+    dataIpAddress?: string;
+    accessLogin?: string;
+    accessPassword?: string;
+    notes?: string;
+  };
+}): Promise<any> => {
+  const { data } = await $authHost.post("/api/beryll/servers/create-and-place", serverData);
+  return data;
+};
+
+
+
+
+
+
+
+
+export const findIpByMac = async (mac: string): Promise<DhcpSearchResult> => {
+  const { data } = await $authHost.get(`/api/beryll/dhcp/find-ip/${encodeURIComponent(mac)}`);
+  return data;
+};
+
+
+
+
+export const findServerInDhcp = async (serial: string): Promise<DhcpSearchResult> => {
+  const { data } = await $authHost.get(`/api/beryll/dhcp/find-server/${encodeURIComponent(serial)}`);
   return data;
 };
 
@@ -1702,7 +1828,6 @@ export const deleteDefectRecordFile = async (fileId: number): Promise<{ success:
   const { data } = await $authHost.delete(`/api/beryll/defect-record-files/${fileId}`);
   return data;
 };
-
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/api/beryll/componentsAPI.ts
 ================================================================================
@@ -9846,6 +9971,7 @@ FILE: MES-Kryptonit-Client-main/src/components/beryll/ServerComponentsManager.ts
 
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Cpu, MemoryStick, HardDrive, Network, CircuitBoard, Zap, Server,
   RefreshCw, Download, ChevronDown, ChevronUp, Copy, AlertCircle,
@@ -10258,8 +10384,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-violet-600">
@@ -10455,7 +10581,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -10510,8 +10637,8 @@ const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         {}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-600 to-teal-600">
@@ -10599,7 +10726,8 @@ const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -10625,8 +10753,8 @@ const SyncModeModal: React.FC<SyncModeModalProps> = ({
     (comparisonResult.summary?.newInBmc || 0) + 
     (comparisonResult.summary?.mismatches || 0);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative overflow-hidden">
         {}
         <div className="flex items-center gap-3 px-6 py-4 border-b bg-amber-50">
@@ -10755,7 +10883,8 @@ const SyncModeModal: React.FC<SyncModeModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -11407,8 +11536,8 @@ const ServerComponentsManager: React.FC<Props> = ({
       />
 
       {}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      {confirmDelete && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 text-red-600 mb-4">
               <AlertCircle size={24} />
@@ -11433,7 +11562,8 @@ const ServerComponentsManager: React.FC<Props> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -24243,6 +24373,7 @@ FILE: MES-Kryptonit-Client-main/src/pages/Beryll/pages/ServerDetailPage.tsx
 ================================================================================
 
 import { useState, useEffect, useContext, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import {
@@ -24394,6 +24525,18 @@ export const ServerDetailPage: React.FC = observer(() => {
       }
     };
   }, []);
+
+  
+  useEffect(() => {
+    if (previewImage || previewLoading || uploadModal.open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [previewImage, previewLoading, uploadModal.open]);
 
   
   useEffect(() => {
@@ -24924,7 +25067,7 @@ export const ServerDetailPage: React.FC = observer(() => {
       />
       
       {}
-      {(previewImage || previewLoading) && (
+      {(previewImage || previewLoading) && createPortal(
         <div 
           className="fixed inset-0 bg-black/90 flex items-center justify-center"
           style={{ zIndex: 9999 }}
@@ -24987,11 +25130,12 @@ export const ServerDetailPage: React.FC = observer(() => {
               Закрыть просмотр
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {}
-      {uploadModal.open && (
+      {uploadModal.open && createPortal(
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           style={{ zIndex: 9999 }}
@@ -25152,7 +25296,8 @@ export const ServerDetailPage: React.FC = observer(() => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {}
@@ -30838,27 +30983,15 @@ export default HistoryTab;
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/tabs/RacksTab.tsx
 ================================================================================
 
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect } from "react";
 import { 
-  Server, Plus, Search, Settings, MapPin, Wifi, 
-  ChevronDown, ChevronRight, Trash2, Edit, Move,
-  CheckCircle, AlertCircle, XCircle, PlusCircle
+  Server, Plus, Search, MapPin, Wifi, 
+  Trash2, Edit, Move, CheckCircle, XCircle, PlusCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { 
   getRacks, getRackById, createRack, updateRack, deleteRack,
-  installServerInRack, removeServerFromRack, moveServerInRack,
+  installServerInRack, removeServerFromRack,
   createAndPlaceServer, findServerInDhcp,
   BeryllRack, BeryllRackUnit, RackStatus
 } from "../../../api/beryll/beryllExtendedApi";
@@ -30883,7 +31016,6 @@ const RacksTab: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
-  const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   
@@ -30936,18 +31068,40 @@ const RacksTab: React.FC = () => {
   }, [showInstallModal]);
   
   
+  
+  const getUnitStatus = (unit: BeryllRackUnit) => {
+    if (!unit.serverId) return "empty";
+    if (unit.installedAt) return "in_work"; 
+    if (unit.placedAt) return "placed"; 
+    return "placed"; 
+  };
+  
   const renderUnit = (unit: BeryllRackUnit) => {
-    const isEmpty = !unit.serverId;
+    const status = getUnitStatus(unit);
+    const isEmpty = status === "empty";
+    const isInWork = status === "in_work";
+    const isPlaced = status === "placed";
+    
+    
+    const borderClass = isEmpty 
+      ? "border-dashed border-gray-300" 
+      : isInWork 
+        ? "border-solid border-green-500 border-l-4" 
+        : "border-solid border-orange-400 border-l-4"; 
+    
+    const bgClass = isEmpty 
+      ? "bg-gray-50" 
+      : isInWork 
+        ? "bg-green-50" 
+        : "bg-orange-50";
     
     return (
       <div
         key={unit.id}
         className={`
           p-2 border rounded cursor-pointer transition-all
-          ${isEmpty 
-            ? "border-dashed border-gray-300 bg-gray-50 hover:border-blue-400" 
-            : "border-solid border-gray-400 bg-white hover:border-blue-500 hover:shadow"
-          }
+          ${borderClass} ${bgClass}
+          hover:shadow hover:border-blue-500
         `}
         onClick={() => {
           setSelectedUnit(unit);
@@ -30957,20 +31111,36 @@ const RacksTab: React.FC = () => {
         }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-mono text-gray-500">U{unit.unitNumber}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-mono text-gray-500">U{unit.unitNumber}</span>
+            {}
+            {isInWork && (
+              <span className="px-1 py-0.5 text-[10px] bg-green-500 text-white rounded" title="В работе">
+                В работе
+              </span>
+            )}
+            {isPlaced && (
+              <span className="px-1 py-0.5 text-[10px] bg-orange-500 text-white rounded" title="Размещён, не взят в работу">
+                Размещён
+              </span>
+            )}
+          </div>
           {!isEmpty && (
             <div className="flex gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedUnit(unit);
-                  setShowMoveModal(true);
-                }}
-                className="p-1 hover:bg-gray-100 rounded"
-                title="Переместить"
-              >
-                <Move size={12} />
-              </button>
+              {}
+              {isPlaced && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedUnit(unit);
+                    setShowInstallModal(true);
+                  }}
+                  className="p-1 hover:bg-green-100 rounded text-green-600"
+                  title="Взять в работу"
+                >
+                  <CheckCircle size={12} />
+                </button>
+              )}
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -31004,6 +31174,17 @@ const RacksTab: React.FC = () => {
             {unit.mgmtIpAddress && (
               <div className="text-xs text-blue-500 truncate">{unit.mgmtIpAddress}</div>
             )}
+            {}
+            {isPlaced && unit.placedBy && (
+              <div className="text-[10px] text-orange-600 truncate mt-0.5">
+                Разместил: {unit.placedBy.surname || unit.placedBy.login}
+              </div>
+            )}
+            {isInWork && unit.installedBy && (
+              <div className="text-[10px] text-green-600 truncate mt-0.5">
+                В работе: {unit.installedBy.surname || unit.installedBy.login}
+              </div>
+            )}
           </div>
         )}
         
@@ -31023,9 +31204,35 @@ const RacksTab: React.FC = () => {
     
     const sortedUnits = [...rack.units].sort((a, b) => b.unitNumber - a.unitNumber);
     
+    
+    const stats = {
+      empty: sortedUnits.filter(u => !u.serverId).length,
+      placed: sortedUnits.filter(u => u.serverId && !u.installedAt).length,
+      inWork: sortedUnits.filter(u => u.serverId && u.installedAt).length
+    };
+    
     return (
-      <div className="grid grid-cols-1 gap-1 max-h-[600px] overflow-y-auto">
-        {sortedUnits.map(unit => renderUnit(unit))}
+      <div>
+        {}
+        <div className="flex items-center gap-4 mb-3 p-2 bg-gray-100 rounded text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border-l-4 border-green-500 bg-green-50 rounded"></div>
+            <span>В работе ({stats.inWork})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border-l-4 border-orange-400 bg-orange-50 rounded"></div>
+            <span>Размещён ({stats.placed})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border border-dashed border-gray-300 bg-gray-50 rounded"></div>
+            <span>Пусто ({stats.empty})</span>
+          </div>
+        </div>
+        
+        {}
+        <div className="grid grid-cols-1 gap-1 max-h-[600px] overflow-y-auto">
+          {sortedUnits.map(unit => renderUnit(unit))}
+        </div>
       </div>
     );
   };
@@ -31519,10 +31726,6 @@ const EditRackModal: React.FC<EditRackModalProps> = ({ isOpen, rack, onClose, on
 };
 
 
-
-
-
-
 interface InstallServerModalProps {
   isOpen: boolean;
   rack: BeryllRack;
@@ -31536,9 +31739,8 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
   isOpen, rack, unit, servers, onClose, onSuccess 
 }) => {
   const [form, setForm] = useState({
-    serialInput: "",        
-    serverId: 0,            
-    
+    serverId: 0,
+    apkSerialNumber: "",
     hostname: "",
     mgmtMacAddress: "",
     mgmtIpAddress: "",
@@ -31548,106 +31750,78 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     accessPassword: "V36man",
     notes: ""
   });
-  
   const [saving, setSaving] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<{
-    found: boolean;
-    server?: any;
-    dhcpInfo?: any;
-    message: string;
-  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dhcpInfo, setDhcpInfo] = useState<any>(null);
+  const [searchingDhcp, setSearchingDhcp] = useState(false);
   
   
-  const searchServer = async (serial: string) => {
-    if (!serial || serial.length < 3) {
-      setSearchResult(null);
-      setForm(prev => ({ ...prev, serverId: 0 }));
+  const filteredServers = servers.filter(s => 
+    searchQuery.length >= 2 && (
+      s.apkSerialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.hostname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.ipAddress?.includes(searchQuery)
+    )
+  );
+  
+  
+  const exactMatch = servers.find(s => 
+    s.apkSerialNumber?.toUpperCase() === searchQuery.toUpperCase() ||
+    s.serialNumber?.toUpperCase() === searchQuery.toUpperCase()
+  );
+  
+  
+  const showServerList = searchQuery.length >= 2 && filteredServers.length > 0;
+  
+  
+  const searchInDhcp = async () => {
+    if (!searchQuery) {
+      toast.error("Введите серийный номер");
       return;
     }
     
-    setSearching(true);
-    
     try {
+      setSearchingDhcp(true);
+      const result = await findServerInDhcp(searchQuery);
+      setDhcpInfo(result);
       
-      const found = servers.find(s => 
-        s.apkSerialNumber?.toUpperCase() === serial.toUpperCase() ||
-        s.serialNumber?.toUpperCase() === serial.toUpperCase() ||
-        s.apkSerialNumber?.toUpperCase().includes(serial.toUpperCase()) ||
-        s.serialNumber?.toUpperCase().includes(serial.toUpperCase())
-      );
-      
-      if (found) {
-        setSearchResult({
-          found: true,
-          server: found,
-          message: `Найден сервер #${found.id}: ${found.apkSerialNumber || found.serialNumber}`
-        });
-        setForm(prev => ({ 
-          ...prev, 
-          serverId: found.id,
-          hostname: found.hostname || prev.hostname,
-          mgmtIpAddress: found.ipAddress || prev.mgmtIpAddress,
-          mgmtMacAddress: found.macAddress || prev.mgmtMacAddress
-        }));
-        return;
-      }
-      
-      
-      try {
-        const dhcpResult = await findServerInDhcp(serial);
-        if (dhcpResult.found) {
-          setSearchResult({
-            found: false,
-            dhcpInfo: dhcpResult,
-            message: `Сервер не найден в базе, но найден в DHCP: ${dhcpResult.ipAddress}`
-          });
-          setForm(prev => ({
-            ...prev,
-            serverId: 0,
-            mgmtIpAddress: dhcpResult.ipAddress || prev.mgmtIpAddress,
-            mgmtMacAddress: dhcpResult.macAddress || prev.mgmtMacAddress,
-            hostname: dhcpResult.hostname || prev.hostname
-          }));
-          return;
-        }
-      } catch (e) {
+      if (result.found) {
+        toast.success("Найден в DHCP!");
         
-        console.warn("DHCP search failed:", e);
+        setForm(prev => ({
+          ...prev,
+          mgmtMacAddress: result.macAddress || prev.mgmtMacAddress,
+          mgmtIpAddress: result.ipAddress || prev.mgmtIpAddress,
+          hostname: result.hostname || prev.hostname
+        }));
+      } else {
+        toast.info("Не найден в DHCP");
       }
-      
-      
-      setSearchResult({
-        found: false,
-        message: "Сервер не найден. Будет создан новый."
-      });
-      setForm(prev => ({ ...prev, serverId: 0 }));
-      
-    } catch (error) {
-      console.error("Search error:", error);
-      setSearchResult({
-        found: false,
-        message: "Ошибка поиска. Будет создан новый сервер."
-      });
+    } catch (error: any) {
+      toast.error("Ошибка поиска в DHCP");
+      console.error(error);
     } finally {
-      setSearching(false);
+      setSearchingDhcp(false);
     }
   };
   
   
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (form.serialInput) {
-        searchServer(form.serialInput);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [form.serialInput, servers]);
+  const selectServer = (server: any) => {
+    setForm(prev => ({ 
+      ...prev, 
+      serverId: server.id,
+      hostname: server.hostname || prev.hostname,
+      mgmtIpAddress: server.ipAddress || prev.mgmtIpAddress,
+      mgmtMacAddress: server.macAddress || prev.mgmtMacAddress
+    }));
+    setSearchQuery(server.apkSerialNumber || server.serialNumber || `#${server.id}`);
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.serialInput.trim()) {
+    if (!searchQuery) {
       toast.error("Введите серийный номер");
       return;
     }
@@ -31668,11 +31842,11 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           accessPassword: form.accessPassword,
           notes: form.notes
         });
-        toast.success("Сервер установлен в стойку");
+        toast.success("Сервер установлен");
       } else {
         
         await createAndPlaceServer({
-          apkSerialNumber: form.serialInput.toUpperCase(),
+          apkSerialNumber: searchQuery.toUpperCase(),
           macAddress: form.mgmtMacAddress || undefined,
           hostname: form.hostname || undefined,
           rackId: rack.id,
@@ -31702,74 +31876,157 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
   
   useEffect(() => {
     if (isOpen) {
-      setForm({
-        serialInput: "",
-        serverId: 0,
-        hostname: "",
-        mgmtMacAddress: "",
-        mgmtIpAddress: "",
-        dataMacAddress: "",
-        dataIpAddress: "",
-        accessLogin: "admin",
-        accessPassword: "V36man",
-        notes: ""
-      });
-      setSearchResult(null);
+      
+      if (unit.serverId && unit.server) {
+        setForm({
+          serverId: unit.serverId,
+          apkSerialNumber: unit.server.apkSerialNumber || "",
+          hostname: unit.hostname || unit.server.hostname || "",
+          mgmtMacAddress: unit.mgmtMacAddress || unit.server.macAddress || "",
+          mgmtIpAddress: unit.mgmtIpAddress || unit.server.ipAddress || "",
+          dataMacAddress: unit.dataMacAddress || "",
+          dataIpAddress: unit.dataIpAddress || "",
+          accessLogin: unit.accessLogin || "admin",
+          accessPassword: unit.accessPassword || "V36man",
+          notes: unit.notes || ""
+        });
+        setSearchQuery(unit.server.apkSerialNumber || `#${unit.serverId}`);
+      } else {
+        
+        setForm({
+          serverId: 0,
+          apkSerialNumber: "",
+          hostname: "",
+          mgmtMacAddress: "",
+          mgmtIpAddress: "",
+          dataMacAddress: "",
+          dataIpAddress: "",
+          accessLogin: "admin",
+          accessPassword: "V36man",
+          notes: ""
+        });
+        setSearchQuery("");
+      }
+      setDhcpInfo(null);
     }
-  }, [isOpen]);
+  }, [isOpen, unit]);
+  
+  
+  useEffect(() => {
+    if (!exactMatch) {
+      setForm(prev => ({ ...prev, serverId: 0 }));
+    }
+  }, [searchQuery]);
+  
+  
+  const isTakeToWorkMode = unit.serverId && !unit.installedAt;
   
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`}>
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={
+        isTakeToWorkMode 
+          ? `Взять в работу: ${rack.name} / Unit ${unit.unitNumber}`
+          : `Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`
+      }
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {}
+        {isTakeToWorkMode && (
+          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
+            <CheckCircle size={16} className="inline mr-1" />
+            Сервер <strong>{unit.server?.apkSerialNumber}</strong> уже размещён в юните.
+            Заполните данные и нажмите "Взять в работу".
+          </div>
+        )}
+        
         {}
         <div>
           <label className="block text-sm font-medium mb-1">Серийный номер *</label>
-          <div className="relative">
+          <div className="flex gap-2">
             <input
               type="text"
-              value={form.serialInput}
-              onChange={(e) => setForm({ ...form, serialInput: e.target.value.toUpperCase() })}
-              placeholder="02042401B5"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 pr-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
+              placeholder="Введите серийник..."
+              className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               autoFocus
+              disabled={isTakeToWorkMode} 
             />
-            {searching && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              </div>
+            <button
+              type="button"
+              onClick={searchInDhcp}
+              disabled={searchingDhcp || !searchQuery}
+              className="px-3 py-2 bg-gray-100 border rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              title="Найти в DHCP"
+            >
+              {searchingDhcp ? "..." : <Wifi size={18} />}
+            </button>
+          </div>
+        </div>
+        
+        {}
+        {!isTakeToWorkMode && showServerList && (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-600">
+              Найденные серверы ({filteredServers.length})
+            </div>
+            <div className="max-h-32 overflow-y-auto">
+              {filteredServers.slice(0, 10).map(server => (
+                <div
+                  key={server.id}
+                  className={`
+                    p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0
+                    ${form.serverId === server.id ? "bg-blue-100" : ""}
+                  `}
+                  onClick={() => selectServer(server)}
+                >
+                  <div className="font-medium">{server.apkSerialNumber || server.serialNumber || `#${server.id}`}</div>
+                  <div className="text-xs text-gray-500">
+                    {server.hostname && `${server.hostname} • `}
+                    {server.ipAddress || "IP не задан"} • 
+                    <span className={`ml-1 ${server.status === "DONE" ? "text-green-600" : "text-yellow-600"}`}>
+                      {server.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {}
+        {!isTakeToWorkMode && searchQuery.length >= 2 && (
+          <div className={`p-3 rounded-lg text-sm ${
+            form.serverId 
+              ? "bg-green-50 border border-green-200 text-green-800"
+              : "bg-blue-50 border border-blue-200 text-blue-800"
+          }`}>
+            {form.serverId ? (
+              <>
+                <CheckCircle size={16} className="inline mr-1" />
+                Выбран существующий сервер
+              </>
+            ) : (
+              <>
+                <PlusCircle size={16} className="inline mr-1" />
+                Будет создан новый сервер: <strong>{searchQuery}</strong>
+              </>
             )}
           </div>
-          
-          {}
-          {searchResult && !searching && (
-            <div className={`mt-2 p-2 rounded-lg text-sm ${
-              searchResult.found 
-                ? "bg-green-50 border border-green-200 text-green-800"
-                : searchResult.dhcpInfo
-                  ? "bg-blue-50 border border-blue-200 text-blue-800"
-                  : "bg-yellow-50 border border-yellow-200 text-yellow-800"
-            }`}>
-              {searchResult.found && <CheckCircle size={14} className="inline mr-1" />}
-              {!searchResult.found && searchResult.dhcpInfo && <Wifi size={14} className="inline mr-1" />}
-              {!searchResult.found && !searchResult.dhcpInfo && <PlusCircle size={14} className="inline mr-1" />}
-              {searchResult.message}
-              
-              {searchResult.server && (
-                <div className="mt-1 text-xs opacity-75">
-                  {searchResult.server.hostname && `Hostname: ${searchResult.server.hostname} • `}
-                  {searchResult.server.ipAddress && `IP: ${searchResult.server.ipAddress} • `}
-                  Статус: {searchResult.server.status}
-                </div>
-              )}
-              
-              {searchResult.dhcpInfo && (
-                <div className="mt-1 text-xs opacity-75">
-                  IP: {searchResult.dhcpInfo.ipAddress} • MAC: {searchResult.dhcpInfo.macAddress}
-                </div>
-              )}
+        )}
+        
+        {}
+        {dhcpInfo && dhcpInfo.found && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+            <div className="font-medium text-green-800 mb-1">✓ Найден в DHCP:</div>
+            <div className="text-green-700">
+              IP: {dhcpInfo.ipAddress} • MAC: {dhcpInfo.macAddress}
+              {dhcpInfo.hostname && ` • Hostname: ${dhcpInfo.hostname}`}
             </div>
-          )}
-        </div>
+          </div>
+        )}
         
         {}
         <div>
@@ -31856,10 +32113,21 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           </button>
           <button
             type="submit"
-            disabled={saving || !form.serialInput.trim() || searching}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={saving || !searchQuery}
+            className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
+              isTakeToWorkMode 
+                ? "bg-green-600 hover:bg-green-700" 
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {saving ? "Установка..." : form.serverId ? "Установить" : "Создать и установить"}
+            {saving 
+              ? "Сохранение..." 
+              : isTakeToWorkMode 
+                ? "Взять в работу" 
+                : form.serverId 
+                  ? "Установить" 
+                  : "Создать и установить"
+            }
           </button>
         </div>
       </form>
@@ -53383,21 +53651,8 @@ FILE: MES-Kryptonit-Client-main/src/pages/beryll/DefectRecordModal.tsx
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-import React, { useState, useEffect } from "react";
-import { X, AlertTriangle, Server, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { X, AlertTriangle, Server, Loader2, Search, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { createDefectRecord, updateDefectRecord, BeryllDefectRecord, RepairPartType } from "src/api/beryllApi";
 
@@ -53426,13 +53681,191 @@ const PART_TYPES: Array<{ value: RepairPartType; label: string }> = [
   { value: "OTHER", label: "Другое" },
 ];
 
+
+
+
+interface ServerComboboxProps {
+  servers: Array<{ id: number; apkSerialNumber: string; hostname?: string }>;
+  value: { serverId: number | null; serverSerial: string };
+  onChange: (value: { serverId: number | null; serverSerial: string }) => void;
+  placeholder?: string;
+}
+
+const ServerCombobox: React.FC<ServerComboboxProps> = ({
+  servers,
+  value,
+  onChange,
+  placeholder = "Поиск по S/N, hostname..."
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(value.serverSerial || "");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  
+  const filteredServers = useMemo(() => {
+    if (!search.trim()) return servers.slice(0, 20);
+    const q = search.toLowerCase();
+    return servers.filter(s => 
+      s.apkSerialNumber?.toLowerCase().includes(q) ||
+      s.hostname?.toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [servers, search]);
+
+  
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  
+  useEffect(() => {
+    if (value.serverSerial && value.serverSerial !== search) {
+      setSearch(value.serverSerial);
+    }
+  }, [value.serverSerial]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setSearch(newValue);
+    setIsOpen(true);
+    
+    
+    const exactMatch = servers.find(s => 
+      s.apkSerialNumber?.toLowerCase() === newValue.toLowerCase()
+    );
+    
+    if (exactMatch) {
+      onChange({ serverId: exactMatch.id, serverSerial: exactMatch.apkSerialNumber });
+    } else {
+      
+      onChange({ serverId: null, serverSerial: newValue });
+    }
+  };
+
+  const handleSelect = (server: { id: number; apkSerialNumber: string; hostname?: string }) => {
+    setSearch(server.apkSerialNumber);
+    onChange({ serverId: server.id, serverSerial: server.apkSerialNumber });
+    setIsOpen(false);
+  };
+
+  const handleFocus = () => {
+    setIsOpen(true);
+  };
+
+  
+  const displayValue = search || "";
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <input
+          ref={inputRef}
+          type="text"
+          value={displayValue}
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          className="w-full pl-9 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+        >
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredServers.length === 0 ? (
+            <div className="p-3 text-sm text-gray-500">
+              {search.trim() ? (
+                <div>
+                  <p>Серверов не найдено</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Серийник "{search}" будет сохранён как есть
+                  </p>
+                </div>
+              ) : (
+                "Начните вводить серийный номер..."
+              )}
+            </div>
+          ) : (
+            <>
+              {}
+              {search.trim() && !filteredServers.some(s => 
+                s.apkSerialNumber?.toLowerCase() === search.toLowerCase()
+              ) && (
+                <div 
+                  className="px-3 py-2 text-sm bg-amber-50 border-b cursor-pointer hover:bg-amber-100"
+                  onClick={() => {
+                    onChange({ serverId: null, serverSerial: search });
+                    setIsOpen(false);
+                  }}
+                >
+                  <span className="text-amber-700">Использовать: </span>
+                  <span className="font-mono font-medium">{search}</span>
+                  <span className="text-xs text-amber-600 ml-2">(ручной ввод)</span>
+                </div>
+              )}
+              
+              {filteredServers.map(server => (
+                <div
+                  key={server.id}
+                  onClick={() => handleSelect(server)}
+                  className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${
+                    value.serverId === server.id ? 'bg-red-50' : ''
+                  }`}
+                >
+                  <div className="font-mono text-sm font-medium">
+                    {server.apkSerialNumber}
+                  </div>
+                  {server.hostname && (
+                    <div className="text-xs text-gray-500">
+                      {server.hostname}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {}
+      {value.serverSerial && (
+        <div className="mt-1 text-xs">
+          {value.serverId ? (
+            <span className="text-green-600">✓ Сервер найден в базе</span>
+          ) : (
+            <span className="text-amber-600">⚠ Ручной ввод (сервер не в базе)</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DefectRecordModal: React.FC<Props> = ({ 
   isOpen, onClose, onSuccess, servers, users, editRecord 
 }) => {
   const [loading, setLoading] = useState(false);
   
   
-  const [serverId, setServerId] = useState<number | "">("");
+  
+  const [serverValue, setServerValue] = useState<{ serverId: number | null; serverSerial: string }>({
+    serverId: null,
+    serverSerial: ""
+  });
   const [yadroTicketNumber, setYadroTicketNumber] = useState("");
   const [hasSPISI, setHasSPISI] = useState(false);
   const [clusterCode, setClusterCode] = useState("");
@@ -53464,7 +53897,12 @@ const DefectRecordModal: React.FC<Props> = ({
   
   useEffect(() => {
     if (editRecord) {
-      setServerId(editRecord.serverId);
+      
+      const server = servers.find(s => s.id === editRecord.serverId);
+      setServerValue({
+        serverId: editRecord.serverId,
+        serverSerial: server?.apkSerialNumber || editRecord.serverSerial || ""
+      });
       setYadroTicketNumber(editRecord.yadroTicketNumber || "");
       setHasSPISI(editRecord.hasSPISI || false);
       setClusterCode(editRecord.clusterCode || "");
@@ -53486,7 +53924,7 @@ const DefectRecordModal: React.FC<Props> = ({
       setReturnedFromYadroAt(editRecord.returnedFromYadroAt?.split("T")[0] || "");
     } else {
       
-      setServerId("");
+      setServerValue({ serverId: null, serverSerial: "" });
       setYadroTicketNumber("");
       setHasSPISI(false);
       setClusterCode("");
@@ -53507,11 +53945,12 @@ const DefectRecordModal: React.FC<Props> = ({
       setSentToYadroAt("");
       setReturnedFromYadroAt("");
     }
-  }, [editRecord, isOpen]);
+  }, [editRecord, isOpen, servers]);
 
   const handleSubmit = async () => {
-    if (!serverId) {
-      toast.error("Выберите сервер");
+    
+    if (!serverValue.serverId && !serverValue.serverSerial.trim()) {
+      toast.error("Укажите сервер (выберите из списка или введите серийный номер)");
       return;
     }
     if (!problemDescription.trim()) {
@@ -53521,8 +53960,10 @@ const DefectRecordModal: React.FC<Props> = ({
 
     setLoading(true);
     try {
-      const data = {
-        serverId: Number(serverId),
+      const data: any = {
+        
+        serverId: serverValue.serverId || undefined,
+        serverSerial: serverValue.serverSerial || undefined,
         yadroTicketNumber: yadroTicketNumber || null,
         hasSPISI,
         clusterCode: clusterCode || null,
@@ -53572,7 +54013,7 @@ const DefectRecordModal: React.FC<Props> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b bg-red-50">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <AlertTriangle className="text-red-500" size={20} />
-            {editRecord ? "Редактирование записи о браке" : "Новая запись о браке"}
+            {editRecord ? "Редактирование записи о браке" : "Добавить запись о браке"}
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-red-100 rounded-lg">
             <X size={20} />
@@ -53592,24 +54033,18 @@ const DefectRecordModal: React.FC<Props> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Сервер <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={serverId}
-                  onChange={(e) => setServerId(e.target.value ? Number(e.target.value) : "")}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="">-- Выберите сервер --</option>
-                  {servers.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.apkSerialNumber} {s.hostname ? `(${s.hostname})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <ServerCombobox
+                  servers={servers}
+                  value={serverValue}
+                  onChange={setServerValue}
+                  placeholder="Поиск по S/N, hostname..."
+                />
               </div>
               
               {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Номер заявки в Ядре
+                  Заявка Ядро
                 </label>
                 <input
                   type="text"
@@ -53624,21 +54059,7 @@ const DefectRecordModal: React.FC<Props> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Наличие СПиСИ
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={hasSPISI}
-                      onChange={(e) => setHasSPISI(e.target.checked)}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span>Да</span>
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Кластер
+                    Код кластера
                   </label>
                   <input
                     type="text"
@@ -53648,19 +54069,33 @@ const DefectRecordModal: React.FC<Props> = ({
                     className="w-full px-3 py-2 border rounded-lg"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Наличие СПиСИ
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2">
+                    <input
+                      type="checkbox"
+                      checked={hasSPISI}
+                      onChange={(e) => setHasSPISI(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span>Да</span>
+                  </label>
+                </div>
               </div>
               
               {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Заявленная проблема <span className="text-red-500">*</span>
+                  Описание проблемы <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={problemDescription}
                   onChange={(e) => setProblemDescription(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="Описание проблемы..."
+                  placeholder="ECC Error, не работает вентилятор..."
                 />
               </div>
               
@@ -53668,25 +54103,29 @@ const DefectRecordModal: React.FC<Props> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Дата обнаружения
+                    Тип детали
                   </label>
-                  <input
-                    type="date"
-                    value={detectedAt}
-                    onChange={(e) => setDetectedAt(e.target.value)}
+                  <select
+                    value={repairPartType}
+                    onChange={(e) => setRepairPartType(e.target.value as RepairPartType)}
                     className="w-full px-3 py-2 border rounded-lg"
-                  />
+                  >
+                    <option value="">— Выб —</option>
+                    {PART_TYPES.map(pt => (
+                      <option key={pt.value} value={pt.value}>{pt.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Диагностик
+                    Диагност
                   </label>
                   <select
                     value={diagnosticianId}
                     onChange={(e) => setDiagnosticianId(e.target.value ? Number(e.target.value) : "")}
                     className="w-full px-3 py-2 border rounded-lg"
                   >
-                    <option value="">-- Выберите --</option>
+                    <option value="">— Выб —</option>
                     {users.map(u => (
                       <option key={u.id} value={u.id}>
                         {u.surname} {u.name}
@@ -53695,7 +54134,7 @@ const DefectRecordModal: React.FC<Props> = ({
                   </select>
                 </div>
               </div>
-              
+
               {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -53713,23 +54152,6 @@ const DefectRecordModal: React.FC<Props> = ({
             {}
             <div className="space-y-4">
               <h3 className="font-medium text-gray-700 border-b pb-2">Детали ремонта</h3>
-              
-              {}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Тип детали
-                </label>
-                <select
-                  value={repairPartType}
-                  onChange={(e) => setRepairPartType(e.target.value as RepairPartType)}
-                  className="w-full px-3 py-2 border rounded-lg"
-                >
-                  <option value="">-- Не определён --</option>
-                  {PART_TYPES.map(pt => (
-                    <option key={pt.value} value={pt.value}>{pt.label}</option>
-                  ))}
-                </select>
-              </div>
               
               {}
               <div className="p-3 bg-red-50 rounded-lg">
@@ -53780,7 +54202,7 @@ const DefectRecordModal: React.FC<Props> = ({
               {}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Детали ремонта / Результат диагностики
+                  Результат диагностики
                 </label>
                 <textarea
                   value={diagnosisResult}
@@ -53829,7 +54251,7 @@ const DefectRecordModal: React.FC<Props> = ({
                   type="text"
                   value={substituteServerSerial}
                   onChange={(e) => setSubstituteServerSerial(e.target.value)}
-                  placeholder="Серийный номер"
+                  placeholder="Серийный номер подменного сервера"
                   className="w-full px-3 py-2 border rounded-lg"
                 />
               </div>
@@ -53841,7 +54263,7 @@ const DefectRecordModal: React.FC<Props> = ({
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <span className="text-xs text-gray-500">Отправлен</span>
+                    <span className="text-xs text-gray-500">Дата отправки</span>
                     <input
                       type="date"
                       value={sentToYadroAt}
@@ -53850,7 +54272,7 @@ const DefectRecordModal: React.FC<Props> = ({
                     />
                   </div>
                   <div>
-                    <span className="text-xs text-gray-500">Возвращён</span>
+                    <span className="text-xs text-gray-500">Дата возврата</span>
                     <input
                       type="date"
                       value={returnedFromYadroAt}
@@ -77020,13 +77442,158 @@ const ExcelJS = require("exceljs");
 
 
 function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return "—";
+  if (!bytes || bytes === 0) return null;
   
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB", "PB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+
+
+
+function formatRamCapacity(capacity) {
+  if (!capacity) return null;
+  
+  const numCapacity = parseInt(capacity);
+  if (!numCapacity || isNaN(numCapacity)) return null;
+  
+  
+  if (numCapacity < 1024) {
+    return `${numCapacity} GB`;
+  }
+  
+  
+  return formatBytes(numCapacity);
+}
+
+
+
+
+function formatStorageCapacity(capacity) {
+  if (!capacity) return null;
+  
+  const numCapacity = parseInt(capacity);
+  if (!numCapacity || isNaN(numCapacity)) return null;
+  
+  
+  if (numCapacity < 10000) {
+    
+    if (numCapacity >= 1000) {
+      return `${(numCapacity / 1000).toFixed(2)} TB`;
+    }
+    return `${numCapacity} GB`;
+  }
+  
+  
+  return formatBytes(numCapacity);
+}
+
+
+
+
+
+function extractRamSpecsFromName(name, model) {
+  const source = `${name || ''} ${model || ''}`.toUpperCase();
+  const specs = {};
+  
+  
+  const knownModels = {
+    'M393A8G40AB2': { capacity: '64 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A8G40BB4': { capacity: '64 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A8G40MB2': { capacity: '64 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A4K40CB2': { capacity: '32 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A4K40DB2': { capacity: '32 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A4K40DB3': { capacity: '32 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A2K40CB2': { capacity: '16 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A2K40DB2': { capacity: '16 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A2K40DB3': { capacity: '16 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A1K43DB2': { capacity: '8 GB', type: 'DDR4', speed: '2933 MT/s' },
+    
+    'M321R8GA0BB0': { capacity: '64 GB', type: 'DDR5', speed: '4800 MT/s' },
+    'M321R4GA0BB0': { capacity: '32 GB', type: 'DDR5', speed: '4800 MT/s' },
+  };
+  
+  
+  for (const [modelPrefix, modelSpecs] of Object.entries(knownModels)) {
+    if (source.includes(modelPrefix)) {
+      return modelSpecs;
+    }
+  }
+  
+  
+  const capacityMatch = source.match(/(\d+)\s*GB/i);
+  if (capacityMatch) {
+    specs.capacity = `${capacityMatch[1]} GB`;
+  }
+  
+  
+  if (source.includes('DDR5')) {
+    specs.type = 'DDR5';
+  } else if (source.includes('DDR4')) {
+    specs.type = 'DDR4';
+  } else if (source.includes('DDR3')) {
+    specs.type = 'DDR3';
+  }
+  
+  
+  const speedMatch = source.match(/(\d{4})\s*(MT\/S|MHZ)?/i);
+  if (speedMatch) {
+    specs.speed = `${speedMatch[1]} MT/s`;
+  }
+  
+  return Object.keys(specs).length > 0 ? specs : null;
+}
+
+
+
+
+function extractStorageSpecsFromName(name, model, componentType) {
+  const source = `${name || ''} ${model || ''}`.toUpperCase();
+  const specs = {};
+  
+  
+  const knownHddModels = {
+    'ST16000NM004J': { capacity: '16 TB', interface: 'SAS' },
+    'ST18000NM000J': { capacity: '18 TB', interface: 'SAS' },
+    'ST14000NM001G': { capacity: '14 TB', interface: 'SAS' },
+    'ST12000NM001G': { capacity: '12 TB', interface: 'SAS' },
+    'ST10000NM001G': { capacity: '10 TB', interface: 'SAS' },
+    'ST8000NM000A': { capacity: '8 TB', interface: 'SAS' },
+  };
+  
+  
+  for (const [modelPrefix, modelSpecs] of Object.entries(knownHddModels)) {
+    if (source.includes(modelPrefix)) {
+      return modelSpecs;
+    }
+  }
+  
+  
+  const tbMatch = source.match(/(\d+(?:\.\d+)?)\s*TB/i);
+  if (tbMatch) {
+    specs.capacity = `${tbMatch[1]} TB`;
+  } else {
+    const gbMatch = source.match(/(\d+)\s*GB/i);
+    if (gbMatch) {
+      specs.capacity = `${gbMatch[1]} GB`;
+    }
+  }
+  
+  
+  if (source.includes('SAS')) {
+    specs.interface = 'SAS';
+  } else if (source.includes('NVME') || source.includes('NVM')) {
+    specs.interface = 'NVMe';
+  } else if (source.includes('SATA')) {
+    specs.interface = 'SATA';
+  } else if (componentType === 'HDD') {
+    specs.interface = 'SAS'; 
+  }
+  
+  return Object.keys(specs).length > 0 ? specs : null;
 }
 
 class PassportService {
@@ -77090,8 +77657,6 @@ class PassportService {
     };
     
     
-    
-    
     sheet.mergeCells("A1:B1");
     sheet.getCell("A1").value = "АО «НПК Криптонит»";
     sheet.getCell("A1").font = titleFont;
@@ -77117,8 +77682,6 @@ class PassportService {
     
     sheet.getCell("C3").value = server.serialNumber || "___";
     sheet.getCell("D3").value = server.apkSerialNumber || "___";
-    
-    
     
     
     let currentRow = 5;
@@ -77222,27 +77785,8 @@ class PassportService {
         sheet.getCell(`E${currentRow}`).alignment = centerAlign;
         
         
-        let specs = "";
-        if (comp.componentType === "CPU") {
-          const cores = comp.metadata?.cores;
-          const threads = comp.metadata?.threads;
-          const speed = comp.speed;
-          if (cores) specs += `${cores} ядер`;
-          if (threads) specs += `/${threads} потоков`;
-          if (speed) specs += ` @ ${speed} MHz`;
-        } else if (comp.componentType === "RAM") {
-          specs = formatBytes(parseInt(comp.capacity) || 0);
-          if (comp.metadata?.memoryType) specs += ` ${comp.metadata.memoryType}`;
-          if (comp.speed) specs += ` ${comp.speed} MT/s`;
-        } else if (["SSD", "HDD", "NVME"].includes(comp.componentType)) {
-          specs = formatBytes(parseInt(comp.capacity) || 0);
-          if (comp.metadata?.interface) specs += ` ${comp.metadata.interface}`;
-        } else if (comp.componentType === "NIC") {
-          if (comp.metadata?.macAddress) specs = comp.metadata.macAddress;
-          if (comp.metadata?.linkSpeed) specs += ` ${comp.metadata.linkSpeed}`;
-        } else if (comp.firmwareVersion) {
-          specs = `FW: ${comp.firmwareVersion}`;
-        }
+        
+        let specs = this.formatComponentSpecs(comp);
         
         sheet.getCell(`F${currentRow}`).value = specs || "—";
         sheet.getCell(`F${currentRow}`).font = normalFont;
@@ -77268,18 +77812,18 @@ class PassportService {
       const totalStorage = grouped.storage.reduce((sum, s) => sum + (parseInt(s.capacity) || 0), 0);
       const totalCores = grouped.CPU.reduce((sum, c) => sum + (c.metadata?.cores || 0), 0);
       
+      
+      const ramFormatted = formatRamCapacity(totalRAM) || formatBytes(totalRAM) || "—";
+      const storageFormatted = formatStorageCapacity(totalStorage) || formatBytes(totalStorage) || "—";
+      
       sheet.mergeCells(`E${currentRow}:F${currentRow}`);
-      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${formatBytes(totalRAM)} | Storage: ${formatBytes(totalStorage)}`;
+      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${ramFormatted} | Storage: ${storageFormatted}`;
       sheet.getCell(`E${currentRow}`).font = titleFont;
       sheet.getCell(`E${currentRow}`).alignment = centerAlign;
       sheet.getCell(`E${currentRow}`).border = thinBorder;
       
       currentRow += 2;
     }
-    
-    
-    
-    
     
     
     sheet.mergeCells(`A${currentRow}:F${currentRow}`);
@@ -77385,8 +77929,6 @@ class PassportService {
     }
     
     
-    
-    
     if (server.burnInStartAt) {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время установки на технологический прогон:";
@@ -77415,12 +77957,99 @@ class PassportService {
       fileName
     };
   }
+
+  
+
+
+
+  formatComponentSpecs(comp) {
+    if (comp.componentType === "CPU") {
+      const parts = [];
+      const cores = comp.metadata?.cores;
+      const threads = comp.metadata?.threads;
+      const speed = comp.speed;
+      
+      if (cores) {
+        parts.push(`${cores}/${threads || cores} потоков`);
+      }
+      if (speed) {
+        parts.push(`@ ${speed} MHz`);
+      }
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "RAM") {
+      
+      let capacityStr = formatRamCapacity(comp.capacity);
+      let typeStr = comp.metadata?.memoryType;
+      let speedStr = comp.speed ? String(comp.speed) : null;
+      
+      
+      if (!capacityStr || !typeStr || !speedStr) {
+        const extracted = extractRamSpecsFromName(comp.name, comp.model);
+        if (extracted) {
+          if (!capacityStr && extracted.capacity) capacityStr = extracted.capacity;
+          if (!typeStr && extracted.type) typeStr = extracted.type;
+          if (!speedStr && extracted.speed) speedStr = extracted.speed;
+        }
+      }
+      
+      
+      const parts = [];
+      if (capacityStr) parts.push(capacityStr);
+      if (typeStr) parts.push(typeStr);
+      if (speedStr) {
+        
+        const speedString = String(speedStr);
+        if (!speedString.includes('MT/s') && !speedString.includes('MHz')) {
+          parts.push(`${speedString} MT/s`);
+        } else {
+          parts.push(speedString);
+        }
+      }
+      
+      return parts.join(" ") || null;
+      
+    } else if (["SSD", "HDD", "NVME"].includes(comp.componentType)) {
+      let capacityStr = formatStorageCapacity(comp.capacity);
+      let interfaceStr = comp.metadata?.interface;
+      
+      
+      if (!capacityStr || !interfaceStr) {
+        const extracted = extractStorageSpecsFromName(comp.name, comp.model, comp.componentType);
+        if (extracted) {
+          if (!capacityStr && extracted.capacity) capacityStr = extracted.capacity;
+          if (!interfaceStr && extracted.interface) interfaceStr = extracted.interface;
+        }
+      }
+      
+      const parts = [];
+      if (capacityStr) parts.push(capacityStr);
+      if (interfaceStr) parts.push(interfaceStr);
+      
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "NIC") {
+      const parts = [];
+      if (comp.metadata?.macAddress) parts.push(comp.metadata.macAddress);
+      if (comp.metadata?.linkSpeed) parts.push(comp.metadata.linkSpeed);
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "PSU") {
+      if (comp.capacity) return `${comp.capacity}W`;
+      return null;
+      
+    } else {
+      if (comp.firmwareVersion) return `FW: ${comp.firmwareVersion}`;
+      return null;
+    }
+  }
 }
 
 module.exports = new PassportService();
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/services/RackService.js
 ================================================================================
+
 
 
 
@@ -77446,6 +78075,7 @@ const {
   BeryllExtendedHistory,
   RACK_STATUSES,
   BeryllServer,
+  BeryllBatch,
   User
 } = require("../../../models/index");
 
@@ -78225,6 +78855,58 @@ class RackService {
   }
   
   
+
+
+
+  async findServerInDhcp(serialNumber) {
+    const ssh = new NodeSSH();
+    
+    try {
+      await ssh.connect({
+        host: DHCP_CONFIG.host,
+        username: DHCP_CONFIG.username,
+        password: DHCP_CONFIG.password,
+        readyTimeout: 10000
+      });
+      
+      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
+      ssh.dispose();
+      
+      if (result.stderr && !result.stdout) {
+        throw new Error(`SSH Error: ${result.stderr}`);
+      }
+      
+      const leases = parseDhcpLeases(result.stdout);
+      
+      
+      const matchingLease = leases.find(lease => {
+        const h = lease.hostname?.toLowerCase() || "";
+        const s = serialNumber.toLowerCase();
+        return h.includes(s) || s.includes(h);
+      });
+      
+      if (matchingLease) {
+        return {
+          found: true,
+          ipAddress: matchingLease.ipAddress,
+          macAddress: matchingLease.macAddress,
+          hostname: matchingLease.hostname,
+          leaseActive: matchingLease.leaseActive,
+          leaseStart: matchingLease.leaseStart,
+          leaseEnd: matchingLease.leaseEnd
+        };
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      ssh.dispose();
+      console.error("[RackService] Find server in DHCP error:", error);
+      return { found: false, error: error.message };
+    }
+  }
+  
+  
   
   
   
@@ -78335,7 +79017,6 @@ class RackService {
     );
     
     
-    const { BeryllBatch } = require("../../../models/index");
     return BeryllServer.findByPk(server.id, {
       include: [
         { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] },
@@ -78347,8 +79028,16 @@ class RackService {
   
 
 
+
+
+
+
+
+
+
+
   async createAndPlaceServer(data, userId) {
-    const { rackId, unitNumber, ...serverData } = data;
+    const { rackId, unitNumber, unitData, ...serverData } = data;
     
     
     const server = await this.createServerManually(serverData, userId);
@@ -78356,61 +79045,38 @@ class RackService {
     
     if (rackId && unitNumber) {
       await this.placeServerInRack(rackId, unitNumber, server.id, userId);
+      
+      
+      if (unitData && Object.keys(unitData).length > 0) {
+        const unit = await BeryllRackUnit.findOne({
+          where: { rackId, unitNumber }
+        });
+        
+        if (unit) {
+          const updateData = {};
+          
+          if (unitData.hostname) updateData.hostname = unitData.hostname;
+          if (unitData.mgmtMacAddress) updateData.mgmtMacAddress = unitData.mgmtMacAddress;
+          if (unitData.mgmtIpAddress) updateData.mgmtIpAddress = unitData.mgmtIpAddress;
+          if (unitData.dataMacAddress) updateData.dataMacAddress = unitData.dataMacAddress;
+          if (unitData.dataIpAddress) updateData.dataIpAddress = unitData.dataIpAddress;
+          if (unitData.accessLogin) updateData.accessLogin = unitData.accessLogin;
+          if (unitData.accessPassword) updateData.accessPassword = unitData.accessPassword;
+          if (unitData.notes) updateData.notes = unitData.notes;
+          
+          if (Object.keys(updateData).length > 0) {
+            await unit.update(updateData);
+            
+            await this.logHistory("RACK", rackId, "UNIT_DATA_UPDATED", userId,
+              `Данные юнита ${unitNumber} обновлены при создании сервера`,
+              { serverId: server.id, unitData: updateData }
+            );
+          }
+        }
+      }
     }
     
     return server;
-  }
-  
-  
-
-
-
-  async findServerInDhcp(serialNumber) {
-    const ssh = new NodeSSH();
-    
-    try {
-      await ssh.connect({
-        host: DHCP_CONFIG.host,
-        username: DHCP_CONFIG.username,
-        password: DHCP_CONFIG.password,
-        readyTimeout: 10000
-      });
-      
-      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
-      ssh.dispose();
-      
-      if (result.stderr && !result.stdout) {
-        throw new Error(`SSH Error: ${result.stderr}`);
-      }
-      
-      const leases = parseDhcpLeases(result.stdout);
-      
-      
-      const matchingLease = leases.find(lease => {
-        const h = lease.hostname?.toLowerCase() || "";
-        const s = serialNumber.toLowerCase();
-        return h.includes(s) || s.includes(h);
-      });
-      
-      if (matchingLease) {
-        return {
-          found: true,
-          ipAddress: matchingLease.ipAddress,
-          macAddress: matchingLease.macAddress,
-          hostname: matchingLease.hostname,
-          leaseActive: matchingLease.leaseActive,
-          leaseStart: matchingLease.leaseStart,
-          leaseEnd: matchingLease.leaseEnd
-        };
-      }
-      
-      return { found: false };
-      
-    } catch (error) {
-      ssh.dispose();
-      console.error("[RackService] Find server in DHCP error:", error);
-      return { found: false, error: error.message };
-    }
   }
 }
 
@@ -90889,6 +91555,8 @@ FILE: MES-Kryptonit-Server-master/models/definitions/BeryllExtended.js
 
 
 
+
+
 const sequelize = require("../../db");
 const { DataTypes } = require("sequelize");
 
@@ -90951,6 +91619,15 @@ const DEFECT_RECORD_STATUSES = {
   RESOLVED: "RESOLVED",
   REPEATED: "REPEATED",
   CLOSED: "CLOSED"
+};
+
+
+const HISTORY_ENTITY_TYPES = {
+  RACK: "RACK",
+  CLUSTER: "CLUSTER",
+  SHIPMENT: "SHIPMENT",
+  DEFECT_RECORD: "DEFECT_RECORD",
+  SERVER: "SERVER"
 };
 
 
@@ -91092,23 +91769,29 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
   },
   
   
+  
+  
   dhcpIpAddress: {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  
   dhcpMacAddress: {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  
   dhcpHostname: {
     type: DataTypes.STRING(100),
     allowNull: true
   },
+  
   dhcpLeaseActive: {
     type: DataTypes.BOOLEAN,
     allowNull: true,
     defaultValue: false
   },
+  
   dhcpLastSync: {
     type: DataTypes.DATE,
     allowNull: true
@@ -91124,8 +91807,10 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
     { unique: true, fields: ["rackId", "unitNumber"] },
     { fields: ["hostname"] },
     { fields: ["placedById"] },
+    { fields: ["installedById"] },
     { fields: ["dhcpIpAddress"] },
-    { fields: ["dhcpMacAddress"] }
+    { fields: ["dhcpMacAddress"] },
+    { fields: ["dhcpLastSync"] }
   ]
 });
 
@@ -91549,7 +92234,8 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
     autoIncrement: true
   },
   entityType: {
-    type: DataTypes.ENUM("RACK", "CLUSTER", "SHIPMENT", "DEFECT_RECORD"),
+    
+    type: DataTypes.ENUM(...Object.values(HISTORY_ENTITY_TYPES)),
     allowNull: false
   },
   entityId: {
@@ -91581,7 +92267,9 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
   timestamps: true,
   indexes: [
     { fields: ["entityType", "entityId"] },
+    { fields: ["entityType"] },
     { fields: ["userId"] },
+    { fields: ["action"] },
     { fields: ["createdAt"] }
   ]
 });
@@ -91597,7 +92285,7 @@ const setupExtendedAssociations = (models) => {
   BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
   
   BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
   }
   
@@ -91621,7 +92309,7 @@ const setupExtendedAssociations = (models) => {
   BeryllClusterServer.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllClusterServer.belongsTo(User, { as: "addedBy", foreignKey: "addedById" });
   
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
   }
   
@@ -91632,7 +92320,7 @@ const setupExtendedAssociations = (models) => {
   BeryllDefectRecord.belongsTo(User, { as: "resolvedBy", foreignKey: "resolvedById" });
   BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", foreignKey: "defectRecordId", onDelete: "CASCADE" });
   
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
   }
   
@@ -91665,6 +92353,7 @@ module.exports = {
   SERVER_ROLES,
   REPAIR_PART_TYPES,
   DEFECT_RECORD_STATUSES,
+  HISTORY_ENTITY_TYPES,
   
   
   setupAssociations: setupExtendedAssociations
@@ -93403,21 +94092,6 @@ FILE: MES-Kryptonit-Server-master/models/index.js
 ================================================================================
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const { User, PC, Session, AuditLog, Role, Ability, RoleAbility } = require("./definitions/General");
 const { Section, Team } = require("./definitions/Structure");
 const { 
@@ -93668,6 +94342,20 @@ BeryllDefectRecord.belongsTo(ComponentInventory, {
 BeryllDefectRecord.belongsTo(ComponentInventory, { 
     foreignKey: "replacementInventoryId", 
     as: "replacementInventoryItem" 
+});
+
+
+
+
+
+
+BeryllDefectRecord.belongsTo(BeryllServer, { 
+    foreignKey: "substituteServerId", 
+    as: "substituteServer" 
+});
+BeryllServer.hasMany(BeryllDefectRecord, { 
+    foreignKey: "substituteServerId", 
+    as: "substituteForDefects" 
 });
 
 
