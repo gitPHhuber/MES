@@ -3,8 +3,10 @@
  * 
  * Модели: Стойки, Кластеры, Отгрузки, Учёт брака
  * 
- * ОБНОВЛЕНО: Добавлены поля placedById, placedAt, dhcp* в BeryllRackUnit
- *            Добавлена ассоциация placedBy
+ * ОБНОВЛЕНО: 
+ * - Добавлены поля placedById, placedAt, dhcp* в BeryllRackUnit
+ * - Добавлена ассоциация placedBy
+ * - Добавлен SERVER в entityType ENUM для истории
  * 
  * Положить в: models/definitions/BeryllExtended.js
  */
@@ -73,6 +75,15 @@ const DEFECT_RECORD_STATUSES = {
   CLOSED: "CLOSED"
 };
 
+// Типы сущностей для истории
+const HISTORY_ENTITY_TYPES = {
+  RACK: "RACK",
+  CLUSTER: "CLUSTER",
+  SHIPMENT: "SHIPMENT",
+  DEFECT_RECORD: "DEFECT_RECORD",
+  SERVER: "SERVER"
+};
+
 // ============================================
 // Модель стойки (Rack)
 // ============================================
@@ -129,7 +140,7 @@ const BeryllRack = sequelize.define("BeryllRack", {
 });
 
 // ============================================
-// Модель юнита стойки (Rack Unit) - ОБНОВЛЕНО
+// Модель юнита стойки (Rack Unit)
 // ============================================
 const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
   id: {
@@ -198,7 +209,7 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
     allowNull: true
   },
   
-  // ========== НОВЫЕ ПОЛЯ ==========
+  // ========== Поля размещения (без взятия в работу) ==========
   
   // Кто поставил сервер в стойку (БЕЗ взятия в работу)
   placedById: {
@@ -211,24 +222,30 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
     allowNull: true
   },
   
-  // DHCP интеграция - автоматически определённые данные
+  // ========== DHCP интеграция ==========
+  
+  // IP адрес из DHCP
   dhcpIpAddress: {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  // MAC адрес из DHCP
   dhcpMacAddress: {
     type: DataTypes.STRING(50),
     allowNull: true
   },
+  // Hostname из DHCP
   dhcpHostname: {
     type: DataTypes.STRING(100),
     allowNull: true
   },
+  // Активна ли аренда DHCP
   dhcpLeaseActive: {
     type: DataTypes.BOOLEAN,
     allowNull: true,
     defaultValue: false
   },
+  // Последняя синхронизация с DHCP
   dhcpLastSync: {
     type: DataTypes.DATE,
     allowNull: true
@@ -244,8 +261,10 @@ const BeryllRackUnit = sequelize.define("BeryllRackUnit", {
     { unique: true, fields: ["rackId", "unitNumber"] },
     { fields: ["hostname"] },
     { fields: ["placedById"] },
+    { fields: ["installedById"] },
     { fields: ["dhcpIpAddress"] },
-    { fields: ["dhcpMacAddress"] }
+    { fields: ["dhcpMacAddress"] },
+    { fields: ["dhcpLastSync"] }
   ]
 });
 
@@ -660,7 +679,7 @@ const BeryllDefectRecordFile = sequelize.define("BeryllDefectRecordFile", {
 });
 
 // ============================================
-// Модель расширенной истории
+// Модель расширенной истории - ИСПРАВЛЕНО
 // ============================================
 const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
   id: {
@@ -669,7 +688,8 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
     autoIncrement: true
   },
   entityType: {
-    type: DataTypes.ENUM("RACK", "CLUSTER", "SHIPMENT", "DEFECT_RECORD"),
+    // ИСПРАВЛЕНО: Добавлен SERVER для логирования создания серверов
+    type: DataTypes.ENUM(...Object.values(HISTORY_ENTITY_TYPES)),
     allowNull: false
   },
   entityId: {
@@ -701,13 +721,15 @@ const BeryllExtendedHistory = sequelize.define("BeryllExtendedHistory", {
   timestamps: true,
   indexes: [
     { fields: ["entityType", "entityId"] },
+    { fields: ["entityType"] },
     { fields: ["userId"] },
+    { fields: ["action"] },
     { fields: ["createdAt"] }
   ]
 });
 
 // ============================================
-// Настройка связей - ОБНОВЛЕНО
+// Настройка связей
 // ============================================
 const setupExtendedAssociations = (models) => {
   const { User, BeryllServer } = models;
@@ -717,14 +739,14 @@ const setupExtendedAssociations = (models) => {
   BeryllRackUnit.belongsTo(BeryllRack, { as: "rack", foreignKey: "rackId" });
   
   BeryllRackUnit.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllRackUnit, { as: "rackUnits", foreignKey: "serverId" });
   }
   
   // Кто установил (взял в работу)
   BeryllRackUnit.belongsTo(User, { as: "installedBy", foreignKey: "installedById" });
   
-  // НОВОЕ: Кто разместил (без взятия в работу)
+  // Кто разместил (без взятия в работу)
   BeryllRackUnit.belongsTo(User, { as: "placedBy", foreignKey: "placedById" });
   
   // --- Отгрузки ---
@@ -741,7 +763,7 @@ const setupExtendedAssociations = (models) => {
   BeryllClusterServer.belongsTo(BeryllServer, { as: "server", foreignKey: "serverId" });
   BeryllClusterServer.belongsTo(User, { as: "addedBy", foreignKey: "addedById" });
   
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllClusterServer, { as: "clusterMemberships", foreignKey: "serverId" });
   }
   
@@ -752,7 +774,7 @@ const setupExtendedAssociations = (models) => {
   BeryllDefectRecord.belongsTo(User, { as: "resolvedBy", foreignKey: "resolvedById" });
   BeryllDefectRecord.hasMany(BeryllDefectRecordFile, { as: "files", foreignKey: "defectRecordId", onDelete: "CASCADE" });
   
-  if (BeryllServer.hasMany) {
+  if (BeryllServer && BeryllServer.hasMany) {
     BeryllServer.hasMany(BeryllDefectRecord, { as: "defectRecords", foreignKey: "serverId" });
   }
   
@@ -785,6 +807,7 @@ module.exports = {
   SERVER_ROLES,
   REPAIR_PART_TYPES,
   DEFECT_RECORD_STATUSES,
+  HISTORY_ENTITY_TYPES,
   
   // Функция настройки связей (импортируется как setupExtendedAssociations в index.js)
   setupAssociations: setupExtendedAssociations

@@ -27,13 +27,13 @@ const {
 const protect = [authMiddleware, syncUserMiddleware];
 
 // ============================================
-// СЕРВЕРЫ - РУЧНОЕ СОЗДАНИЕ (НОВЫЕ)
+// СЕРВЕРЫ - РУЧНОЕ СОЗДАНИЕ
 // ============================================
 
 // Создать сервер вручную (без DHCP, но с опциональным поиском)
 router.post("/servers/create", ...protect, checkAbility("beryll.work"), RackController.createServer);
 
-// Создать сервер и сразу разместить в стойку
+// Создать сервер и сразу разместить в стойку (с поддержкой unitData)
 router.post("/servers/create-and-place", ...protect, checkAbility("beryll.work"), RackController.createAndPlaceServer);
 
 // Поиск сервера в DHCP по серийнику/hostname
@@ -51,7 +51,7 @@ router.delete("/racks/:id", ...protect, checkAbility("beryll.manage"), RackContr
 router.get("/racks/:id/history", ...protect, checkAbility("beryll.view"), RackController.getRackHistory);
 
 // ============================================
-// СТОЙКИ - РАСШИРЕННЫЕ ОПЕРАЦИИ (НОВЫЕ)
+// СТОЙКИ - РАСШИРЕННЫЕ ОПЕРАЦИИ
 // ============================================
 
 // Получить сводку по стойке (статистика по статусам, кто разместил и т.д.)
@@ -70,7 +70,7 @@ router.put("/rack-units/:unitId", ...protect, checkAbility("beryll.work"), RackC
 router.post("/rack-units/move", ...protect, checkAbility("beryll.work"), RackController.moveServer);
 
 // ============================================
-// ЮНИТЫ - РАСШИРЕННЫЕ ОПЕРАЦИИ (НОВЫЕ)
+// ЮНИТЫ - РАСШИРЕННЫЕ ОПЕРАЦИИ
 // ============================================
 
 // Получить юниты по статусу сервера (IN_WORK, DEFECT, DONE и т.д.)
@@ -80,7 +80,7 @@ router.get("/racks/:rackId/units-by-status", ...protect, checkAbility("beryll.vi
 // СЕРВЕРЫ В СТОЙКАХ
 // ============================================
 
-// НОВЫЙ: Разместить сервер в стойку БЕЗ взятия в работу
+// Разместить сервер в стойку БЕЗ взятия в работу
 router.post("/racks/:rackId/units/:unitNumber/place", ...protect, checkAbility("beryll.work"), RackController.placeServer);
 
 // Установить сервер и взять в работу
@@ -93,7 +93,7 @@ router.post("/racks/:rackId/units/:unitNumber/remove", ...protect, checkAbility(
 router.get("/servers/:serverId/rack-location", ...protect, checkAbility("beryll.view"), RackController.findServerInRacks);
 
 // ============================================
-// DHCP ИНТЕГРАЦИЯ (НОВЫЕ)
+// DHCP ИНТЕГРАЦИЯ
 // ============================================
 
 // Найти IP по MAC адресу в DHCP
