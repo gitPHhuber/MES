@@ -1,15 +1,3 @@
-/**
- * RacksTab.tsx
- * 
- * Вкладка "Стойки" для APK Beryll
- * Отображает физическое размещение серверов в стойках
- * 
- * ОБНОВЛЕНО: Модалка установки с автопоиском - сначала ищет существующий сервер,
- * если не найден - создаёт новый
- * 
- * Положить в: src/pages/Beryll/tabs/RacksTab.tsx
- */
-
 import React, { useState, useEffect } from "react";
 import { 
   Server, Plus, Search, MapPin, Wifi, 
@@ -95,18 +83,40 @@ const RacksTab: React.FC = () => {
   }, [showInstallModal]);
   
   // Рендер юнита стойки
+  // Определение статуса юнита
+  const getUnitStatus = (unit: BeryllRackUnit) => {
+    if (!unit.serverId) return "empty";
+    if (unit.installedAt) return "in_work"; // Взят в работу
+    if (unit.placedAt) return "placed"; // Только размещён
+    return "placed"; // fallback
+  };
+  
   const renderUnit = (unit: BeryllRackUnit) => {
-    const isEmpty = !unit.serverId;
+    const status = getUnitStatus(unit);
+    const isEmpty = status === "empty";
+    const isInWork = status === "in_work";
+    const isPlaced = status === "placed";
+    
+    // Цвета в зависимости от статуса
+    const borderClass = isEmpty 
+      ? "border-dashed border-gray-300" 
+      : isInWork 
+        ? "border-solid border-green-500 border-l-4" // В работе - зелёная граница слева
+        : "border-solid border-orange-400 border-l-4"; // Размещён - оранжевая граница слева
+    
+    const bgClass = isEmpty 
+      ? "bg-gray-50" 
+      : isInWork 
+        ? "bg-green-50" 
+        : "bg-orange-50";
     
     return (
       <div
         key={unit.id}
         className={`
           p-2 border rounded cursor-pointer transition-all
-          ${isEmpty 
-            ? "border-dashed border-gray-300 bg-gray-50 hover:border-blue-400" 
-            : "border-solid border-gray-400 bg-white hover:border-blue-500 hover:shadow"
-          }
+          ${borderClass} ${bgClass}
+          hover:shadow hover:border-blue-500
         `}
         onClick={() => {
           setSelectedUnit(unit);
@@ -116,9 +126,36 @@ const RacksTab: React.FC = () => {
         }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-mono text-gray-500">U{unit.unitNumber}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-mono text-gray-500">U{unit.unitNumber}</span>
+            {/* Бейдж статуса */}
+            {isInWork && (
+              <span className="px-1 py-0.5 text-[10px] bg-green-500 text-white rounded" title="В работе">
+                В работе
+              </span>
+            )}
+            {isPlaced && (
+              <span className="px-1 py-0.5 text-[10px] bg-orange-500 text-white rounded" title="Размещён, не взят в работу">
+                Размещён
+              </span>
+            )}
+          </div>
           {!isEmpty && (
             <div className="flex gap-1">
+              {/* Кнопка "Взять в работу" для размещённых */}
+              {isPlaced && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedUnit(unit);
+                    setShowInstallModal(true);
+                  }}
+                  className="p-1 hover:bg-green-100 rounded text-green-600"
+                  title="Взять в работу"
+                >
+                  <CheckCircle size={12} />
+                </button>
+              )}
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -152,6 +189,17 @@ const RacksTab: React.FC = () => {
             {unit.mgmtIpAddress && (
               <div className="text-xs text-blue-500 truncate">{unit.mgmtIpAddress}</div>
             )}
+            {/* Показываем кто разместил/взял в работу */}
+            {isPlaced && unit.placedBy && (
+              <div className="text-[10px] text-orange-600 truncate mt-0.5">
+                Разместил: {unit.placedBy.surname || unit.placedBy.login}
+              </div>
+            )}
+            {isInWork && unit.installedBy && (
+              <div className="text-[10px] text-green-600 truncate mt-0.5">
+                В работе: {unit.installedBy.surname || unit.installedBy.login}
+              </div>
+            )}
           </div>
         )}
         
@@ -171,9 +219,35 @@ const RacksTab: React.FC = () => {
     // Сортируем юниты по номеру (сверху вниз, т.е. от большего к меньшему)
     const sortedUnits = [...rack.units].sort((a, b) => b.unitNumber - a.unitNumber);
     
+    // Статистика по статусам
+    const stats = {
+      empty: sortedUnits.filter(u => !u.serverId).length,
+      placed: sortedUnits.filter(u => u.serverId && !u.installedAt).length,
+      inWork: sortedUnits.filter(u => u.serverId && u.installedAt).length
+    };
+    
     return (
-      <div className="grid grid-cols-1 gap-1 max-h-[600px] overflow-y-auto">
-        {sortedUnits.map(unit => renderUnit(unit))}
+      <div>
+        {/* Легенда */}
+        <div className="flex items-center gap-4 mb-3 p-2 bg-gray-100 rounded text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border-l-4 border-green-500 bg-green-50 rounded"></div>
+            <span>В работе ({stats.inWork})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border-l-4 border-orange-400 bg-orange-50 rounded"></div>
+            <span>Размещён ({stats.placed})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 border border-dashed border-gray-300 bg-gray-50 rounded"></div>
+            <span>Пусто ({stats.empty})</span>
+          </div>
+        </div>
+        
+        {/* Юниты */}
+        <div className="grid grid-cols-1 gap-1 max-h-[600px] overflow-y-auto">
+          {sortedUnits.map(unit => renderUnit(unit))}
+        </div>
       </div>
     );
   };
@@ -666,10 +740,6 @@ const EditRackModal: React.FC<EditRackModalProps> = ({ isOpen, rack, onClose, on
   );
 };
 
-// ============================================
-// МОДАЛЬНОЕ ОКНО УСТАНОВКИ СЕРВЕРА
-// Логика: сначала ищем существующий, если нет - создаём новый
-// ============================================
 
 interface InstallServerModalProps {
   isOpen: boolean;
@@ -821,22 +891,40 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
   // Сброс формы при открытии
   useEffect(() => {
     if (isOpen) {
-      setForm({
-        serverId: 0,
-        apkSerialNumber: "",
-        hostname: "",
-        mgmtMacAddress: "",
-        mgmtIpAddress: "",
-        dataMacAddress: "",
-        dataIpAddress: "",
-        accessLogin: "admin",
-        accessPassword: "V36man",
-        notes: ""
-      });
-      setSearchQuery("");
+      // Если юнит уже содержит сервер (режим "взять в работу")
+      if (unit.serverId && unit.server) {
+        setForm({
+          serverId: unit.serverId,
+          apkSerialNumber: unit.server.apkSerialNumber || "",
+          hostname: unit.hostname || unit.server.hostname || "",
+          mgmtMacAddress: unit.mgmtMacAddress || unit.server.macAddress || "",
+          mgmtIpAddress: unit.mgmtIpAddress || unit.server.ipAddress || "",
+          dataMacAddress: unit.dataMacAddress || "",
+          dataIpAddress: unit.dataIpAddress || "",
+          accessLogin: unit.accessLogin || "admin",
+          accessPassword: unit.accessPassword || "V36man",
+          notes: unit.notes || ""
+        });
+        setSearchQuery(unit.server.apkSerialNumber || `#${unit.serverId}`);
+      } else {
+        // Новая установка - чистая форма
+        setForm({
+          serverId: 0,
+          apkSerialNumber: "",
+          hostname: "",
+          mgmtMacAddress: "",
+          mgmtIpAddress: "",
+          dataMacAddress: "",
+          dataIpAddress: "",
+          accessLogin: "admin",
+          accessPassword: "V36man",
+          notes: ""
+        });
+        setSearchQuery("");
+      }
       setDhcpInfo(null);
     }
-  }, [isOpen]);
+  }, [isOpen, unit]);
   
   // Сброс выбора при изменении поиска
   useEffect(() => {
@@ -845,9 +933,29 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     }
   }, [searchQuery]);
   
+  // Режим "взять в работу" (сервер уже размещён)
+  const isTakeToWorkMode = unit.serverId && !unit.installedAt;
+  
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`}>
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={
+        isTakeToWorkMode 
+          ? `Взять в работу: ${rack.name} / Unit ${unit.unitNumber}`
+          : `Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`
+      }
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Режим "взять в работу" - информация */}
+        {isTakeToWorkMode && (
+          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
+            <CheckCircle size={16} className="inline mr-1" />
+            Сервер <strong>{unit.server?.apkSerialNumber}</strong> уже размещён в юните.
+            Заполните данные и нажмите "Взять в работу".
+          </div>
+        )}
+        
         {/* Поле ввода серийника */}
         <div>
           <label className="block text-sm font-medium mb-1">Серийный номер *</label>
@@ -859,6 +967,7 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
               placeholder="Введите серийник..."
               className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               autoFocus
+              disabled={isTakeToWorkMode} // Нельзя менять серийник для уже размещённого
             />
             <button
               type="button"
@@ -872,8 +981,8 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           </div>
         </div>
         
-        {/* Список найденных серверов */}
-        {showServerList && (
+        {/* Список найденных серверов (только для новой установки) */}
+        {!isTakeToWorkMode && showServerList && (
           <div className="border rounded-lg overflow-hidden">
             <div className="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-600">
               Найденные серверы ({filteredServers.length})
@@ -902,8 +1011,8 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           </div>
         )}
         
-        {/* Статус: выбран существующий или создаём новый */}
-        {searchQuery.length >= 2 && (
+        {/* Статус: выбран существующий или создаём новый (только для новой установки) */}
+        {!isTakeToWorkMode && searchQuery.length >= 2 && (
           <div className={`p-3 rounded-lg text-sm ${
             form.serverId 
               ? "bg-green-50 border border-green-200 text-green-800"
@@ -1020,9 +1129,20 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           <button
             type="submit"
             disabled={saving || !searchQuery}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
+              isTakeToWorkMode 
+                ? "bg-green-600 hover:bg-green-700" 
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {saving ? "Установка..." : form.serverId ? "Установить" : "Создать и установить"}
+            {saving 
+              ? "Сохранение..." 
+              : isTakeToWorkMode 
+                ? "Взять в работу" 
+                : form.serverId 
+                  ? "Установить" 
+                  : "Создать и установить"
+            }
           </button>
         </div>
       </form>

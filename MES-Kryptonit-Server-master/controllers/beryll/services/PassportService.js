@@ -3,10 +3,10 @@ const { CHECKLIST_GROUPS } = require("../../../models/definitions/Beryll");
 const ExcelJS = require("exceljs");
 
 /**
- * Форматировать байты в человекочитаемый формат
+ * Форматирование байтов в читаемый формат
  */
 function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return "—";
+  if (!bytes || bytes === 0) return null;
   
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB", "PB"];
@@ -15,9 +15,154 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+/**
+ * Форматирование capacity для RAM (может быть в байтах или в GB)
+ */
+function formatRamCapacity(capacity) {
+  if (!capacity) return null;
+  
+  const numCapacity = parseInt(capacity);
+  if (!numCapacity || isNaN(numCapacity)) return null;
+  
+  // Если значение меньше 1024, считаем что это уже GB
+  if (numCapacity < 1024) {
+    return `${numCapacity} GB`;
+  }
+  
+  // Иначе форматируем как байты
+  return formatBytes(numCapacity);
+}
+
+/**
+ * Форматирование capacity для накопителей (может быть в байтах или в GB)
+ */
+function formatStorageCapacity(capacity) {
+  if (!capacity) return null;
+  
+  const numCapacity = parseInt(capacity);
+  if (!numCapacity || isNaN(numCapacity)) return null;
+  
+  // Если значение меньше 10000, считаем что это GB
+  if (numCapacity < 10000) {
+    // Форматируем в TB если больше 1000 GB
+    if (numCapacity >= 1000) {
+      return `${(numCapacity / 1000).toFixed(2)} TB`;
+    }
+    return `${numCapacity} GB`;
+  }
+  
+  // Иначе форматируем как байты
+  return formatBytes(numCapacity);
+}
+
+/**
+ * Извлекает характеристики RAM из названия модели
+ * Например: "Samsung M393A8G40AB2-CWE" -> { capacity: "64 GB", type: "DDR4", speed: "3200 MT/s" }
+ */
+function extractRamSpecsFromName(name, model) {
+  const source = `${name || ''} ${model || ''}`.toUpperCase();
+  const specs = {};
+  
+  // Известные модели Samsung DDR4 и их характеристики
+  const knownModels = {
+    'M393A8G40AB2': { capacity: '64 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A8G40BB4': { capacity: '64 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A8G40MB2': { capacity: '64 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A4K40CB2': { capacity: '32 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A4K40DB2': { capacity: '32 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A4K40DB3': { capacity: '32 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A2K40CB2': { capacity: '16 GB', type: 'DDR4', speed: '2666 MT/s' },
+    'M393A2K40DB2': { capacity: '16 GB', type: 'DDR4', speed: '2933 MT/s' },
+    'M393A2K40DB3': { capacity: '16 GB', type: 'DDR4', speed: '3200 MT/s' },
+    'M393A1K43DB2': { capacity: '8 GB', type: 'DDR4', speed: '2933 MT/s' },
+    // DDR5
+    'M321R8GA0BB0': { capacity: '64 GB', type: 'DDR5', speed: '4800 MT/s' },
+    'M321R4GA0BB0': { capacity: '32 GB', type: 'DDR5', speed: '4800 MT/s' },
+  };
+  
+  // Проверяем известные модели
+  for (const [modelPrefix, modelSpecs] of Object.entries(knownModels)) {
+    if (source.includes(modelPrefix)) {
+      return modelSpecs;
+    }
+  }
+  
+  // Пытаемся извлечь объём из названия (например "64GB", "64 GB")
+  const capacityMatch = source.match(/(\d+)\s*GB/i);
+  if (capacityMatch) {
+    specs.capacity = `${capacityMatch[1]} GB`;
+  }
+  
+  // Извлекаем тип памяти
+  if (source.includes('DDR5')) {
+    specs.type = 'DDR5';
+  } else if (source.includes('DDR4')) {
+    specs.type = 'DDR4';
+  } else if (source.includes('DDR3')) {
+    specs.type = 'DDR3';
+  }
+  
+  // Извлекаем скорость (например "3200", "2933", "2666")
+  const speedMatch = source.match(/(\d{4})\s*(MT\/S|MHZ)?/i);
+  if (speedMatch) {
+    specs.speed = `${speedMatch[1]} MT/s`;
+  }
+  
+  return Object.keys(specs).length > 0 ? specs : null;
+}
+
+/**
+ * Извлекает характеристики HDD/SSD из названия модели
+ */
+function extractStorageSpecsFromName(name, model, componentType) {
+  const source = `${name || ''} ${model || ''}`.toUpperCase();
+  const specs = {};
+  
+  // Известные модели Seagate
+  const knownHddModels = {
+    'ST16000NM004J': { capacity: '16 TB', interface: 'SAS' },
+    'ST18000NM000J': { capacity: '18 TB', interface: 'SAS' },
+    'ST14000NM001G': { capacity: '14 TB', interface: 'SAS' },
+    'ST12000NM001G': { capacity: '12 TB', interface: 'SAS' },
+    'ST10000NM001G': { capacity: '10 TB', interface: 'SAS' },
+    'ST8000NM000A': { capacity: '8 TB', interface: 'SAS' },
+  };
+  
+  // Проверяем известные модели HDD
+  for (const [modelPrefix, modelSpecs] of Object.entries(knownHddModels)) {
+    if (source.includes(modelPrefix)) {
+      return modelSpecs;
+    }
+  }
+  
+  // Пытаемся извлечь объём
+  const tbMatch = source.match(/(\d+(?:\.\d+)?)\s*TB/i);
+  if (tbMatch) {
+    specs.capacity = `${tbMatch[1]} TB`;
+  } else {
+    const gbMatch = source.match(/(\d+)\s*GB/i);
+    if (gbMatch) {
+      specs.capacity = `${gbMatch[1]} GB`;
+    }
+  }
+  
+  // Определяем интерфейс
+  if (source.includes('SAS')) {
+    specs.interface = 'SAS';
+  } else if (source.includes('NVME') || source.includes('NVM')) {
+    specs.interface = 'NVMe';
+  } else if (source.includes('SATA')) {
+    specs.interface = 'SATA';
+  } else if (componentType === 'HDD') {
+    specs.interface = 'SAS'; // По умолчанию для HDD
+  }
+  
+  return Object.keys(specs).length > 0 ? specs : null;
+}
+
 class PassportService {
   /**
-   * Генерация Excel паспорта сервера
+   * Генерирует паспорт сервера в формате Excel
    */
   async generatePassport(id) {
     const server = await BeryllServer.findByPk(id, {
@@ -39,7 +184,7 @@ class PassportService {
       throw new Error("Сервер не найден");
     }
     
-    // Загружаем комплектующие
+    // Получаем комплектующие
     const components = await BeryllServerComponent.findAll({
       where: { serverId: id },
       order: [
@@ -51,14 +196,14 @@ class PassportService {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Паспорт");
     
-    // Настройка колонок - расширено до 6 колонок (A-F)
+    // Настройки столбцов
     sheet.columns = [
-      { width: 8 },   // A: №
-      { width: 35 },  // B: Тип / Операция
-      { width: 50 },  // C: Наименование / Этап
-      { width: 22 },  // D: Серийный номер производителя / Подпись
-      { width: 22 },  // E: S/N Yadro / Дата
-      { width: 18 }   // F: Характеристики
+      { width: 8 },   // A - №
+      { width: 35 },  // B - Тип
+      { width: 50 },  // C - Наименование
+      { width: 22 },  // D - Серийный номер
+      { width: 22 },  // E - S/N Yadro
+      { width: 18 }   // F - Характеристики (расширил)
     ];
     
     // Стили
@@ -75,9 +220,7 @@ class PassportService {
       right: { style: "thin" }
     };
     
-    // ==========================================
-    // ШАПКА ДОКУМЕНТА
-    // ==========================================
+    // ============ ШАПКА ============
     sheet.mergeCells("A1:B1");
     sheet.getCell("A1").value = "АО «НПК Криптонит»";
     sheet.getCell("A1").font = titleFont;
@@ -96,7 +239,7 @@ class PassportService {
     sheet.getCell("C2").font = titleFont;
     sheet.getCell("C2").alignment = centerAlign;
     
-    // Серийный номер сервера
+    // Серийный номер
     sheet.mergeCells("A3:B3");
     sheet.getCell("A3").value = "Серийный номер сервера, (АПК):";
     sheet.getCell("A3").font = normalFont;
@@ -104,13 +247,11 @@ class PassportService {
     sheet.getCell("C3").value = server.serialNumber || "___";
     sheet.getCell("D3").value = server.apkSerialNumber || "___";
     
-    // ==========================================
-    // СЕКЦИЯ КОМПЛЕКТУЮЩИХ
-    // ==========================================
+    // ============ КОМПЛЕКТУЮЩИЕ ============
     let currentRow = 5;
     
     if (components.length > 0) {
-      // Заголовок секции комплектующих
+      // Заголовок раздела
       sheet.mergeCells(`A${currentRow}:F${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "КОМПЛЕКТУЮЩИЕ СЕРВЕРА";
       sheet.getCell(`A${currentRow}`).font = headerFont;
@@ -122,7 +263,7 @@ class PassportService {
       };
       currentRow++;
       
-      // Заголовки таблицы комплектующих - 6 колонок
+      // Заголовки таблицы
       sheet.getCell(`A${currentRow}`).value = "№";
       sheet.getCell(`B${currentRow}`).value = "Тип";
       sheet.getCell(`C${currentRow}`).value = "Наименование / Модель";
@@ -143,7 +284,7 @@ class PassportService {
       }
       currentRow++;
       
-      // Группируем компоненты
+      // Группировка компонентов
       const grouped = {
         CPU: components.filter(c => c.componentType === "CPU"),
         RAM: components.filter(c => c.componentType === "RAM"),
@@ -169,7 +310,7 @@ class PassportService {
       
       let compNumber = 0;
       
-      // Выводим компоненты по группам
+      // Объединённый список
       const allGrouped = [
         ...grouped.CPU,
         ...grouped.RAM,
@@ -181,60 +322,41 @@ class PassportService {
       for (const comp of allGrouped) {
         compNumber++;
         
-        // A: Номер
+        // Номер
         sheet.getCell(`A${currentRow}`).value = compNumber;
         sheet.getCell(`A${currentRow}`).font = normalFont;
         sheet.getCell(`A${currentRow}`).alignment = centerAlign;
         
-        // B: Тип
+        // Тип
         sheet.getCell(`B${currentRow}`).value = typeLabels[comp.componentType] || comp.componentType;
         sheet.getCell(`B${currentRow}`).font = normalFont;
         sheet.getCell(`B${currentRow}`).alignment = leftAlign;
         
-        // C: Наименование
+        // Наименование
         const name = comp.name || comp.model || "—";
         sheet.getCell(`C${currentRow}`).value = name;
         sheet.getCell(`C${currentRow}`).font = normalFont;
         sheet.getCell(`C${currentRow}`).alignment = { ...leftAlign, wrapText: true };
         
-        // D: Серийный номер производителя
+        // Серийный номер
         sheet.getCell(`D${currentRow}`).value = comp.serialNumber || "—";
         sheet.getCell(`D${currentRow}`).font = normalFont;
         sheet.getCell(`D${currentRow}`).alignment = centerAlign;
         
-        // E: S/N Yadro (новая колонка)
+        // S/N Yadro
         sheet.getCell(`E${currentRow}`).value = comp.serialNumberYadro || "—";
         sheet.getCell(`E${currentRow}`).font = normalFont;
         sheet.getCell(`E${currentRow}`).alignment = centerAlign;
         
-        // F: Характеристики (зависят от типа)
-        let specs = "";
-        if (comp.componentType === "CPU") {
-          const cores = comp.metadata?.cores;
-          const threads = comp.metadata?.threads;
-          const speed = comp.speed;
-          if (cores) specs += `${cores} ядер`;
-          if (threads) specs += `/${threads} потоков`;
-          if (speed) specs += ` @ ${speed} MHz`;
-        } else if (comp.componentType === "RAM") {
-          specs = formatBytes(parseInt(comp.capacity) || 0);
-          if (comp.metadata?.memoryType) specs += ` ${comp.metadata.memoryType}`;
-          if (comp.speed) specs += ` ${comp.speed} MT/s`;
-        } else if (["SSD", "HDD", "NVME"].includes(comp.componentType)) {
-          specs = formatBytes(parseInt(comp.capacity) || 0);
-          if (comp.metadata?.interface) specs += ` ${comp.metadata.interface}`;
-        } else if (comp.componentType === "NIC") {
-          if (comp.metadata?.macAddress) specs = comp.metadata.macAddress;
-          if (comp.metadata?.linkSpeed) specs += ` ${comp.metadata.linkSpeed}`;
-        } else if (comp.firmwareVersion) {
-          specs = `FW: ${comp.firmwareVersion}`;
-        }
+        // ============ ИСПРАВЛЕНО: Характеристики ============
+        // Формируем характеристики независимо от наличия S/N Yadro
+        let specs = this.formatComponentSpecs(comp);
         
         sheet.getCell(`F${currentRow}`).value = specs || "—";
         sheet.getCell(`F${currentRow}`).font = normalFont;
         sheet.getCell(`F${currentRow}`).alignment = centerAlign;
         
-        // Рамки для всех 6 колонок
+        // Границы
         for (let col of ["A", "B", "C", "D", "E", "F"]) {
           sheet.getCell(`${col}${currentRow}`).border = thinBorder;
         }
@@ -242,20 +364,24 @@ class PassportService {
         currentRow++;
       }
       
-      // Итоговая строка
+      // Итого
       sheet.mergeCells(`A${currentRow}:D${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "Итого комплектующих:";
       sheet.getCell(`A${currentRow}`).font = titleFont;
       sheet.getCell(`A${currentRow}`).alignment = { horizontal: "right", vertical: "middle" };
       sheet.getCell(`A${currentRow}`).border = thinBorder;
       
-      // Суммы
+      // Подсчёт общих характеристик
       const totalRAM = grouped.RAM.reduce((sum, r) => sum + (parseInt(r.capacity) || 0), 0);
       const totalStorage = grouped.storage.reduce((sum, s) => sum + (parseInt(s.capacity) || 0), 0);
       const totalCores = grouped.CPU.reduce((sum, c) => sum + (c.metadata?.cores || 0), 0);
       
+      // Форматируем RAM (может быть в GB или в байтах)
+      const ramFormatted = formatRamCapacity(totalRAM) || formatBytes(totalRAM) || "—";
+      const storageFormatted = formatStorageCapacity(totalStorage) || formatBytes(totalStorage) || "—";
+      
       sheet.mergeCells(`E${currentRow}:F${currentRow}`);
-      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${formatBytes(totalRAM)} | Storage: ${formatBytes(totalStorage)}`;
+      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${ramFormatted} | Storage: ${storageFormatted}`;
       sheet.getCell(`E${currentRow}`).font = titleFont;
       sheet.getCell(`E${currentRow}`).alignment = centerAlign;
       sheet.getCell(`E${currentRow}`).border = thinBorder;
@@ -263,11 +389,7 @@ class PassportService {
       currentRow += 2;
     }
     
-    // ==========================================
-    // СЕКЦИЯ ЧЕК-ЛИСТОВ (ОПЕРАЦИИ ПРОИЗВОДСТВА)
-    // ==========================================
-    
-    // Заголовок таблицы чек-листов
+    // ============ ОПЕРАЦИИ ПРОИЗВОДСТВА ============
     sheet.mergeCells(`A${currentRow}:F${currentRow}`);
     sheet.getCell(`A${currentRow}`).value = "ОПЕРАЦИИ ПРОИЗВОДСТВА";
     sheet.getCell(`A${currentRow}`).font = headerFont;
@@ -279,7 +401,7 @@ class PassportService {
     };
     currentRow++;
     
-    // Заголовки таблицы операций - объединяем C:D для "Этап"
+    // Заголовок таблицы операций
     const headerRow = currentRow;
     sheet.getCell(`A${headerRow}`).value = "№\nп/п";
     sheet.getCell(`B${headerRow}`).value = "Операция";
@@ -299,12 +421,12 @@ class PassportService {
         fgColor: { argb: "FFE0E0E0" }
       };
     }
-    // Добавляем border для D (объединена с C)
+    
     sheet.getCell(`D${headerRow}`).border = thinBorder;
     sheet.getRow(headerRow).height = 30;
     currentRow++;
     
-    // Группируем чек-листы по группам
+    // Метки групп
     const groupLabels = {
       [CHECKLIST_GROUPS.VISUAL]: "Визуальный осмотр",
       [CHECKLIST_GROUPS.TESTING]: "Проверка работоспособности",
@@ -313,7 +435,7 @@ class PassportService {
       [CHECKLIST_GROUPS.QC_FINAL]: "Контрольная"
     };
     
-    // Сортируем чек-листы
+    // Сортировка чек-листа
     const sortedChecklists = (server.checklists || []).sort(
       (a, b) => (a.template?.sortOrder || 0) - (b.template?.sortOrder || 0)
     );
@@ -325,7 +447,7 @@ class PassportService {
       const template = checklist.template;
       if (!template) continue;
       
-      // Новая группа?
+      // Новая группа
       if (template.groupCode !== currentGroup) {
         currentGroup = template.groupCode;
         groupNumber++;
@@ -340,13 +462,13 @@ class PassportService {
         sheet.getCell(`B${currentRow}`).font = titleFont;
       }
       
-      // Этап (объединённые колонки C:D)
+      // Этап
       sheet.mergeCells(`C${currentRow}:D${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = template.title;
       sheet.getCell(`C${currentRow}`).font = normalFont;
       sheet.getCell(`C${currentRow}`).alignment = { ...leftAlign, wrapText: true };
       
-      // Подпись (колонка E)
+      // Подпись
       if (checklist.completed && checklist.completedBy) {
         sheet.getCell(`E${currentRow}`).value = 
           `${checklist.completedBy.surname} ${checklist.completedBy.name?.charAt(0) || ""}.`;
@@ -354,7 +476,7 @@ class PassportService {
       sheet.getCell(`E${currentRow}`).font = normalFont;
       sheet.getCell(`E${currentRow}`).alignment = centerAlign;
       
-      // Дата (колонка F)
+      // Дата
       if (checklist.completedAt) {
         const date = new Date(checklist.completedAt);
         sheet.getCell(`F${currentRow}`).value = date.toLocaleDateString("ru-RU");
@@ -362,7 +484,7 @@ class PassportService {
       sheet.getCell(`F${currentRow}`).font = normalFont;
       sheet.getCell(`F${currentRow}`).alignment = centerAlign;
       
-      // Рамки
+      // Границы
       for (let col of ["A", "B", "C", "D", "E", "F"]) {
         sheet.getCell(`${col}${currentRow}`).border = thinBorder;
       }
@@ -370,9 +492,7 @@ class PassportService {
       currentRow++;
     }
     
-    // ==========================================
-    // ИНФОРМАЦИЯ О ТЕХНОЛОГИЧЕСКОМ ПРОГОНЕ
-    // ==========================================
+    // Даты прогона
     if (server.burnInStartAt) {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время установки на технологический прогон:";
@@ -391,7 +511,7 @@ class PassportService {
       sheet.getCell(`C${currentRow}`).font = normalFont;
     }
     
-    // Генерируем файл
+    // Создаём буфер
     const buffer = await workbook.xlsx.writeBuffer();
     
     const fileName = `Паспорт_${server.apkSerialNumber || server.id}.xlsx`;
@@ -400,6 +520,92 @@ class PassportService {
       buffer,
       fileName
     };
+  }
+
+  /**
+   * Форматирование характеристик компонента
+   * ИСПРАВЛЕНО: извлекает характеристики из названия модели если поля пустые
+   */
+  formatComponentSpecs(comp) {
+    if (comp.componentType === "CPU") {
+      const parts = [];
+      const cores = comp.metadata?.cores;
+      const threads = comp.metadata?.threads;
+      const speed = comp.speed;
+      
+      if (cores) {
+        parts.push(`${cores}/${threads || cores} потоков`);
+      }
+      if (speed) {
+        parts.push(`@ ${speed} MHz`);
+      }
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "RAM") {
+      // Сначала пробуем из полей БД
+      let capacityStr = formatRamCapacity(comp.capacity);
+      let typeStr = comp.metadata?.memoryType;
+      let speedStr = comp.speed ? String(comp.speed) : null;
+      
+      // Если нет данных - извлекаем из названия модели
+      if (!capacityStr || !typeStr || !speedStr) {
+        const extracted = extractRamSpecsFromName(comp.name, comp.model);
+        if (extracted) {
+          if (!capacityStr && extracted.capacity) capacityStr = extracted.capacity;
+          if (!typeStr && extracted.type) typeStr = extracted.type;
+          if (!speedStr && extracted.speed) speedStr = extracted.speed;
+        }
+      }
+      
+      // Формируем строку характеристик
+      const parts = [];
+      if (capacityStr) parts.push(capacityStr);
+      if (typeStr) parts.push(typeStr);
+      if (speedStr) {
+        // Приводим к строке и добавляем MT/s если нет
+        const speedString = String(speedStr);
+        if (!speedString.includes('MT/s') && !speedString.includes('MHz')) {
+          parts.push(`${speedString} MT/s`);
+        } else {
+          parts.push(speedString);
+        }
+      }
+      
+      return parts.join(" ") || null;
+      
+    } else if (["SSD", "HDD", "NVME"].includes(comp.componentType)) {
+      let capacityStr = formatStorageCapacity(comp.capacity);
+      let interfaceStr = comp.metadata?.interface;
+      
+      // Если нет данных - извлекаем из названия
+      if (!capacityStr || !interfaceStr) {
+        const extracted = extractStorageSpecsFromName(comp.name, comp.model, comp.componentType);
+        if (extracted) {
+          if (!capacityStr && extracted.capacity) capacityStr = extracted.capacity;
+          if (!interfaceStr && extracted.interface) interfaceStr = extracted.interface;
+        }
+      }
+      
+      const parts = [];
+      if (capacityStr) parts.push(capacityStr);
+      if (interfaceStr) parts.push(interfaceStr);
+      
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "NIC") {
+      const parts = [];
+      if (comp.metadata?.macAddress) parts.push(comp.metadata.macAddress);
+      if (comp.metadata?.linkSpeed) parts.push(comp.metadata.linkSpeed);
+      return parts.join(" ") || null;
+      
+    } else if (comp.componentType === "PSU") {
+      if (comp.capacity) return `${comp.capacity}W`;
+      return null;
+      
+    } else {
+      if (comp.firmwareVersion) return `FW: ${comp.firmwareVersion}`;
+      return null;
+    }
   }
 }
 

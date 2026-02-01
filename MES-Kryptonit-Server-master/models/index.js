@@ -1,18 +1,3 @@
-/**
- * models/index.js - Главный файл моделей MES Kryptonit
- * 
- * ОБНОВЛЕНО: исправлены импорты YadroIntegration
- * ОБНОВЛЕНО: добавлена ассоциация Section -> User (manager)
- * ОБНОВЛЕНО: добавлены ассоциации ProductionOutput (исправление ошибки "user is not associated to production_output")
- * ОБНОВЛЕНО: добавлена ассоциация Project -> User (author) (исправление ошибки "user is not associated to project")
- * ОБНОВЛЕНО: добавлена ассоциация AuditLog -> User (исправление ошибки "user is not associated to audit_log")
- * ОБНОВЛЕНО: добавлена ассоциация Session -> PC (исправление ошибки "столбец session.PCId не существует")
- * ОБНОВЛЕНО: добавлены ассоциации BeryllDefectRecordFile (исправление 404 на /api/beryll/defect-records/:id/files)
- */
-
-// ============================================
-// БАЗОВЫЕ ИМПОРТЫ
-// ============================================
 
 const { User, PC, Session, AuditLog, Role, Ability, RoleAbility } = require("./definitions/General");
 const { Section, Team } = require("./definitions/Structure");
@@ -264,6 +249,20 @@ BeryllDefectRecord.belongsTo(ComponentInventory, {
 BeryllDefectRecord.belongsTo(ComponentInventory, { 
     foreignKey: "replacementInventoryId", 
     as: "replacementInventoryItem" 
+});
+
+// ============================================
+// 16.1 ИСПРАВЛЕНИЕ: Подменный сервер для записей о браке
+// Ошибка: "BeryllServer is associated to BeryllDefectRecord using an alias (substituteServer), 
+//          but it does not match the alias(es) defined in your association (server)"
+// ============================================
+BeryllDefectRecord.belongsTo(BeryllServer, { 
+    foreignKey: "substituteServerId", 
+    as: "substituteServer" 
+});
+BeryllServer.hasMany(BeryllDefectRecord, { 
+    foreignKey: "substituteServerId", 
+    as: "substituteForDefects" 
 });
 
 // ============================================
