@@ -5,6 +5,8 @@
  * - Стойки (физическое размещение)
  * - Кластеры и Комплекты (логическая группировка)
  * - Учёт брака (журнал дефектов)
+ * - Создание серверов (ручное добавление)
+ * - DHCP интеграция (поиск IP/MAC)
  * 
  * Положить в: src/api/beryll/beryllExtendedApi.ts
  */
@@ -51,6 +53,14 @@ export interface BeryllRackUnit {
   notes: string | null;
   installedAt: string | null;
   installedById: number | null;
+  placedAt: string | null;
+  placedById: number | null;
+  // DHCP данные
+  dhcpIpAddress: string | null;
+  dhcpMacAddress: string | null;
+  dhcpHostname: string | null;
+  dhcpLeaseActive: boolean | null;
+  dhcpLastSync: string | null;
   createdAt: string;
   updatedAt: string;
   // Relations
@@ -64,6 +74,7 @@ export interface BeryllRackUnit {
     macAddress?: string;
   };
   installedBy?: { id: number; login: string; name: string; surname: string };
+  placedBy?: { id: number; login: string; name: string; surname: string };
 }
 
 // ============================================
@@ -259,6 +270,21 @@ export interface DefectRecordStats {
 }
 
 // ============================================
+// ТИПЫ - DHCP
+// ============================================
+
+export interface DhcpSearchResult {
+  found: boolean;
+  ipAddress?: string;
+  macAddress?: string;
+  hostname?: string;
+  leaseActive?: boolean;
+  leaseStart?: string;
+  leaseEnd?: string;
+  error?: string;
+}
+
+// ============================================
 // ТИПЫ - ОБЩИЕ
 // ============================================
 
@@ -333,8 +359,28 @@ export const getRackHistory = async (
   return data;
 };
 
+export const getRackSummary = async (rackId: number): Promise<any> => {
+  const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/summary`);
+  return data;
+};
+
+export const syncRackWithDhcp = async (rackId: number): Promise<{
+  success: boolean;
+  message: string;
+  synced: number;
+  total: number;
+}> => {
+  const { data } = await $authHost.post(`/api/beryll/racks/${rackId}/sync-dhcp`);
+  return data;
+};
+
 export const getFreeUnits = async (rackId: number): Promise<BeryllRackUnit[]> => {
   const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/free-units`);
+  return data;
+};
+
+export const getUnitsByServerStatus = async (rackId: number, status: string): Promise<BeryllRackUnit[]> => {
+  const { data } = await $authHost.get(`/api/beryll/racks/${rackId}/units-by-status`, { params: { status } });
   return data;
 };
 
@@ -356,6 +402,18 @@ export const installServerInRack = async (
   const { data } = await $authHost.post(
     `/api/beryll/racks/${rackId}/units/${unitNumber}/install`,
     params
+  );
+  return data;
+};
+
+export const placeServerInRack = async (
+  rackId: number,
+  unitNumber: number,
+  serverId: number
+): Promise<BeryllRackUnit> => {
+  const { data } = await $authHost.post(
+    `/api/beryll/racks/${rackId}/units/${unitNumber}/place`,
+    { serverId }
   );
   return data;
 };
@@ -390,6 +448,74 @@ export const findServerRackLocation = async (
   serverId: number
 ): Promise<BeryllRackUnit | { found: false }> => {
   const { data } = await $authHost.get(`/api/beryll/servers/${serverId}/rack-location`);
+  return data;
+};
+
+// ============================================
+// API - СОЗДАНИЕ СЕРВЕРОВ (НОВОЕ)
+// ============================================
+
+/**
+ * Создать сервер вручную (без DHCP)
+ */
+export const createServer = async (serverData: {
+  apkSerialNumber?: string;
+  serialNumber?: string;
+  macAddress?: string;
+  hostname?: string;
+  batchId?: number;
+  notes?: string;
+  searchDhcp?: boolean;
+}): Promise<any> => {
+  const { data } = await $authHost.post("/api/beryll/servers/create", serverData);
+  return data;
+};
+
+/**
+ * Создать сервер и сразу разместить в стойку
+ */
+export const createAndPlaceServer = async (serverData: {
+  apkSerialNumber?: string;
+  serialNumber?: string;
+  macAddress?: string;
+  hostname?: string;
+  batchId?: number;
+  notes?: string;
+  searchDhcp?: boolean;
+  rackId?: number;
+  unitNumber?: number;
+  unitData?: {
+    hostname?: string;
+    mgmtMacAddress?: string;
+    mgmtIpAddress?: string;
+    dataMacAddress?: string;
+    dataIpAddress?: string;
+    accessLogin?: string;
+    accessPassword?: string;
+    notes?: string;
+  };
+}): Promise<any> => {
+  const { data } = await $authHost.post("/api/beryll/servers/create-and-place", serverData);
+  return data;
+};
+
+// ============================================
+// API - DHCP ИНТЕГРАЦИЯ (НОВОЕ)
+// ============================================
+
+/**
+ * Найти IP по MAC адресу в DHCP
+ */
+export const findIpByMac = async (mac: string): Promise<DhcpSearchResult> => {
+  const { data } = await $authHost.get(`/api/beryll/dhcp/find-ip/${encodeURIComponent(mac)}`);
+  return data;
+};
+
+/**
+ * Найти сервер в DHCP по серийнику/hostname
+ */
+export const findServerInDhcp = async (serial: string): Promise<DhcpSearchResult> => {
+  const { data } = await $authHost.get(`/api/beryll/dhcp/find-server/${encodeURIComponent(serial)}`);
   return data;
 };
 

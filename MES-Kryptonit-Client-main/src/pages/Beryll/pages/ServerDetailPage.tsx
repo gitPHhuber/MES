@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import {
@@ -150,6 +151,18 @@ export const ServerDetailPage: React.FC = observer(() => {
       }
     };
   }, []);
+
+  // Блокировка прокрутки body при открытии модалок
+  useEffect(() => {
+    if (previewImage || previewLoading || uploadModal.open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [previewImage, previewLoading, uploadModal.open]);
 
   // Обработчик ESC для закрытия модальных окон
   useEffect(() => {
@@ -680,7 +693,7 @@ export const ServerDetailPage: React.FC = observer(() => {
       />
       
       {/* ==================== МОДАЛКА ПРОСМОТРА ИЗОБРАЖЕНИЯ ==================== */}
-      {(previewImage || previewLoading) && (
+      {(previewImage || previewLoading) && createPortal(
         <div 
           className="fixed inset-0 bg-black/90 flex items-center justify-center"
           style={{ zIndex: 9999 }}
@@ -743,11 +756,12 @@ export const ServerDetailPage: React.FC = observer(() => {
               Закрыть просмотр
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ==================== МОДАЛКА ЗАГРУЗКИ ФАЙЛА ==================== */}
-      {uploadModal.open && (
+      {uploadModal.open && createPortal(
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           style={{ zIndex: 9999 }}
@@ -908,7 +922,8 @@ export const ServerDetailPage: React.FC = observer(() => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Шапка */}

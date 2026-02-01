@@ -27,6 +27,19 @@ const {
 const protect = [authMiddleware, syncUserMiddleware];
 
 // ============================================
+// СЕРВЕРЫ - РУЧНОЕ СОЗДАНИЕ (НОВЫЕ)
+// ============================================
+
+// Создать сервер вручную (без DHCP, но с опциональным поиском)
+router.post("/servers/create", ...protect, checkAbility("beryll.work"), RackController.createServer);
+
+// Создать сервер и сразу разместить в стойку
+router.post("/servers/create-and-place", ...protect, checkAbility("beryll.work"), RackController.createAndPlaceServer);
+
+// Поиск сервера в DHCP по серийнику/hostname
+router.get("/dhcp/find-server/:serial", ...protect, checkAbility("beryll.view"), RackController.findServerInDhcp);
+
+// ============================================
 // СТОЙКИ (RACKS) - БАЗОВЫЕ ОПЕРАЦИИ
 // ============================================
 

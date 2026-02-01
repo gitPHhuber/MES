@@ -1,11 +1,16 @@
 /**
- * RackController - Обновлённый контроллер для работы со стойками
+ * RackController.js
  * 
- * Новые эндпоинты:
+ * Контроллер для работы со стойками и размещением серверов
+ * 
+ * Новые endpoints:
  * - POST /racks/:rackId/units/:unitNumber/place - Разместить сервер БЕЗ взятия в работу
  * - POST /racks/:rackId/sync-dhcp - Синхронизировать IP с DHCP
  * - GET /racks/:rackId/summary - Получить сводку по стойке
+ * - GET /racks/:rackId/units-by-status - Юниты по статусу
  * - GET /dhcp/find-ip/:mac - Найти IP по MAC адресу
+ * 
+ * Положить в: controllers/beryll/controllers/RackController.js
  */
 
 const RackService = require("../services/RackService");
@@ -13,8 +18,13 @@ const ApiError = require("../../../error/ApiError");
 
 class RackController {
   
+  // =============================================
+  // СТОЙКИ
+  // =============================================
+  
   /**
    * Получить все стойки
+   * GET /api/beryll/racks
    */
   async getAllRacks(req, res, next) {
     try {
@@ -33,6 +43,7 @@ class RackController {
   
   /**
    * Получить стойку по ID
+   * GET /api/beryll/racks/:id
    */
   async getRackById(req, res, next) {
     try {
@@ -52,6 +63,7 @@ class RackController {
   
   /**
    * Создать стойку
+   * POST /api/beryll/racks
    */
   async createRack(req, res, next) {
     try {
@@ -66,6 +78,7 @@ class RackController {
   
   /**
    * Обновить стойку
+   * PUT /api/beryll/racks/:id
    */
   async updateRack(req, res, next) {
     try {
@@ -81,6 +94,7 @@ class RackController {
   
   /**
    * Удалить стойку
+   * DELETE /api/beryll/racks/:id
    */
   async deleteRack(req, res, next) {
     try {
@@ -95,7 +109,101 @@ class RackController {
   }
   
   /**
+   * Получить историю стойки
+   * GET /api/beryll/racks/:id/history
+   */
+  async getRackHistory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { limit, offset } = req.query;
+      
+      const history = await RackService.getHistory("RACK", id, {
+        limit: parseInt(limit) || 50,
+        offset: parseInt(offset) || 0
+      });
+      
+      res.json(history);
+    } catch (error) {
+      console.error("[RackController] getRackHistory error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  /**
+   * НОВЫЙ: Получить сводку по стойке
+   * GET /api/beryll/racks/:rackId/summary
+   */
+  async getRackSummary(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const summary = await RackService.getRackSummary(parseInt(rackId));
+      res.json(summary);
+    } catch (error) {
+      console.error("[RackController] getRackSummary error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  // =============================================
+  // ЮНИТЫ
+  // =============================================
+  
+  /**
+   * Получить свободные юниты в стойке
+   * GET /api/beryll/racks/:rackId/free-units
+   */
+  async getFreeUnits(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const units = await RackService.getFreeUnits(rackId);
+      res.json(units);
+    } catch (error) {
+      console.error("[RackController] getFreeUnits error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  /**
+   * Получить юнит по номеру
+   * GET /api/beryll/racks/:rackId/units/:unitNumber
+   */
+  async getUnit(req, res, next) {
+    try {
+      const { rackId, unitNumber } = req.params;
+      const unit = await RackService.getUnitByNumber(parseInt(rackId), parseInt(unitNumber));
+      
+      if (!unit) {
+        return next(ApiError.notFound("Юнит не найден"));
+      }
+      
+      res.json(unit);
+    } catch (error) {
+      console.error("[RackController] getUnit error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  /**
+   * НОВЫЙ: Получить юниты по статусу сервера
+   * GET /api/beryll/racks/:rackId/units-by-status?status=IN_WORK
+   */
+  async getUnitsByStatus(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const { status } = req.query;
+      
+      const units = await RackService.getUnitsByServerStatus(parseInt(rackId), status);
+      res.json(units);
+    } catch (error) {
+      console.error("[RackController] getUnitsByStatus error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  /**
    * НОВЫЙ: Разместить сервер в стойку БЕЗ взятия в работу
+   * POST /api/beryll/racks/:rackId/units/:unitNumber/place
+   * Body: { serverId: number }
    */
   async placeServer(req, res, next) {
     try {
@@ -123,6 +231,7 @@ class RackController {
   
   /**
    * Установить сервер и взять в работу
+   * POST /api/beryll/racks/:rackId/units/:unitNumber/install
    */
   async installServer(req, res, next) {
     try {
@@ -151,6 +260,7 @@ class RackController {
   
   /**
    * Извлечь сервер из стойки
+   * POST /api/beryll/racks/:rackId/units/:unitNumber/remove
    */
   async removeServer(req, res, next) {
     try {
@@ -171,72 +281,8 @@ class RackController {
   }
   
   /**
-   * НОВЫЙ: Синхронизировать стойку с DHCP
-   */
-  async syncWithDhcp(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const userId = req.user?.id;
-      
-      const result = await RackService.syncRackWithDhcp(parseInt(rackId), userId);
-      res.json(result);
-    } catch (error) {
-      console.error("[RackController] syncWithDhcp error:", error);
-      next(ApiError.internal(`Ошибка синхронизации с DHCP: ${error.message}`));
-    }
-  }
-  
-  /**
-   * НОВЫЙ: Найти IP по MAC адресу в DHCP
-   */
-  async findIpByMac(req, res, next) {
-    try {
-      const { mac } = req.params;
-      
-      if (!mac) {
-        return next(ApiError.badRequest("Необходимо указать MAC адрес"));
-      }
-      
-      const result = await RackService.findIpByMac(mac);
-      res.json(result);
-    } catch (error) {
-      console.error("[RackController] findIpByMac error:", error);
-      next(ApiError.internal(`Ошибка поиска IP: ${error.message}`));
-    }
-  }
-  
-  /**
-   * НОВЫЙ: Получить сводку по стойке
-   */
-  async getRackSummary(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const summary = await RackService.getRackSummary(parseInt(rackId));
-      res.json(summary);
-    } catch (error) {
-      console.error("[RackController] getRackSummary error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  /**
-   * НОВЫЙ: Получить юниты по статусу сервера
-   */
-  async getUnitsByStatus(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const { status } = req.query;
-      
-      const units = await RackService.getUnitsByServerStatus(parseInt(rackId), status);
-      res.json(units);
-    } catch (error) {
-      console.error("[RackController] getUnitsByStatus error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  /**
-   * Обновить юнит
+   * Обновить данные юнита
+   * PUT /api/beryll/rack-units/:unitId
    */
   async updateUnit(req, res, next) {
     try {
@@ -252,6 +298,7 @@ class RackController {
   
   /**
    * Переместить сервер между юнитами/стойками
+   * POST /api/beryll/rack-units/move
    */
   async moveServer(req, res, next) {
     try {
@@ -271,21 +318,8 @@ class RackController {
   }
   
   /**
-   * Получить свободные юниты
-   */
-  async getFreeUnits(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const units = await RackService.getFreeUnits(rackId);
-      res.json(units);
-    } catch (error) {
-      console.error("[RackController] getFreeUnits error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  /**
    * Найти сервер в стойках
+   * GET /api/beryll/servers/:serverId/rack-location
    */
   async findServerInRacks(req, res, next) {
     try {
@@ -298,42 +332,120 @@ class RackController {
     }
   }
   
+  // =============================================
+  // DHCP ИНТЕГРАЦИЯ
+  // =============================================
+  
   /**
-   * Получить юнит по рackId и номеру
+   * НОВЫЙ: Синхронизировать стойку с DHCP
+   * POST /api/beryll/racks/:rackId/sync-dhcp
    */
-  async getUnit(req, res, next) {
+  async syncWithDhcp(req, res, next) {
     try {
-      const { rackId, unitNumber } = req.params;
-      const unit = await RackService.getUnitByNumber(parseInt(rackId), parseInt(unitNumber));
+      const { rackId } = req.params;
+      const userId = req.user?.id;
       
-      if (!unit) {
-        return next(ApiError.notFound("Юнит не найден"));
-      }
-      
-      res.json(unit);
+      const result = await RackService.syncRackWithDhcp(parseInt(rackId), userId);
+      res.json(result);
     } catch (error) {
-      console.error("[RackController] getUnit error:", error);
-      next(ApiError.internal(error.message));
+      console.error("[RackController] syncWithDhcp error:", error);
+      next(ApiError.internal(`Ошибка синхронизации с DHCP: ${error.message}`));
     }
   }
   
   /**
-   * Получить историю стойки
+   * НОВЫЙ: Найти IP по MAC адресу в DHCP
+   * GET /api/beryll/dhcp/find-ip/:mac
    */
-  async getRackHistory(req, res, next) {
+  async findIpByMac(req, res, next) {
     try {
-      const { id } = req.params;
-      const { limit, offset } = req.query;
+      const { mac } = req.params;
       
-      const history = await RackService.getHistory("RACK", id, {
-        limit: parseInt(limit) || 50,
-        offset: parseInt(offset) || 0
-      });
+      if (!mac) {
+        return next(ApiError.badRequest("Необходимо указать MAC адрес"));
+      }
       
-      res.json(history);
+      const result = await RackService.findIpByMac(mac);
+      res.json(result);
     } catch (error) {
-      console.error("[RackController] getRackHistory error:", error);
-      next(ApiError.internal(error.message));
+      console.error("[RackController] findIpByMac error:", error);
+      next(ApiError.internal(`Ошибка поиска IP: ${error.message}`));
+    }
+  }
+  
+  // =============================================
+  // РУЧНОЕ СОЗДАНИЕ СЕРВЕРОВ
+  // =============================================
+  
+  /**
+   * Создать сервер вручную
+   * POST /api/beryll/servers/create
+   * 
+   * Body: {
+   *   apkSerialNumber: string,  // Серийный номер АПК (обязательный)
+   *   serialNumber?: string,    // Серийный номер сервера
+   *   macAddress?: string,      // MAC адрес
+   *   hostname?: string,        // Hostname  
+   *   batchId?: number,         // ID партии
+   *   notes?: string,           // Примечания
+   *   searchDhcp?: boolean      // Искать ли в DHCP (default: true)
+   * }
+   */
+  async createServer(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const server = await RackService.createServerManually(req.body, userId);
+      res.status(201).json(server);
+    } catch (error) {
+      console.error("[RackController] createServer error:", error);
+      next(ApiError.badRequest(error.message));
+    }
+  }
+  
+  /**
+   * Создать сервер и сразу разместить в стойку
+   * POST /api/beryll/servers/create-and-place
+   * 
+   * Body: {
+   *   apkSerialNumber: string,
+   *   serialNumber?: string,
+   *   macAddress?: string,
+   *   hostname?: string,
+   *   batchId?: number,
+   *   notes?: string,
+   *   searchDhcp?: boolean,
+   *   rackId?: number,          // ID стойки для размещения
+   *   unitNumber?: number       // Номер юнита
+   * }
+   */
+  async createAndPlaceServer(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const server = await RackService.createAndPlaceServer(req.body, userId);
+      res.status(201).json(server);
+    } catch (error) {
+      console.error("[RackController] createAndPlaceServer error:", error);
+      next(ApiError.badRequest(error.message));
+    }
+  }
+  
+  /**
+   * Поиск сервера в DHCP по серийнику
+   * GET /api/beryll/dhcp/find-server/:serial
+   */
+  async findServerInDhcp(req, res, next) {
+    try {
+      const { serial } = req.params;
+      
+      if (!serial) {
+        return next(ApiError.badRequest("Необходимо указать серийный номер"));
+      }
+      
+      const result = await RackService.findServerInDhcp(serial);
+      res.json(result);
+    } catch (error) {
+      console.error("[RackController] findServerInDhcp error:", error);
+      next(ApiError.internal(`Ошибка поиска в DHCP: ${error.message}`));
     }
   }
 }

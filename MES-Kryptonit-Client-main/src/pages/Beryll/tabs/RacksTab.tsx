@@ -4,19 +4,22 @@
  * Вкладка "Стойки" для APK Beryll
  * Отображает физическое размещение серверов в стойках
  * 
+ * ОБНОВЛЕНО: Модалка установки с автопоиском - сначала ищет существующий сервер,
+ * если не найден - создаёт новый
+ * 
  * Положить в: src/pages/Beryll/tabs/RacksTab.tsx
  */
 
 import React, { useState, useEffect } from "react";
 import { 
-  Server, Plus, Search, Settings, MapPin, Wifi, 
-  ChevronDown, ChevronRight, Trash2, Edit, Move,
-  CheckCircle, AlertCircle, XCircle
+  Server, Plus, Search, MapPin, Wifi, 
+  Trash2, Edit, Move, CheckCircle, XCircle, PlusCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { 
   getRacks, getRackById, createRack, updateRack, deleteRack,
-  installServerInRack, removeServerFromRack, moveServerInRack,
+  installServerInRack, removeServerFromRack,
+  createAndPlaceServer, findServerInDhcp,
   BeryllRack, BeryllRackUnit, RackStatus
 } from "../../../api/beryll/beryllExtendedApi";
 import { getServers } from "../../../api/beryllApi";
@@ -40,7 +43,6 @@ const RacksTab: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
-  const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Выбранный юнит для операций
@@ -75,9 +77,7 @@ const RacksTab: React.FC = () => {
   // Загрузка доступных серверов
   const loadAvailableServers = async () => {
     try {
-      const data = await getServers({ status: "DONE" });
-      // Фильтруем серверы, которые не установлены в стойки
-      // (это упрощённая версия, в реальности нужно проверять через API)
+      const data = await getServers({});
       setAvailableServers(data);
     } catch (error) {
       console.error("Ошибка загрузки серверов:", error);
@@ -119,17 +119,6 @@ const RacksTab: React.FC = () => {
           <span className="text-xs font-mono text-gray-500">U{unit.unitNumber}</span>
           {!isEmpty && (
             <div className="flex gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedUnit(unit);
-                  setShowMoveModal(true);
-                }}
-                className="p-1 hover:bg-gray-100 rounded"
-                title="Переместить"
-              >
-                <Move size={12} />
-              </button>
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -679,6 +668,7 @@ const EditRackModal: React.FC<EditRackModalProps> = ({ isOpen, rack, onClose, on
 
 // ============================================
 // МОДАЛЬНОЕ ОКНО УСТАНОВКИ СЕРВЕРА
+// Логика: сначала ищем существующий, если нет - создаём новый
 // ============================================
 
 interface InstallServerModalProps {
@@ -695,6 +685,7 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
 }) => {
   const [form, setForm] = useState({
     serverId: 0,
+    apkSerialNumber: "",
     hostname: "",
     mgmtMacAddress: "",
     mgmtIpAddress: "",
@@ -705,27 +696,120 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     notes: ""
   });
   const [saving, setSaving] = useState(false);
-  const [searchServer, setSearchServer] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dhcpInfo, setDhcpInfo] = useState<any>(null);
+  const [searchingDhcp, setSearchingDhcp] = useState(false);
   
+  // Поиск существующих серверов по введённому запросу
   const filteredServers = servers.filter(s => 
-    !searchServer || 
-    s.apkSerialNumber?.toLowerCase().includes(searchServer.toLowerCase()) ||
-    s.hostname?.toLowerCase().includes(searchServer.toLowerCase()) ||
-    s.ipAddress?.includes(searchServer)
+    searchQuery.length >= 2 && (
+      s.apkSerialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.hostname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.ipAddress?.includes(searchQuery)
+    )
   );
+  
+  // Найден ли существующий сервер с точным совпадением
+  const exactMatch = servers.find(s => 
+    s.apkSerialNumber?.toUpperCase() === searchQuery.toUpperCase() ||
+    s.serialNumber?.toUpperCase() === searchQuery.toUpperCase()
+  );
+  
+  // Показывать список серверов
+  const showServerList = searchQuery.length >= 2 && filteredServers.length > 0;
+  
+  // Поиск в DHCP по серийнику
+  const searchInDhcp = async () => {
+    if (!searchQuery) {
+      toast.error("Введите серийный номер");
+      return;
+    }
+    
+    try {
+      setSearchingDhcp(true);
+      const result = await findServerInDhcp(searchQuery);
+      setDhcpInfo(result);
+      
+      if (result.found) {
+        toast.success("Найден в DHCP!");
+        // Заполняем данные из DHCP
+        setForm(prev => ({
+          ...prev,
+          mgmtMacAddress: result.macAddress || prev.mgmtMacAddress,
+          mgmtIpAddress: result.ipAddress || prev.mgmtIpAddress,
+          hostname: result.hostname || prev.hostname
+        }));
+      } else {
+        toast.info("Не найден в DHCP");
+      }
+    } catch (error: any) {
+      toast.error("Ошибка поиска в DHCP");
+      console.error(error);
+    } finally {
+      setSearchingDhcp(false);
+    }
+  };
+  
+  // Выбор существующего сервера
+  const selectServer = (server: any) => {
+    setForm(prev => ({ 
+      ...prev, 
+      serverId: server.id,
+      hostname: server.hostname || prev.hostname,
+      mgmtIpAddress: server.ipAddress || prev.mgmtIpAddress,
+      mgmtMacAddress: server.macAddress || prev.mgmtMacAddress
+    }));
+    setSearchQuery(server.apkSerialNumber || server.serialNumber || `#${server.id}`);
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.serverId) {
-      toast.error("Выберите сервер");
+    if (!searchQuery) {
+      toast.error("Введите серийный номер");
       return;
     }
     
     try {
       setSaving(true);
-      await installServerInRack(rack.id, unit.unitNumber, form);
-      toast.success("Сервер установлен");
+      
+      if (form.serverId) {
+        // Устанавливаем существующий сервер
+        await installServerInRack(rack.id, unit.unitNumber, {
+          serverId: form.serverId,
+          hostname: form.hostname,
+          mgmtMacAddress: form.mgmtMacAddress,
+          mgmtIpAddress: form.mgmtIpAddress,
+          dataMacAddress: form.dataMacAddress,
+          dataIpAddress: form.dataIpAddress,
+          accessLogin: form.accessLogin,
+          accessPassword: form.accessPassword,
+          notes: form.notes
+        });
+        toast.success("Сервер установлен");
+      } else {
+        // Создаём новый сервер и сразу устанавливаем в стойку
+        await createAndPlaceServer({
+          apkSerialNumber: searchQuery.toUpperCase(),
+          macAddress: form.mgmtMacAddress || undefined,
+          hostname: form.hostname || undefined,
+          rackId: rack.id,
+          unitNumber: unit.unitNumber,
+          unitData: {
+            hostname: form.hostname,
+            mgmtMacAddress: form.mgmtMacAddress,
+            mgmtIpAddress: form.mgmtIpAddress,
+            dataMacAddress: form.dataMacAddress,
+            dataIpAddress: form.dataIpAddress,
+            accessLogin: form.accessLogin,
+            accessPassword: form.accessPassword,
+            notes: form.notes
+          }
+        });
+        toast.success("Сервер создан и установлен");
+      }
+      
       onSuccess();
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Ошибка установки");
@@ -734,43 +818,123 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     }
   };
   
+  // Сброс формы при открытии
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        serverId: 0,
+        apkSerialNumber: "",
+        hostname: "",
+        mgmtMacAddress: "",
+        mgmtIpAddress: "",
+        dataMacAddress: "",
+        dataIpAddress: "",
+        accessLogin: "admin",
+        accessPassword: "V36man",
+        notes: ""
+      });
+      setSearchQuery("");
+      setDhcpInfo(null);
+    }
+  }, [isOpen]);
+  
+  // Сброс выбора при изменении поиска
+  useEffect(() => {
+    if (!exactMatch) {
+      setForm(prev => ({ ...prev, serverId: 0 }));
+    }
+  }, [searchQuery]);
+  
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Выбор сервера */}
+        {/* Поле ввода серийника */}
         <div>
-          <label className="block text-sm font-medium mb-1">Сервер *</label>
-          <input
-            type="text"
-            placeholder="Поиск по S/N, hostname, IP..."
-            value={searchServer}
-            onChange={(e) => setSearchServer(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg mb-2"
-          />
-          <div className="max-h-40 overflow-y-auto border rounded-lg">
-            {filteredServers.length === 0 ? (
-              <div className="p-3 text-gray-500 text-center">Серверы не найдены</div>
-            ) : (
-              filteredServers.slice(0, 20).map(server => (
+          <label className="block text-sm font-medium mb-1">Серийный номер *</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
+              placeholder="Введите серийник..."
+              className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={searchInDhcp}
+              disabled={searchingDhcp || !searchQuery}
+              className="px-3 py-2 bg-gray-100 border rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              title="Найти в DHCP"
+            >
+              {searchingDhcp ? "..." : <Wifi size={18} />}
+            </button>
+          </div>
+        </div>
+        
+        {/* Список найденных серверов */}
+        {showServerList && (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-600">
+              Найденные серверы ({filteredServers.length})
+            </div>
+            <div className="max-h-32 overflow-y-auto">
+              {filteredServers.slice(0, 10).map(server => (
                 <div
                   key={server.id}
                   className={`
                     p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0
                     ${form.serverId === server.id ? "bg-blue-100" : ""}
                   `}
-                  onClick={() => setForm({ ...form, serverId: server.id })}
+                  onClick={() => selectServer(server)}
                 >
-                  <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
+                  <div className="font-medium">{server.apkSerialNumber || server.serialNumber || `#${server.id}`}</div>
                   <div className="text-xs text-gray-500">
-                    {server.hostname} • {server.ipAddress}
+                    {server.hostname && `${server.hostname} • `}
+                    {server.ipAddress || "IP не задан"} • 
+                    <span className={`ml-1 ${server.status === "DONE" ? "text-green-600" : "text-yellow-600"}`}>
+                      {server.status}
+                    </span>
                   </div>
                 </div>
-              ))
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Статус: выбран существующий или создаём новый */}
+        {searchQuery.length >= 2 && (
+          <div className={`p-3 rounded-lg text-sm ${
+            form.serverId 
+              ? "bg-green-50 border border-green-200 text-green-800"
+              : "bg-blue-50 border border-blue-200 text-blue-800"
+          }`}>
+            {form.serverId ? (
+              <>
+                <CheckCircle size={16} className="inline mr-1" />
+                Выбран существующий сервер
+              </>
+            ) : (
+              <>
+                <PlusCircle size={16} className="inline mr-1" />
+                Будет создан новый сервер: <strong>{searchQuery}</strong>
+              </>
             )}
           </div>
-        </div>
+        )}
         
-        {/* Hostname в стойке */}
+        {/* Информация из DHCP */}
+        {dhcpInfo && dhcpInfo.found && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+            <div className="font-medium text-green-800 mb-1">✓ Найден в DHCP:</div>
+            <div className="text-green-700">
+              IP: {dhcpInfo.ipAddress} • MAC: {dhcpInfo.macAddress}
+              {dhcpInfo.hostname && ` • Hostname: ${dhcpInfo.hostname}`}
+            </div>
+          </div>
+        )}
+        
+        {/* Hostname в кластере */}
         <div>
           <label className="block text-sm font-medium mb-1">Hostname в кластере</label>
           <input
@@ -855,10 +1019,10 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           </button>
           <button
             type="submit"
-            disabled={saving || !form.serverId}
+            disabled={saving || !searchQuery}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "Установка..." : "Установить"}
+            {saving ? "Установка..." : form.serverId ? "Установить" : "Создать и установить"}
           </button>
         </div>
       </form>

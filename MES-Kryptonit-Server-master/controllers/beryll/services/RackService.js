@@ -5,6 +5,7 @@
  * 
  * Новые возможности:
  * - Размещение сервера в стойку БЕЗ взятия в работу (placeServerInRack)
+ * - Создание сервера вручную и размещение в стойку (createAndPlaceServer) с unitData
  * - Отслеживание кто поставил и кто взял в работу отдельно
  * - Интеграция с DHCP для автоматического определения IP
  * - Фильтрация по статусу сервера
@@ -22,6 +23,7 @@ const {
   BeryllExtendedHistory,
   RACK_STATUSES,
   BeryllServer,
+  BeryllBatch,
   User
 } = require("../../../models/index");
 
@@ -297,7 +299,7 @@ class RackService {
   }
   
   /**
-   * НОВЫЙ МЕТОД: Разместить сервер в стойку БЕЗ взятия в работу
+   * Разместить сервер в стойку БЕЗ взятия в работу
    * Просто физическое размещение сервера
    */
   async placeServerInRack(rackId, unitNumber, serverId, userId) {
@@ -555,7 +557,7 @@ class RackService {
   }
   
   /**
-   * НОВЫЙ МЕТОД: Получить юниты по статусу сервера
+   * Получить юниты по статусу сервера
    */
   async getUnitsByServerStatus(rackId, status) {
     const where = { rackId };
@@ -586,7 +588,7 @@ class RackService {
   }
   
   /**
-   * НОВЫЙ МЕТОД: Получить сводку по стойке
+   * Получить сводку по стойке
    */
   async getRackSummary(rackId) {
     const rack = await BeryllRack.findByPk(rackId);
@@ -656,7 +658,7 @@ class RackService {
   // =============================================
   
   /**
-   * НОВЫЙ МЕТОД: Синхронизировать IP-адреса с DHCP для стойки
+   * Синхронизировать IP-адреса с DHCP для стойки
    */
   async syncRackWithDhcp(rackId, userId) {
     const rack = await BeryllRack.findByPk(rackId, {
@@ -749,7 +751,7 @@ class RackService {
   }
   
   /**
-   * НОВЫЙ МЕТОД: Поиск IP по MAC в DHCP
+   * Поиск IP по MAC в DHCP
    */
   async findIpByMac(macAddress) {
     if (!macAddress) {
@@ -800,6 +802,58 @@ class RackService {
     }
   }
   
+  /**
+   * Поиск сервера в DHCP по серийнику (hostname)
+   * Серийник часто совпадает с hostname в DHCP
+   */
+  async findServerInDhcp(serialNumber) {
+    const ssh = new NodeSSH();
+    
+    try {
+      await ssh.connect({
+        host: DHCP_CONFIG.host,
+        username: DHCP_CONFIG.username,
+        password: DHCP_CONFIG.password,
+        readyTimeout: 10000
+      });
+      
+      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
+      ssh.dispose();
+      
+      if (result.stderr && !result.stdout) {
+        throw new Error(`SSH Error: ${result.stderr}`);
+      }
+      
+      const leases = parseDhcpLeases(result.stdout);
+      
+      // Ищем по hostname (часто = серийнику)
+      const matchingLease = leases.find(lease => {
+        const h = lease.hostname?.toLowerCase() || "";
+        const s = serialNumber.toLowerCase();
+        return h.includes(s) || s.includes(h);
+      });
+      
+      if (matchingLease) {
+        return {
+          found: true,
+          ipAddress: matchingLease.ipAddress,
+          macAddress: matchingLease.macAddress,
+          hostname: matchingLease.hostname,
+          leaseActive: matchingLease.leaseActive,
+          leaseStart: matchingLease.leaseStart,
+          leaseEnd: matchingLease.leaseEnd
+        };
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      ssh.dispose();
+      console.error("[RackService] Find server in DHCP error:", error);
+      return { found: false, error: error.message };
+    }
+  }
+  
   // =============================================
   // ИСТОРИЯ
   // =============================================
@@ -827,6 +881,150 @@ class RackService {
       limit,
       offset
     });
+  }
+  
+  // =============================================
+  // РУЧНОЕ СОЗДАНИЕ СЕРВЕРОВ
+  // =============================================
+  
+  /**
+   * Создать сервер вручную (без DHCP)
+   * Опционально ищет данные в DHCP по серийнику/MAC
+   * 
+   * @param {Object} data - данные сервера
+   * @param {string} data.apkSerialNumber - Серийный номер АПК (обязательный)
+   * @param {string} data.serialNumber - Серийный номер сервера
+   * @param {string} data.macAddress - MAC адрес (для поиска в DHCP)
+   * @param {string} data.hostname - Hostname
+   * @param {number} data.batchId - ID партии
+   * @param {string} data.notes - Примечания
+   * @param {boolean} data.searchDhcp - Искать ли в DHCP по MAC
+   * @param {number} userId - ID пользователя
+   */
+  async createServerManually(data, userId) {
+    const { 
+      apkSerialNumber, 
+      serialNumber, 
+      macAddress, 
+      hostname, 
+      batchId, 
+      notes,
+      searchDhcp = true 
+    } = data;
+    
+    if (!apkSerialNumber && !serialNumber) {
+      throw new Error("Необходимо указать серийный номер (apkSerialNumber или serialNumber)");
+    }
+    
+    // Проверяем уникальность серийника
+    if (apkSerialNumber) {
+      const existing = await BeryllServer.findOne({ 
+        where: { apkSerialNumber } 
+      });
+      if (existing) {
+        throw new Error(`Сервер с серийным номером АПК ${apkSerialNumber} уже существует`);
+      }
+    }
+    
+    // Данные для создания сервера
+    const serverData = {
+      apkSerialNumber: apkSerialNumber || null,
+      serialNumber: serialNumber || null,
+      macAddress: macAddress || null,
+      hostname: hostname || null,
+      batchId: batchId || null,
+      notes: notes || null,
+      status: "NEW",
+      leaseActive: false
+    };
+    
+    // Если указан MAC и нужно искать в DHCP
+    if (macAddress && searchDhcp) {
+      try {
+        const dhcpResult = await this.findIpByMac(macAddress);
+        if (dhcpResult.found) {
+          serverData.ipAddress = dhcpResult.ipAddress;
+          serverData.hostname = serverData.hostname || dhcpResult.hostname;
+          serverData.leaseActive = dhcpResult.leaseActive;
+          serverData.leaseStart = dhcpResult.leaseStart;
+          serverData.leaseEnd = dhcpResult.leaseEnd;
+        }
+      } catch (err) {
+        // DHCP недоступен - создаём без IP
+        console.warn("[RackService] DHCP lookup failed:", err.message);
+      }
+    }
+    
+    // Создаём сервер
+    const server = await BeryllServer.create(serverData);
+    
+    // Логируем
+    await this.logHistory("SERVER", server.id, "CREATED_MANUALLY", userId, 
+      `Сервер создан вручную: ${apkSerialNumber || serialNumber}`,
+      { apkSerialNumber, serialNumber, macAddress }
+    );
+    
+    // Возвращаем с ассоциациями
+    return BeryllServer.findByPk(server.id, {
+      include: [
+        { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] },
+        { model: BeryllBatch, as: "batch" }
+      ]
+    });
+  }
+  
+  /**
+   * Создать сервер и сразу разместить в стойку
+   * С поддержкой обновления данных юнита (unitData)
+   * 
+   * @param {Object} data - данные
+   * @param {string} data.apkSerialNumber - Серийный номер АПК
+   * @param {number} data.rackId - ID стойки
+   * @param {number} data.unitNumber - Номер юнита
+   * @param {Object} data.unitData - Данные для юнита (hostname, IP, MAC и т.д.)
+   * @param {number} userId - ID пользователя
+   */
+  async createAndPlaceServer(data, userId) {
+    const { rackId, unitNumber, unitData, ...serverData } = data;
+    
+    // Создаём сервер
+    const server = await this.createServerManually(serverData, userId);
+    
+    // Если указана стойка - размещаем
+    if (rackId && unitNumber) {
+      await this.placeServerInRack(rackId, unitNumber, server.id, userId);
+      
+      // Если есть данные для юнита - обновляем их
+      if (unitData && Object.keys(unitData).length > 0) {
+        const unit = await BeryllRackUnit.findOne({
+          where: { rackId, unitNumber }
+        });
+        
+        if (unit) {
+          const updateData = {};
+          
+          if (unitData.hostname) updateData.hostname = unitData.hostname;
+          if (unitData.mgmtMacAddress) updateData.mgmtMacAddress = unitData.mgmtMacAddress;
+          if (unitData.mgmtIpAddress) updateData.mgmtIpAddress = unitData.mgmtIpAddress;
+          if (unitData.dataMacAddress) updateData.dataMacAddress = unitData.dataMacAddress;
+          if (unitData.dataIpAddress) updateData.dataIpAddress = unitData.dataIpAddress;
+          if (unitData.accessLogin) updateData.accessLogin = unitData.accessLogin;
+          if (unitData.accessPassword) updateData.accessPassword = unitData.accessPassword;
+          if (unitData.notes) updateData.notes = unitData.notes;
+          
+          if (Object.keys(updateData).length > 0) {
+            await unit.update(updateData);
+            
+            await this.logHistory("RACK", rackId, "UNIT_DATA_UPDATED", userId,
+              `Данные юнита ${unitNumber} обновлены при создании сервера`,
+              { serverId: server.id, unitData: updateData }
+            );
+          }
+        }
+      }
+    }
+    
+    return server;
   }
 }
 

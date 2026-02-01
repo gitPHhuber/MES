@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Cpu, MemoryStick, HardDrive, Network, CircuitBoard, Zap, Server,
   RefreshCw, Download, ChevronDown, ChevronUp, Copy, AlertCircle,
@@ -425,8 +426,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-violet-600">
@@ -622,7 +623,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -677,8 +679,8 @@ const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-600 to-teal-600">
@@ -766,7 +768,8 @@ const EditSerialsModal: React.FC<EditSerialsModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -792,8 +795,8 @@ const SyncModeModal: React.FC<SyncModeModalProps> = ({
     (comparisonResult.summary?.newInBmc || 0) + 
     (comparisonResult.summary?.mismatches || 0);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b bg-amber-50">
@@ -922,7 +925,8 @@ const SyncModeModal: React.FC<SyncModeModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1166,12 +1170,23 @@ const ServerComponentsManager: React.FC<Props> = ({
       // Сначала делаем сравнение (compare)
       const result = await fetchComponentsFromBMC(serverId, 'compare');
       
-      if (result.hasDiscrepancies) {
-        // Если есть расхождения - показываем модальное окно выбора режима
+      const dbCount = result.summary?.total?.inDb || 0;
+      const bmcCount = result.summary?.total?.inBmc || 0;
+      
+      // Если в базе пусто - сразу загружаем без вопросов
+      if (dbCount === 0 && bmcCount > 0) {
+        const syncResult = await fetchComponentsFromBMC(serverId, 'force', true);
+        toast.success(`Загружено ${syncResult.components?.length || bmcCount} комплектующих с BMC`);
+        await loadComponents();
+        return;
+      }
+      
+      // Если в базе есть данные и есть расхождения - показываем модалку
+      if (result.hasDiscrepancies && dbCount > 0) {
         setComparisonResult(result);
         setSyncModalOpen(true);
-      } else if (result.summary?.total?.inBmc > 0) {
-        // Расхождений нет, но есть данные в BMC - синхронизируем с force
+      } else if (bmcCount > 0) {
+        // Расхождений нет - синхронизируем
         const syncResult = await fetchComponentsFromBMC(serverId, 'force', true);
         toast.success(syncResult.message || `Загружено ${syncResult.components?.length || 0} комплектующих`);
         await loadComponents();
@@ -1563,8 +1578,8 @@ const ServerComponentsManager: React.FC<Props> = ({
       />
 
       {/* Delete Confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      {confirmDelete && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 text-red-600 mb-4">
               <AlertCircle size={24} />
@@ -1589,7 +1604,8 @@ const ServerComponentsManager: React.FC<Props> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

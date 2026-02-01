@@ -10999,11 +10999,22 @@ const ServerComponentsManager: React.FC<Props> = ({
       
       const result = await fetchComponentsFromBMC(serverId, 'compare');
       
-      if (result.hasDiscrepancies) {
-        
+      const dbCount = result.summary?.total?.inDb || 0;
+      const bmcCount = result.summary?.total?.inBmc || 0;
+      
+      
+      if (dbCount === 0 && bmcCount > 0) {
+        const syncResult = await fetchComponentsFromBMC(serverId, 'force', true);
+        toast.success(`Загружено ${syncResult.components?.length || bmcCount} комплектующих с BMC`);
+        await loadComponents();
+        return;
+      }
+      
+      
+      if (result.hasDiscrepancies && dbCount > 0) {
         setComparisonResult(result);
         setSyncModalOpen(true);
-      } else if (result.summary?.total?.inBmc > 0) {
+      } else if (bmcCount > 0) {
         
         const syncResult = await fetchComponentsFromBMC(serverId, 'force', true);
         toast.success(syncResult.message || `Загружено ${syncResult.components?.length || 0} комплектующих`);
@@ -22890,20 +22901,8 @@ export default BeryllPage;
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/components/ServerChecklistSection.tsx
 ================================================================================
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   Circle,
@@ -22948,6 +22947,14 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   onUpdate,
   readOnly = false
 }) => {
+  const DEV = import.meta.env.DEV;
+  const dlog = (...args: any[]) => {
+    if (DEV) console.log(...args);
+  };
+  const derr = (...args: any[]) => {
+    if (DEV) console.error(...args);
+  };
+
   const [expandedGroups, setExpandedGroups] = useState<Set<ChecklistGroup>>(
     new Set(["VISUAL", "TESTING", "QC_PRIMARY", "BURN_IN", "QC_FINAL"])
   );
@@ -22956,7 +22963,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadId, setActiveUploadId] = useState<number | null>(null);
 
-  
   const [previewFile, setPreviewFile] = useState<BeryllChecklistFile | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -22964,16 +22970,65 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  
+  const handleClosePreview = useCallback(() => {
+    dlog("=== handleClosePreview called ===");
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewFile(null);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setZoom(1);
+    setRotation(0);
+  }, [previewUrl]);
+
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
   
+  useEffect(() => {
+    if (!previewFile) return;
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+
+    return () => {
+      const top = body.style.top;
+
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+
+      const restoreY = top ? -parseInt(top, 10) : scrollY;
+      window.scrollTo(0, restoreY);
+    };
+  }, [previewFile]);
+
+  
+  useEffect(() => {
+    if (!previewFile) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleClosePreview();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewFile, handleClosePreview]);
+
   const groupedChecklists = checklists.reduce((acc, item) => {
     const group = item.template?.groupCode || "TESTING";
     if (!acc[group]) acc[group] = [];
@@ -22985,19 +23040,19 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
 
   const toggleGroup = (group: ChecklistGroup) => {
     const newExpanded = new Set(expandedGroups);
-    if (newExpanded.has(group)) {
-      newExpanded.delete(group);
-    } else {
-      newExpanded.add(group);
-    }
+    if (newExpanded.has(group)) newExpanded.delete(group);
+    else newExpanded.add(group);
     setExpandedGroups(newExpanded);
   };
 
-  
-  const handleToggle = async (checklistId: number, currentCompleted: boolean, requiresFile: boolean, hasFiles: boolean) => {
+  const handleToggle = async (
+    checklistId: number,
+    currentCompleted: boolean,
+    requiresFile: boolean,
+    hasFiles: boolean
+  ) => {
     if (readOnly) return;
 
-    
     if (!currentCompleted && requiresFile && !hasFiles) {
       alert("Для выполнения этого этапа необходимо сначала загрузить скриншот/доказательство");
       return;
@@ -23014,25 +23069,21 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
     }
   };
 
-  
   const handleUploadClick = (checklistId: number) => {
     setActiveUploadId(checklistId);
     fileInputRef.current?.click();
   };
 
-  
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeUploadId) return;
 
-    
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
     if (!allowedTypes.includes(file.type)) {
       alert("Разрешены только изображения (JPG, PNG, GIF, WEBP) и PDF");
       return;
     }
 
-    
     if (file.size > 5 * 1024 * 1024) {
       alert("Максимальный размер файла: 5 МБ");
       return;
@@ -23047,21 +23098,17 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
     } finally {
       setUploadingId(null);
       setActiveUploadId(null);
-      
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  
   const handleDeleteFile = async (fileId: number, checklistCompleted: boolean) => {
     if (readOnly) return;
-    
-    const message = checklistCompleted 
+
+    const message = checklistCompleted
       ? "Удаление последнего файла снимет отметку выполнения. Продолжить?"
       : "Удалить этот файл?";
-      
+
     if (!confirm(message)) return;
 
     try {
@@ -23072,14 +23119,14 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
     }
   };
 
-  
   const handleDownloadFile = async (fileId: number, originalName: string) => {
-    console.log("=== handleDownloadFile called ===", { fileId, originalName });
+    dlog("=== handleDownloadFile called ===", { fileId, originalName });
+
     try {
       const response = await $authHost.get(`/api/beryll/files/${fileId}?download=true`, {
-        responseType: 'blob'
+        responseType: "blob"
       });
-      
+
       const url = URL.createObjectURL(response.data);
       const a = document.createElement("a");
       a.href = url;
@@ -23089,78 +23136,63 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      console.error("Download error:", e);
+      derr("Download error:", e);
       alert("Ошибка скачивания файла");
     }
   };
 
-  
   const handleOpenPreview = async (file: BeryllChecklistFile) => {
-    console.log("=== handleOpenPreview called ===", file);
-    
+    dlog("=== handleOpenPreview called ===", file);
+
     setPreviewFile(file);
     setPreviewLoading(true);
     setPreviewError(null);
     setZoom(1);
     setRotation(0);
 
-    
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
 
     try {
-      console.log("Fetching file...", `/api/beryll/files/${file.id}`);
+      dlog("Fetching file...", `/api/beryll/files/${file.id}`);
+
       const response = await $authHost.get(`/api/beryll/files/${file.id}`, {
-        responseType: 'blob'
+        responseType: "blob"
       });
-      
-      console.log("Response received:", response);
+
+      dlog("Response received:", response);
+
       const url = URL.createObjectURL(response.data);
-      console.log("Blob URL created:", url);
+      dlog("Blob URL created:", url);
       setPreviewUrl(url);
     } catch (e: any) {
-      console.error("Preview error:", e);
+      derr("Preview error:", e);
       setPreviewError("Не удалось загрузить изображение");
     } finally {
       setPreviewLoading(false);
     }
   };
 
-  
-  const handleClosePreview = () => {
-    console.log("=== handleClosePreview called ===");
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewFile(null);
-    setPreviewUrl(null);
-    setPreviewError(null);
-    setZoom(1);
-    setRotation(0);
-  };
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
+  const handleRotate = () => setRotation((prev) => (prev + 90) % 360);
 
-  
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
-  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
-
-  
   const totalCount = checklists.length;
-  const completedCount = checklists.filter(c => c.completed).length;
-  const requiredCount = checklists.filter(c => c.template?.isRequired).length;
-  const requiredCompletedCount = checklists.filter(c => c.template?.isRequired && c.completed).length;
+  const completedCount = checklists.filter((c) => c.completed).length;
+  const requiredCount = checklists.filter((c) => c.template?.isRequired).length;
+  const requiredCompletedCount = checklists.filter((c) => c.template?.isRequired && c.completed).length;
 
-  
   const isImageFile = (file: BeryllChecklistFile) => {
-    return file.mimetype?.startsWith("image/") || 
-           ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
-             file.originalName?.toLowerCase().endsWith(`.${ext}`)
-           );
+    return (
+      file.mimetype?.startsWith("image/") ||
+      ["jpg", "jpeg", "png", "gif", "webp"].some((ext) =>
+        file.originalName?.toLowerCase().endsWith(`.${ext}`)
+      )
+    );
   };
 
-  
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return "0 KB";
     if (bytes < 1024) return `${bytes} B`;
@@ -23170,7 +23202,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
 
   return (
     <div className="space-y-4">
-      {}
       <input
         ref={fileInputRef}
         type="file"
@@ -23179,7 +23210,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
         onChange={handleFileChange}
       />
 
-      {}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-gray-800">Чек-лист работ</h3>
@@ -23193,10 +23223,9 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
           </p>
         </div>
 
-        {}
         <div className="flex items-center gap-3">
           <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-green-500 transition-all duration-300"
               style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
             />
@@ -23207,36 +23236,31 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
         </div>
       </div>
 
-      {}
       <div className="space-y-3">
-        {groupOrder.map(groupCode => {
+        {groupOrder.map((groupCode) => {
           const groupItems = groupedChecklists[groupCode];
           if (!groupItems || groupItems.length === 0) return null;
 
           const isExpanded = expandedGroups.has(groupCode);
-          const groupCompleted = groupItems.filter(i => i.completed).length;
+          const groupCompleted = groupItems.filter((i) => i.completed).length;
           const groupTotal = groupItems.length;
 
           return (
-            <div 
-              key={groupCode} 
-              className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-            >
-              {}
+            <div key={groupCode} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <button
                 type="button"
                 onClick={() => toggleGroup(groupCode)}
                 className="w-full px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="font-medium text-gray-700">
-                    {CHECKLIST_GROUP_LABELS[groupCode]}
-                  </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    groupCompleted === groupTotal 
-                      ? "bg-green-100 text-green-700" 
-                      : "bg-gray-200 text-gray-600"
-                  }`}>
+                  <span className="font-medium text-gray-700">{CHECKLIST_GROUP_LABELS[groupCode]}</span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      groupCompleted === groupTotal
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
                     {groupCompleted}/{groupTotal}
                   </span>
                 </div>
@@ -23247,7 +23271,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                 )}
               </button>
 
-              {}
               {isExpanded && (
                 <div className="divide-y divide-gray-100">
                   {groupItems.map((item) => {
@@ -23259,10 +23282,16 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                     return (
                       <div key={item.id} className="p-4">
                         <div className="flex items-start gap-3">
-                          {}
                           <button
                             type="button"
-                            onClick={() => handleToggle(item.checklistTemplateId, item.completed, requiresFile, !!hasFiles)}
+                            onClick={() =>
+                              handleToggle(
+                                item.checklistTemplateId,
+                                item.completed,
+                                requiresFile,
+                                !!hasFiles
+                              )
+                            }
                             disabled={readOnly || togglingId === item.checklistTemplateId}
                             className={`mt-0.5 shrink-0 ${readOnly ? "cursor-default" : "cursor-pointer"}`}
                           >
@@ -23271,33 +23300,38 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                             ) : item.completed ? (
                               <CheckCircle2 className="w-5 h-5 text-green-500" />
                             ) : (
-                              <Circle className={`w-5 h-5 ${
-                                !canComplete ? "text-amber-400" : "text-gray-300"
-                              }`} />
+                              <Circle
+                                className={`w-5 h-5 ${
+                                  !canComplete ? "text-amber-400" : "text-gray-300"
+                                }`}
+                              />
                             )}
                           </button>
 
-                          {}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-medium ${
-                                item.completed ? "text-gray-500 line-through" : "text-gray-800"
-                              }`}>
+                              <span
+                                className={`font-medium ${
+                                  item.completed ? "text-gray-500 line-through" : "text-gray-800"
+                                }`}
+                              >
                                 {template?.title}
                               </span>
-                              
+
                               {template?.isRequired && (
                                 <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] rounded font-medium">
                                   ОБЯЗ.
                                 </span>
                               )}
-                              
+
                               {requiresFile && (
-                                <span className={`px-1.5 py-0.5 text-[10px] rounded font-medium flex items-center gap-1 ${
-                                  hasFiles 
-                                    ? "bg-green-100 text-green-700" 
-                                    : "bg-amber-100 text-amber-700"
-                                }`}>
+                                <span
+                                  className={`px-1.5 py-0.5 text-[10px] rounded font-medium flex items-center gap-1 ${
+                                    hasFiles
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
                                   <Camera className="w-3 h-3" />
                                   {hasFiles ? "Скрин загружен" : "Нужен скрин"}
                                 </span>
@@ -23305,42 +23339,36 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                             </div>
 
                             {template?.description && (
-                              <p className="text-sm text-gray-500 mt-1">
-                                {template.description}
-                              </p>
+                              <p className="text-sm text-gray-500 mt-1">{template.description}</p>
                             )}
 
-                            {}
                             {item.completed && item.completedBy && (
                               <p className="text-xs text-gray-400 mt-1">
                                 Выполнил: {item.completedBy.name || item.completedBy.login}
-                                {item.completedAt && (
-                                  <> в {new Date(item.completedAt).toLocaleString("ru-RU")}</>
-                                )}
+                                {item.completedAt && <> в {new Date(item.completedAt).toLocaleString("ru-RU")}</>}
                               </p>
                             )}
 
-                            {}
                             {hasFiles && (
                               <div className="mt-3 flex flex-wrap gap-2">
                                 {item.files!.map((file) => (
-                                  <div 
-                                    key={file.id} 
+                                  <div
+                                    key={file.id}
                                     className="group relative flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
                                   >
-                                    {}
                                     {isImageFile(file) ? (
                                       <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
                                     ) : (
                                       <FileText className="w-4 h-4 text-red-500 shrink-0" />
                                     )}
 
-                                    {}
-                                    <span className="text-sm text-gray-700 max-w-[120px] truncate" title={file.originalName}>
+                                    <span
+                                      className="text-sm text-gray-700 max-w-[120px] truncate"
+                                      title={file.originalName}
+                                    >
                                       {file.originalName}
                                     </span>
 
-                                    {}
                                     <div className="flex items-center gap-1 ml-1">
                                       {isImageFile(file) && (
                                         <button
@@ -23348,7 +23376,7 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                                           onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            console.log("👁 Eye button clicked for file:", file.id, file.originalName);
+                                            dlog("👁 Eye button clicked for file:", file.id, file.originalName);
                                             handleOpenPreview(file);
                                           }}
                                           className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
@@ -23357,13 +23385,13 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                                           <Eye className="w-4 h-4" />
                                         </button>
                                       )}
-                                      
+
                                       <button
                                         type="button"
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          console.log("⬇ Download button clicked for file:", file.id, file.originalName);
+                                          dlog("⬇ Download button clicked for file:", file.id, file.originalName);
                                           handleDownloadFile(file.id, file.originalName);
                                         }}
                                         className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
@@ -23392,7 +23420,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                               </div>
                             )}
 
-                            {}
                             {requiresFile && !hasFiles && !item.completed && (
                               <div className="mt-2 flex items-center gap-2 text-amber-600 text-sm">
                                 <AlertTriangle className="w-4 h-4" />
@@ -23401,7 +23428,6 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
                             )}
                           </div>
 
-                          {}
                           {!readOnly && (
                             <button
                               type="button"
@@ -23432,137 +23458,157 @@ export const ServerChecklistSection: React.FC<ServerChecklistSectionProps> = ({
         })}
       </div>
 
-      {}
-      {previewFile && (
-        <div 
-          className="fixed inset-0 bg-black/90 flex flex-col z-50"
-          onClick={handleClosePreview}
-        >
-          {}
-          <div 
-            className="flex items-center justify-between px-4 py-3 bg-black/50 backdrop-blur-sm"
-            onClick={e => e.stopPropagation()}
+      {previewFile &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/90 flex flex-col"
+            style={{ zIndex: 9999 }}
+            onClick={handleClosePreview}
           >
-            <div className="flex items-center gap-3 text-white">
-              <ImageIcon className="w-5 h-5 text-indigo-400" />
-              <div>
-                <p className="font-medium">{previewFile.originalName}</p>
-                <p className="text-sm text-gray-400">{formatFileSize(previewFile.fileSize)}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
-                disabled={zoom <= 0.5}
-                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
-                title="Уменьшить"
-              >
-                <ZoomOut className="w-5 h-5" />
-              </button>
-              
-              <span className="text-white/70 text-sm min-w-[60px] text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
-                disabled={zoom >= 3}
-                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
-                title="Увеличить"
-              >
-                <ZoomIn className="w-5 h-5" />
-              </button>
-              
-              <div className="w-px h-6 bg-white/20 mx-2" />
-              
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleRotate(); }}
-                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                title="Повернуть"
-              >
-                <RotateCw className="w-5 h-5" />
-              </button>
-              
-              <div className="w-px h-6 bg-white/20 mx-2" />
-              
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleDownloadFile(previewFile.id, previewFile.originalName); }}
-                className="p-2 text-white/70 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
-                title="Скачать"
-              >
-                <Download className="w-5 h-5" />
-              </button>
-              
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleClosePreview(); }}
-                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors ml-2"
-                title="Закрыть (Esc)"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {}
-          <div 
-            className="flex-1 flex items-center justify-center overflow-auto p-4"
-            onClick={e => e.stopPropagation()}
-          >
-            {previewLoading && (
-              <div className="flex flex-col items-center gap-3 text-white">
-                <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
-                <span className="text-gray-400">Загрузка...</span>
-              </div>
-            )}
-
-            {previewError && (
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
-                  <X className="w-8 h-8 text-red-400" />
+            <div
+              className="flex items-center justify-between px-4 py-3 bg-black/50 backdrop-blur-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 text-white">
+                <ImageIcon className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <p className="font-medium">{previewFile.originalName}</p>
+                  <p className="text-sm text-gray-400">{formatFileSize(previewFile.fileSize)}</p>
                 </div>
-                <p className="text-white font-medium">Ошибка загрузки</p>
-                <p className="text-gray-400 text-sm">{previewError}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); handleOpenPreview(previewFile); }}
-                  className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleZoomOut();
+                  }}
+                  disabled={zoom <= 0.5}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                  title="Уменьшить"
                 >
-                  Повторить
+                  <ZoomOut className="w-5 h-5" />
+                </button>
+
+                <span className="text-white/70 text-sm min-w-[60px] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleZoomIn();
+                  }}
+                  disabled={zoom >= 3}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+                  title="Увеличить"
+                >
+                  <ZoomIn className="w-5 h-5" />
+                </button>
+
+                <div className="w-px h-6 bg-white/20 mx-2" />
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRotate();
+                  }}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="Повернуть"
+                >
+                  <RotateCw className="w-5 h-5" />
+                </button>
+
+                <div className="w-px h-6 bg-white/20 mx-2" />
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadFile(previewFile.id, previewFile.originalName);
+                  }}
+                  className="p-2 text-white/70 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
+                  title="Скачать"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleClosePreview();
+                  }}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors ml-2"
+                  title="Закрыть (Esc)"
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            )}
+            </div>
 
-            {previewUrl && !previewLoading && (
-              <img 
-                src={previewUrl}
-                alt={previewFile.originalName}
-                className="max-w-full max-h-full object-contain transition-transform duration-200 select-none"
-                style={{
-                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                }}
-                draggable={false}
-              />
-            )}
-          </div>
+            <div
+              className="flex-1 flex items-center justify-center overflow-hidden p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {previewLoading && (
+                <div className="flex flex-col items-center gap-3 text-white">
+                  <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+                  <span className="text-gray-400">Загрузка...</span>
+                </div>
+              )}
 
-          {}
-          <div className="text-center py-2 text-gray-500 text-sm bg-black/50">
-            Нажмите в любом месте или Esc для закрытия
-          </div>
-        </div>
-      )}
+              {previewError && (
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <X className="w-8 h-8 text-red-400" />
+                  </div>
+                  <p className="text-white font-medium">Ошибка загрузки</p>
+                  <p className="text-gray-400 text-sm">{previewError}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPreview(previewFile);
+                    }}
+                    className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                  >
+                    Повторить
+                  </button>
+                </div>
+              )}
+
+              {previewUrl && !previewLoading && (
+                <img
+                  src={previewUrl}
+                  alt={previewFile.originalName}
+                  className="block object-contain select-none"
+                  style={{
+                    maxWidth: "96vw",
+                    maxHeight: "calc(100dvh - 120px)",
+                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                    transformOrigin: "center center"
+                  }}
+                  draggable={false}
+                />
+              )}
+            </div>
+
+            <div className="text-center py-2 text-gray-500 text-sm bg-black/50">
+              Нажмите в любом месте или Esc для закрытия
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
 
 export default ServerChecklistSection;
+
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/pages/BatchDetailPage.tsx
 ================================================================================
@@ -30801,16 +30847,19 @@ FILE: MES-Kryptonit-Client-main/src/pages/Beryll/tabs/RacksTab.tsx
 
 
 
+
+
 import React, { useState, useEffect } from "react";
 import { 
   Server, Plus, Search, Settings, MapPin, Wifi, 
   ChevronDown, ChevronRight, Trash2, Edit, Move,
-  CheckCircle, AlertCircle, XCircle
+  CheckCircle, AlertCircle, XCircle, PlusCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { 
   getRacks, getRackById, createRack, updateRack, deleteRack,
   installServerInRack, removeServerFromRack, moveServerInRack,
+  createAndPlaceServer, findServerInDhcp,
   BeryllRack, BeryllRackUnit, RackStatus
 } from "../../../api/beryll/beryllExtendedApi";
 import { getServers } from "../../../api/beryllApi";
@@ -30869,9 +30918,7 @@ const RacksTab: React.FC = () => {
   
   const loadAvailableServers = async () => {
     try {
-      const data = await getServers({ status: "DONE" });
-      
-      
+      const data = await getServers({});
       setAvailableServers(data);
     } catch (error) {
       console.error("Ошибка загрузки серверов:", error);
@@ -31475,6 +31522,7 @@ const EditRackModal: React.FC<EditRackModalProps> = ({ isOpen, rack, onClose, on
 
 
 
+
 interface InstallServerModalProps {
   isOpen: boolean;
   rack: BeryllRack;
@@ -31488,7 +31536,9 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
   isOpen, rack, unit, servers, onClose, onSuccess 
 }) => {
   const [form, setForm] = useState({
-    serverId: 0,
+    serialInput: "",        
+    serverId: 0,            
+    
     hostname: "",
     mgmtMacAddress: "",
     mgmtIpAddress: "",
@@ -31498,28 +31548,149 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     accessPassword: "V36man",
     notes: ""
   });
-  const [saving, setSaving] = useState(false);
-  const [searchServer, setSearchServer] = useState("");
   
-  const filteredServers = servers.filter(s => 
-    !searchServer || 
-    s.apkSerialNumber?.toLowerCase().includes(searchServer.toLowerCase()) ||
-    s.hostname?.toLowerCase().includes(searchServer.toLowerCase()) ||
-    s.ipAddress?.includes(searchServer)
-  );
+  const [saving, setSaving] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<{
+    found: boolean;
+    server?: any;
+    dhcpInfo?: any;
+    message: string;
+  } | null>(null);
+  
+  
+  const searchServer = async (serial: string) => {
+    if (!serial || serial.length < 3) {
+      setSearchResult(null);
+      setForm(prev => ({ ...prev, serverId: 0 }));
+      return;
+    }
+    
+    setSearching(true);
+    
+    try {
+      
+      const found = servers.find(s => 
+        s.apkSerialNumber?.toUpperCase() === serial.toUpperCase() ||
+        s.serialNumber?.toUpperCase() === serial.toUpperCase() ||
+        s.apkSerialNumber?.toUpperCase().includes(serial.toUpperCase()) ||
+        s.serialNumber?.toUpperCase().includes(serial.toUpperCase())
+      );
+      
+      if (found) {
+        setSearchResult({
+          found: true,
+          server: found,
+          message: `Найден сервер #${found.id}: ${found.apkSerialNumber || found.serialNumber}`
+        });
+        setForm(prev => ({ 
+          ...prev, 
+          serverId: found.id,
+          hostname: found.hostname || prev.hostname,
+          mgmtIpAddress: found.ipAddress || prev.mgmtIpAddress,
+          mgmtMacAddress: found.macAddress || prev.mgmtMacAddress
+        }));
+        return;
+      }
+      
+      
+      try {
+        const dhcpResult = await findServerInDhcp(serial);
+        if (dhcpResult.found) {
+          setSearchResult({
+            found: false,
+            dhcpInfo: dhcpResult,
+            message: `Сервер не найден в базе, но найден в DHCP: ${dhcpResult.ipAddress}`
+          });
+          setForm(prev => ({
+            ...prev,
+            serverId: 0,
+            mgmtIpAddress: dhcpResult.ipAddress || prev.mgmtIpAddress,
+            mgmtMacAddress: dhcpResult.macAddress || prev.mgmtMacAddress,
+            hostname: dhcpResult.hostname || prev.hostname
+          }));
+          return;
+        }
+      } catch (e) {
+        
+        console.warn("DHCP search failed:", e);
+      }
+      
+      
+      setSearchResult({
+        found: false,
+        message: "Сервер не найден. Будет создан новый."
+      });
+      setForm(prev => ({ ...prev, serverId: 0 }));
+      
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResult({
+        found: false,
+        message: "Ошибка поиска. Будет создан новый сервер."
+      });
+    } finally {
+      setSearching(false);
+    }
+  };
+  
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (form.serialInput) {
+        searchServer(form.serialInput);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.serialInput, servers]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.serverId) {
-      toast.error("Выберите сервер");
+    if (!form.serialInput.trim()) {
+      toast.error("Введите серийный номер");
       return;
     }
     
     try {
       setSaving(true);
-      await installServerInRack(rack.id, unit.unitNumber, form);
-      toast.success("Сервер установлен");
+      
+      if (form.serverId) {
+        
+        await installServerInRack(rack.id, unit.unitNumber, {
+          serverId: form.serverId,
+          hostname: form.hostname,
+          mgmtMacAddress: form.mgmtMacAddress,
+          mgmtIpAddress: form.mgmtIpAddress,
+          dataMacAddress: form.dataMacAddress,
+          dataIpAddress: form.dataIpAddress,
+          accessLogin: form.accessLogin,
+          accessPassword: form.accessPassword,
+          notes: form.notes
+        });
+        toast.success("Сервер установлен в стойку");
+      } else {
+        
+        await createAndPlaceServer({
+          apkSerialNumber: form.serialInput.toUpperCase(),
+          macAddress: form.mgmtMacAddress || undefined,
+          hostname: form.hostname || undefined,
+          rackId: rack.id,
+          unitNumber: unit.unitNumber,
+          unitData: {
+            hostname: form.hostname,
+            mgmtMacAddress: form.mgmtMacAddress,
+            mgmtIpAddress: form.mgmtIpAddress,
+            dataMacAddress: form.dataMacAddress,
+            dataIpAddress: form.dataIpAddress,
+            accessLogin: form.accessLogin,
+            accessPassword: form.accessPassword,
+            notes: form.notes
+          }
+        });
+        toast.success("Сервер создан и установлен");
+      }
+      
       onSuccess();
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Ошибка установки");
@@ -31528,40 +31699,76 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
     }
   };
   
+  
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        serialInput: "",
+        serverId: 0,
+        hostname: "",
+        mgmtMacAddress: "",
+        mgmtIpAddress: "",
+        dataMacAddress: "",
+        dataIpAddress: "",
+        accessLogin: "admin",
+        accessPassword: "V36man",
+        notes: ""
+      });
+      setSearchResult(null);
+    }
+  }, [isOpen]);
+  
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Установить сервер в ${rack.name} / Unit ${unit.unitNumber}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {}
         <div>
-          <label className="block text-sm font-medium mb-1">Сервер *</label>
-          <input
-            type="text"
-            placeholder="Поиск по S/N, hostname, IP..."
-            value={searchServer}
-            onChange={(e) => setSearchServer(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg mb-2"
-          />
-          <div className="max-h-40 overflow-y-auto border rounded-lg">
-            {filteredServers.length === 0 ? (
-              <div className="p-3 text-gray-500 text-center">Серверы не найдены</div>
-            ) : (
-              filteredServers.slice(0, 20).map(server => (
-                <div
-                  key={server.id}
-                  className={`
-                    p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0
-                    ${form.serverId === server.id ? "bg-blue-100" : ""}
-                  `}
-                  onClick={() => setForm({ ...form, serverId: server.id })}
-                >
-                  <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
-                  <div className="text-xs text-gray-500">
-                    {server.hostname} • {server.ipAddress}
-                  </div>
-                </div>
-              ))
+          <label className="block text-sm font-medium mb-1">Серийный номер *</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={form.serialInput}
+              onChange={(e) => setForm({ ...form, serialInput: e.target.value.toUpperCase() })}
+              placeholder="02042401B5"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 pr-10"
+              autoFocus
+            />
+            {searching && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
             )}
           </div>
+          
+          {}
+          {searchResult && !searching && (
+            <div className={`mt-2 p-2 rounded-lg text-sm ${
+              searchResult.found 
+                ? "bg-green-50 border border-green-200 text-green-800"
+                : searchResult.dhcpInfo
+                  ? "bg-blue-50 border border-blue-200 text-blue-800"
+                  : "bg-yellow-50 border border-yellow-200 text-yellow-800"
+            }`}>
+              {searchResult.found && <CheckCircle size={14} className="inline mr-1" />}
+              {!searchResult.found && searchResult.dhcpInfo && <Wifi size={14} className="inline mr-1" />}
+              {!searchResult.found && !searchResult.dhcpInfo && <PlusCircle size={14} className="inline mr-1" />}
+              {searchResult.message}
+              
+              {searchResult.server && (
+                <div className="mt-1 text-xs opacity-75">
+                  {searchResult.server.hostname && `Hostname: ${searchResult.server.hostname} • `}
+                  {searchResult.server.ipAddress && `IP: ${searchResult.server.ipAddress} • `}
+                  Статус: {searchResult.server.status}
+                </div>
+              )}
+              
+              {searchResult.dhcpInfo && (
+                <div className="mt-1 text-xs opacity-75">
+                  IP: {searchResult.dhcpInfo.ipAddress} • MAC: {searchResult.dhcpInfo.macAddress}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         {}
@@ -31649,10 +31856,10 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
           </button>
           <button
             type="submit"
-            disabled={saving || !form.serverId}
+            disabled={saving || !form.serialInput.trim() || searching}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "Установка..." : "Установить"}
+            {saving ? "Установка..." : form.serverId ? "Установить" : "Создать и установить"}
           </button>
         </div>
       </form>
@@ -31661,7 +31868,6 @@ const InstallServerModal: React.FC<InstallServerModalProps> = ({
 };
 
 export default RacksTab;
-
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/tabs/ServersTab.tsx
 ================================================================================
@@ -68991,12 +69197,22 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/RackController.
 
 
 
+
+
+
+
+
 const RackService = require("../services/RackService");
 const ApiError = require("../../../error/ApiError");
 
 class RackController {
   
   
+  
+  
+  
+  
+
 
 
   async getAllRacks(req, res, next) {
@@ -69015,6 +69231,7 @@ class RackController {
   }
   
   
+
 
 
   async getRackById(req, res, next) {
@@ -69036,6 +69253,7 @@ class RackController {
   
 
 
+
   async createRack(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -69048,6 +69266,7 @@ class RackController {
   }
   
   
+
 
 
   async updateRack(req, res, next) {
@@ -69065,6 +69284,7 @@ class RackController {
   
 
 
+
   async deleteRack(req, res, next) {
     try {
       const { id } = req.params;
@@ -69078,6 +69298,100 @@ class RackController {
   }
   
   
+
+
+
+  async getRackHistory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { limit, offset } = req.query;
+      
+      const history = await RackService.getHistory("RACK", id, {
+        limit: parseInt(limit) || 50,
+        offset: parseInt(offset) || 0
+      });
+      
+      res.json(history);
+    } catch (error) {
+      console.error("[RackController] getRackHistory error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  
+
+
+
+  async getRackSummary(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const summary = await RackService.getRackSummary(parseInt(rackId));
+      res.json(summary);
+    } catch (error) {
+      console.error("[RackController] getRackSummary error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  
+  
+  
+  
+  
+
+
+
+  async getFreeUnits(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const units = await RackService.getFreeUnits(rackId);
+      res.json(units);
+    } catch (error) {
+      console.error("[RackController] getFreeUnits error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  
+
+
+
+  async getUnit(req, res, next) {
+    try {
+      const { rackId, unitNumber } = req.params;
+      const unit = await RackService.getUnitByNumber(parseInt(rackId), parseInt(unitNumber));
+      
+      if (!unit) {
+        return next(ApiError.notFound("Юнит не найден"));
+      }
+      
+      res.json(unit);
+    } catch (error) {
+      console.error("[RackController] getUnit error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  
+
+
+
+  async getUnitsByStatus(req, res, next) {
+    try {
+      const { rackId } = req.params;
+      const { status } = req.query;
+      
+      const units = await RackService.getUnitsByServerStatus(parseInt(rackId), status);
+      res.json(units);
+    } catch (error) {
+      console.error("[RackController] getUnitsByStatus error:", error);
+      next(ApiError.internal(error.message));
+    }
+  }
+  
+  
+
+
 
 
   async placeServer(req, res, next) {
@@ -69105,6 +69419,7 @@ class RackController {
   }
   
   
+
 
 
   async installServer(req, res, next) {
@@ -69135,6 +69450,7 @@ class RackController {
   
 
 
+
   async removeServer(req, res, next) {
     try {
       const { rackId, unitNumber } = req.params;
@@ -69156,70 +69472,6 @@ class RackController {
   
 
 
-  async syncWithDhcp(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const userId = req.user?.id;
-      
-      const result = await RackService.syncRackWithDhcp(parseInt(rackId), userId);
-      res.json(result);
-    } catch (error) {
-      console.error("[RackController] syncWithDhcp error:", error);
-      next(ApiError.internal(`Ошибка синхронизации с DHCP: ${error.message}`));
-    }
-  }
-  
-  
-
-
-  async findIpByMac(req, res, next) {
-    try {
-      const { mac } = req.params;
-      
-      if (!mac) {
-        return next(ApiError.badRequest("Необходимо указать MAC адрес"));
-      }
-      
-      const result = await RackService.findIpByMac(mac);
-      res.json(result);
-    } catch (error) {
-      console.error("[RackController] findIpByMac error:", error);
-      next(ApiError.internal(`Ошибка поиска IP: ${error.message}`));
-    }
-  }
-  
-  
-
-
-  async getRackSummary(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const summary = await RackService.getRackSummary(parseInt(rackId));
-      res.json(summary);
-    } catch (error) {
-      console.error("[RackController] getRackSummary error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  
-
-
-  async getUnitsByStatus(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const { status } = req.query;
-      
-      const units = await RackService.getUnitsByServerStatus(parseInt(rackId), status);
-      res.json(units);
-    } catch (error) {
-      console.error("[RackController] getUnitsByStatus error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  
-
 
   async updateUnit(req, res, next) {
     try {
@@ -69234,6 +69486,7 @@ class RackController {
   }
   
   
+
 
 
   async moveServer(req, res, next) {
@@ -69256,19 +69509,6 @@ class RackController {
   
 
 
-  async getFreeUnits(req, res, next) {
-    try {
-      const { rackId } = req.params;
-      const units = await RackService.getFreeUnits(rackId);
-      res.json(units);
-    } catch (error) {
-      console.error("[RackController] getFreeUnits error:", error);
-      next(ApiError.internal(error.message));
-    }
-  }
-  
-  
-
 
   async findServerInRacks(req, res, next) {
     try {
@@ -69282,41 +69522,119 @@ class RackController {
   }
   
   
+  
+  
+  
+  
 
 
-  async getUnit(req, res, next) {
+
+  async syncWithDhcp(req, res, next) {
     try {
-      const { rackId, unitNumber } = req.params;
-      const unit = await RackService.getUnitByNumber(parseInt(rackId), parseInt(unitNumber));
+      const { rackId } = req.params;
+      const userId = req.user?.id;
       
-      if (!unit) {
-        return next(ApiError.notFound("Юнит не найден"));
-      }
-      
-      res.json(unit);
+      const result = await RackService.syncRackWithDhcp(parseInt(rackId), userId);
+      res.json(result);
     } catch (error) {
-      console.error("[RackController] getUnit error:", error);
-      next(ApiError.internal(error.message));
+      console.error("[RackController] syncWithDhcp error:", error);
+      next(ApiError.internal(`Ошибка синхронизации с DHCP: ${error.message}`));
     }
   }
   
   
 
 
-  async getRackHistory(req, res, next) {
+
+  async findIpByMac(req, res, next) {
     try {
-      const { id } = req.params;
-      const { limit, offset } = req.query;
+      const { mac } = req.params;
       
-      const history = await RackService.getHistory("RACK", id, {
-        limit: parseInt(limit) || 50,
-        offset: parseInt(offset) || 0
-      });
+      if (!mac) {
+        return next(ApiError.badRequest("Необходимо указать MAC адрес"));
+      }
       
-      res.json(history);
+      const result = await RackService.findIpByMac(mac);
+      res.json(result);
     } catch (error) {
-      console.error("[RackController] getRackHistory error:", error);
-      next(ApiError.internal(error.message));
+      console.error("[RackController] findIpByMac error:", error);
+      next(ApiError.internal(`Ошибка поиска IP: ${error.message}`));
+    }
+  }
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async createServer(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const server = await RackService.createServerManually(req.body, userId);
+      res.status(201).json(server);
+    } catch (error) {
+      console.error("[RackController] createServer error:", error);
+      next(ApiError.badRequest(error.message));
+    }
+  }
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async createAndPlaceServer(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const server = await RackService.createAndPlaceServer(req.body, userId);
+      res.status(201).json(server);
+    } catch (error) {
+      console.error("[RackController] createAndPlaceServer error:", error);
+      next(ApiError.badRequest(error.message));
+    }
+  }
+  
+  
+
+
+
+  async findServerInDhcp(req, res, next) {
+    try {
+      const { serial } = req.params;
+      
+      if (!serial) {
+        return next(ApiError.badRequest("Необходимо указать серийный номер"));
+      }
+      
+      const result = await RackService.findServerInDhcp(serial);
+      res.json(result);
+    } catch (error) {
+      console.error("[RackController] findServerInDhcp error:", error);
+      next(ApiError.internal(`Ошибка поиска в DHCP: ${error.message}`));
     }
   }
 }
@@ -76752,8 +77070,9 @@ class PassportService {
       { width: 8 },   
       { width: 35 },  
       { width: 50 },  
-      { width: 20 },  
-      { width: 15 }   
+      { width: 22 },  
+      { width: 22 },  
+      { width: 18 }   
     ];
     
     
@@ -76771,11 +77090,13 @@ class PassportService {
     };
     
     
+    
+    
     sheet.mergeCells("A1:B1");
     sheet.getCell("A1").value = "АО «НПК Криптонит»";
     sheet.getCell("A1").font = titleFont;
     
-    sheet.mergeCells("C1:E1");
+    sheet.mergeCells("C1:F1");
     sheet.getCell("C1").value = "СОПРОВОДИТЕЛЬНЫЙ ПАСПОРТ ПРОИЗВОДСТВА";
     sheet.getCell("C1").font = headerFont;
     sheet.getCell("C1").alignment = centerAlign;
@@ -76784,7 +77105,7 @@ class PassportService {
     sheet.getCell("A2").value = "АПК \"Берилл\"";
     sheet.getCell("A2").font = titleFont;
     
-    sheet.mergeCells("C2:E2");
+    sheet.mergeCells("C2:F2");
     sheet.getCell("C2").value = `МРТН.466514.002 - ${server.apkSerialNumber || "___"}`;
     sheet.getCell("C2").font = titleFont;
     sheet.getCell("C2").alignment = centerAlign;
@@ -76804,7 +77125,7 @@ class PassportService {
     
     if (components.length > 0) {
       
-      sheet.mergeCells(`A${currentRow}:E${currentRow}`);
+      sheet.mergeCells(`A${currentRow}:F${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "КОМПЛЕКТУЮЩИЕ СЕРВЕРА";
       sheet.getCell(`A${currentRow}`).font = headerFont;
       sheet.getCell(`A${currentRow}`).alignment = centerAlign;
@@ -76820,9 +77141,10 @@ class PassportService {
       sheet.getCell(`B${currentRow}`).value = "Тип";
       sheet.getCell(`C${currentRow}`).value = "Наименование / Модель";
       sheet.getCell(`D${currentRow}`).value = "Серийный номер";
-      sheet.getCell(`E${currentRow}`).value = "Характеристики";
+      sheet.getCell(`E${currentRow}`).value = "S/N Yadro";
+      sheet.getCell(`F${currentRow}`).value = "Характеристики";
       
-      for (let col of ["A", "B", "C", "D", "E"]) {
+      for (let col of ["A", "B", "C", "D", "E", "F"]) {
         const cell = sheet.getCell(`${col}${currentRow}`);
         cell.font = titleFont;
         cell.alignment = centerAlign;
@@ -76895,6 +77217,11 @@ class PassportService {
         sheet.getCell(`D${currentRow}`).alignment = centerAlign;
         
         
+        sheet.getCell(`E${currentRow}`).value = comp.serialNumberYadro || "—";
+        sheet.getCell(`E${currentRow}`).font = normalFont;
+        sheet.getCell(`E${currentRow}`).alignment = centerAlign;
+        
+        
         let specs = "";
         if (comp.componentType === "CPU") {
           const cores = comp.metadata?.cores;
@@ -76917,12 +77244,12 @@ class PassportService {
           specs = `FW: ${comp.firmwareVersion}`;
         }
         
-        sheet.getCell(`E${currentRow}`).value = specs || "—";
-        sheet.getCell(`E${currentRow}`).font = normalFont;
-        sheet.getCell(`E${currentRow}`).alignment = centerAlign;
+        sheet.getCell(`F${currentRow}`).value = specs || "—";
+        sheet.getCell(`F${currentRow}`).font = normalFont;
+        sheet.getCell(`F${currentRow}`).alignment = centerAlign;
         
         
-        for (let col of ["A", "B", "C", "D", "E"]) {
+        for (let col of ["A", "B", "C", "D", "E", "F"]) {
           sheet.getCell(`${col}${currentRow}`).border = thinBorder;
         }
         
@@ -76930,24 +77257,22 @@ class PassportService {
       }
       
       
-      sheet.mergeCells(`A${currentRow}:C${currentRow}`);
+      sheet.mergeCells(`A${currentRow}:D${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "Итого комплектующих:";
       sheet.getCell(`A${currentRow}`).font = titleFont;
       sheet.getCell(`A${currentRow}`).alignment = { horizontal: "right", vertical: "middle" };
+      sheet.getCell(`A${currentRow}`).border = thinBorder;
       
       
       const totalRAM = grouped.RAM.reduce((sum, r) => sum + (parseInt(r.capacity) || 0), 0);
       const totalStorage = grouped.storage.reduce((sum, s) => sum + (parseInt(s.capacity) || 0), 0);
       const totalCores = grouped.CPU.reduce((sum, c) => sum + (c.metadata?.cores || 0), 0);
       
-      sheet.mergeCells(`D${currentRow}:E${currentRow}`);
-      sheet.getCell(`D${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${formatBytes(totalRAM)} | Storage: ${formatBytes(totalStorage)}`;
-      sheet.getCell(`D${currentRow}`).font = titleFont;
-      sheet.getCell(`D${currentRow}`).alignment = centerAlign;
-      
-      for (let col of ["A", "D"]) {
-        sheet.getCell(`${col}${currentRow}`).border = thinBorder;
-      }
+      sheet.mergeCells(`E${currentRow}:F${currentRow}`);
+      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${formatBytes(totalRAM)} | Storage: ${formatBytes(totalStorage)}`;
+      sheet.getCell(`E${currentRow}`).font = titleFont;
+      sheet.getCell(`E${currentRow}`).alignment = centerAlign;
+      sheet.getCell(`E${currentRow}`).border = thinBorder;
       
       currentRow += 2;
     }
@@ -76957,7 +77282,7 @@ class PassportService {
     
     
     
-    sheet.mergeCells(`A${currentRow}:E${currentRow}`);
+    sheet.mergeCells(`A${currentRow}:F${currentRow}`);
     sheet.getCell(`A${currentRow}`).value = "ОПЕРАЦИИ ПРОИЗВОДСТВА";
     sheet.getCell(`A${currentRow}`).font = headerFont;
     sheet.getCell(`A${currentRow}`).alignment = centerAlign;
@@ -76968,14 +77293,16 @@ class PassportService {
     };
     currentRow++;
     
+    
     const headerRow = currentRow;
     sheet.getCell(`A${headerRow}`).value = "№\nп/п";
     sheet.getCell(`B${headerRow}`).value = "Операция";
+    sheet.mergeCells(`C${headerRow}:D${headerRow}`);
     sheet.getCell(`C${headerRow}`).value = "Этап";
-    sheet.getCell(`D${headerRow}`).value = "Подпись";
-    sheet.getCell(`E${headerRow}`).value = "Дата";
+    sheet.getCell(`E${headerRow}`).value = "Подпись";
+    sheet.getCell(`F${headerRow}`).value = "Дата";
     
-    for (let col of ["A", "B", "C", "D", "E"]) {
+    for (let col of ["A", "B", "C", "E", "F"]) {
       const cell = sheet.getCell(`${col}${headerRow}`);
       cell.font = titleFont;
       cell.alignment = centerAlign;
@@ -76986,6 +77313,8 @@ class PassportService {
         fgColor: { argb: "FFE0E0E0" }
       };
     }
+    
+    sheet.getCell(`D${headerRow}`).border = thinBorder;
     sheet.getRow(headerRow).height = 30;
     currentRow++;
     
@@ -77026,28 +77355,29 @@ class PassportService {
       }
       
       
+      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = template.title;
       sheet.getCell(`C${currentRow}`).font = normalFont;
       sheet.getCell(`C${currentRow}`).alignment = { ...leftAlign, wrapText: true };
       
       
       if (checklist.completed && checklist.completedBy) {
-        sheet.getCell(`D${currentRow}`).value = 
+        sheet.getCell(`E${currentRow}`).value = 
           `${checklist.completedBy.surname} ${checklist.completedBy.name?.charAt(0) || ""}.`;
-      }
-      sheet.getCell(`D${currentRow}`).font = normalFont;
-      sheet.getCell(`D${currentRow}`).alignment = centerAlign;
-      
-      
-      if (checklist.completedAt) {
-        const date = new Date(checklist.completedAt);
-        sheet.getCell(`E${currentRow}`).value = date.toLocaleDateString("ru-RU");
       }
       sheet.getCell(`E${currentRow}`).font = normalFont;
       sheet.getCell(`E${currentRow}`).alignment = centerAlign;
       
       
-      for (let col of ["A", "B", "C", "D", "E"]) {
+      if (checklist.completedAt) {
+        const date = new Date(checklist.completedAt);
+        sheet.getCell(`F${currentRow}`).value = date.toLocaleDateString("ru-RU");
+      }
+      sheet.getCell(`F${currentRow}`).font = normalFont;
+      sheet.getCell(`F${currentRow}`).alignment = centerAlign;
+      
+      
+      for (let col of ["A", "B", "C", "D", "E", "F"]) {
         sheet.getCell(`${col}${currentRow}`).border = thinBorder;
       }
       
@@ -77055,16 +77385,24 @@ class PassportService {
     }
     
     
+    
+    
     if (server.burnInStartAt) {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время установки на технологический прогон:";
+      sheet.getCell(`B${currentRow}`).font = normalFont;
+      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = new Date(server.burnInStartAt).toLocaleString("ru-RU");
+      sheet.getCell(`C${currentRow}`).font = normalFont;
     }
     
     if (server.burnInEndAt) {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время завершения технологического прогона:";
+      sheet.getCell(`B${currentRow}`).font = normalFont;
+      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = new Date(server.burnInEndAt).toLocaleString("ru-RU");
+      sheet.getCell(`C${currentRow}`).font = normalFont;
     }
     
     
@@ -77913,6 +78251,166 @@ class RackService {
       limit,
       offset
     });
+  }
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async createServerManually(data, userId) {
+    const { 
+      apkSerialNumber, 
+      serialNumber, 
+      macAddress, 
+      hostname, 
+      batchId, 
+      notes,
+      searchDhcp = true 
+    } = data;
+    
+    if (!apkSerialNumber && !serialNumber) {
+      throw new Error("Необходимо указать серийный номер (apkSerialNumber или serialNumber)");
+    }
+    
+    
+    if (apkSerialNumber) {
+      const existing = await BeryllServer.findOne({ 
+        where: { apkSerialNumber } 
+      });
+      if (existing) {
+        throw new Error(`Сервер с серийным номером АПК ${apkSerialNumber} уже существует`);
+      }
+    }
+    
+    
+    const serverData = {
+      apkSerialNumber: apkSerialNumber || null,
+      serialNumber: serialNumber || null,
+      macAddress: macAddress || null,
+      hostname: hostname || null,
+      batchId: batchId || null,
+      notes: notes || null,
+      status: "NEW",
+      leaseActive: false
+    };
+    
+    
+    if (macAddress && searchDhcp) {
+      try {
+        const dhcpResult = await this.findIpByMac(macAddress);
+        if (dhcpResult.found) {
+          serverData.ipAddress = dhcpResult.ipAddress;
+          serverData.hostname = serverData.hostname || dhcpResult.hostname;
+          serverData.leaseActive = dhcpResult.leaseActive;
+          serverData.leaseStart = dhcpResult.leaseStart;
+          serverData.leaseEnd = dhcpResult.leaseEnd;
+        }
+      } catch (err) {
+        
+        console.warn("[RackService] DHCP lookup failed:", err.message);
+      }
+    }
+    
+    
+    const server = await BeryllServer.create(serverData);
+    
+    
+    await this.logHistory("SERVER", server.id, "CREATED_MANUALLY", userId, 
+      `Сервер создан вручную: ${apkSerialNumber || serialNumber}`,
+      { apkSerialNumber, serialNumber, macAddress }
+    );
+    
+    
+    const { BeryllBatch } = require("../../../models/index");
+    return BeryllServer.findByPk(server.id, {
+      include: [
+        { model: User, as: "assignedTo", attributes: ["id", "login", "name", "surname"] },
+        { model: BeryllBatch, as: "batch" }
+      ]
+    });
+  }
+  
+  
+
+
+  async createAndPlaceServer(data, userId) {
+    const { rackId, unitNumber, ...serverData } = data;
+    
+    
+    const server = await this.createServerManually(serverData, userId);
+    
+    
+    if (rackId && unitNumber) {
+      await this.placeServerInRack(rackId, unitNumber, server.id, userId);
+    }
+    
+    return server;
+  }
+  
+  
+
+
+
+  async findServerInDhcp(serialNumber) {
+    const ssh = new NodeSSH();
+    
+    try {
+      await ssh.connect({
+        host: DHCP_CONFIG.host,
+        username: DHCP_CONFIG.username,
+        password: DHCP_CONFIG.password,
+        readyTimeout: 10000
+      });
+      
+      const result = await ssh.execCommand(`cat ${DHCP_CONFIG.leaseFile}`);
+      ssh.dispose();
+      
+      if (result.stderr && !result.stdout) {
+        throw new Error(`SSH Error: ${result.stderr}`);
+      }
+      
+      const leases = parseDhcpLeases(result.stdout);
+      
+      
+      const matchingLease = leases.find(lease => {
+        const h = lease.hostname?.toLowerCase() || "";
+        const s = serialNumber.toLowerCase();
+        return h.includes(s) || s.includes(h);
+      });
+      
+      if (matchingLease) {
+        return {
+          found: true,
+          ipAddress: matchingLease.ipAddress,
+          macAddress: matchingLease.macAddress,
+          hostname: matchingLease.hostname,
+          leaseActive: matchingLease.leaseActive,
+          leaseStart: matchingLease.leaseStart,
+          leaseEnd: matchingLease.leaseEnd
+        };
+      }
+      
+      return { found: false };
+      
+    } catch (error) {
+      ssh.dispose();
+      console.error("[RackService] Find server in DHCP error:", error);
+      return { found: false, error: error.message };
+    }
   }
 }
 
@@ -94051,6 +94549,19 @@ const {
 } = require("../controllers/beryll/ComponentsExtendedController");
 
 const protect = [authMiddleware, syncUserMiddleware];
+
+
+
+
+
+
+router.post("/servers/create", ...protect, checkAbility("beryll.work"), RackController.createServer);
+
+
+router.post("/servers/create-and-place", ...protect, checkAbility("beryll.work"), RackController.createAndPlaceServer);
+
+
+router.get("/dhcp/find-server/:serial", ...protect, checkAbility("beryll.view"), RackController.findServerInDhcp);
 
 
 
