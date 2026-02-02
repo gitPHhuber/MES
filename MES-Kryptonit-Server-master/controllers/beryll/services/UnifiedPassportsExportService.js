@@ -11,13 +11,11 @@ const {
 } = require("../../../models/index");
 
 const EXPORT_CONFIG = {
-  
   HDD_COUNT: 12,
   SSD_BOOT_COUNT: 2,    
   SSD_DATA_COUNT: 2,    
   RAM_COUNT: 12,
   PSU_COUNT: 2,
-  
   
   COMPONENT_TYPES: {
     HDD: "HDD",
@@ -36,9 +34,8 @@ const EXPORT_CONFIG = {
   }
 };
 
-
 // Структура колонок экспорта (справочник)
-// Каждый компонент имеет свою тройку: S/N ядро, S/N производитель, Ревизия
+// Каждый компонент: S/N ядро, S/N производитель, Ревизия — всё в одной строке
 const COLUMN_STRUCTURE = {
   BASE: ["rowNumber", "apkSerialNumber", "inspectionDate", "employees1", "employees2"],
   HDD: "12x(hdd_yadro, hdd_manuf, hdd_revision)",
@@ -175,7 +172,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // ПОДГОТОВКА ДАННЫХ ДЛЯ ЭКСПОРТА
+  // ПОДГОТОВКА ДАННЫХ — ОДНА СТРОКА НА СЕРВЕР
   // =====================================================================
 
   async prepareExportData(servers) {
@@ -187,8 +184,8 @@ class UnifiedPassportsExportService {
       const grouped = this.groupComponentsByType(components);
       const employees = await this.getServerEmployees(server);
       
-      // Основная строка (S/N ядро + ревизия каждого компонента)
-      const mainRow = {
+      // Все данные в одной строке: S/N ядро, S/N произв., Ревизия
+      const row = {
         rowNumber,
         apkSerialNumber: server.apkSerialNumber || server.serialNumber || "",
         inspectionDate: this.formatDate(server.createdAt),
@@ -210,30 +207,7 @@ class UnifiedPassportsExportService {
         ...this.mapNicCard(grouped.NIC || [])
       };
       
-      // Вторая строка (S/N производитель)
-      const serialRow = {
-        rowNumber: null,
-        apkSerialNumber: "",
-        inspectionDate: "",
-        employees1: "",
-        employees2: "",
-        
-        ...this.mapHddSerialManuf(grouped.HDD || []),
-        backplaneHdd: "",
-        ...this.mapMotherboardSerialManuf(grouped.MOTHERBOARD || []),
-        coolers: "",
-        ...this.mapCpuSerialManuf(grouped.CPU || []),
-        ...this.mapPsuSerialManuf(grouped.PSU || []),
-        ...this.mapSsdBootSerialManuf(grouped.SSD || [], grouped.NVME || []),
-        ...this.mapSsdDataSerialManuf(grouped.SSD || [], grouped.NVME || []),
-        ...this.mapBmcSerialManuf(grouped.BMC || []),
-        backplaneSsd: "",
-        ...this.mapRamSerialManuf(grouped.RAM || []),
-        ...this.mapRaidSerialManuf(grouped.RAID || []),
-        ...this.mapNicSerialManuf(grouped.NIC || [])
-      };
-      
-      rows.push({ main: mainRow, serial: serialRow, server });
+      rows.push({ row, server });
       rowNumber++;
     }
 
@@ -245,17 +219,13 @@ class UnifiedPassportsExportService {
   // =====================================================================
 
   /**
-   * Извлечь ревизию одного компонента.
-   * Проверяет metadata.revision и firmwareVersion.
+   * Извлечь ревизию одного компонента
    */
   _getComponentRevision(comp) {
     if (!comp) return "";
     return comp.metadata?.revision || comp.firmwareVersion || "";
   }
 
-  /**
-   * Группировка компонентов по типу с сортировкой по слоту
-   */
   groupComponentsByType(components) {
     const grouped = {};
     
@@ -309,7 +279,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // HDD (12 шт): у каждого — S/N ядро, S/N произв., Ревизия
+  // HDD (12 шт): S/N ядро, S/N произв., Ревизия — всё в одной строке
   // =====================================================================
 
   mapHddComponents(hdds) {
@@ -317,19 +287,8 @@ class UnifiedPassportsExportService {
     for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
       const hdd = hdds[i];
       result[`hdd${i + 1}_yadro`] = hdd?.serialNumberYadro || "";
-      result[`hdd${i + 1}_manuf`] = "";
-      result[`hdd${i + 1}_revision`] = this._getComponentRevision(hdd);
-    }
-    return result;
-  }
-
-  mapHddSerialManuf(hdds) {
-    const result = {};
-    for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
-      const hdd = hdds[i];
-      result[`hdd${i + 1}_yadro`] = "";
       result[`hdd${i + 1}_manuf`] = hdd?.serialNumber || "";
-      result[`hdd${i + 1}_revision`] = "";
+      result[`hdd${i + 1}_revision`] = this._getComponentRevision(hdd);
     }
     return result;
   }
@@ -347,7 +306,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // Материнская плата: S/N ядро, S/N произв., ревизия
+  // Материнская плата
   // =====================================================================
 
   mapMotherboard(motherboards) {
@@ -357,17 +316,8 @@ class UnifiedPassportsExportService {
     }
     return {
       mb_yadro: mb.serialNumberYadro || "",
-      mb_manuf: "",
+      mb_manuf: mb.serialNumber || "",
       mb_revision: this._getComponentRevision(mb)
-    };
-  }
-
-  mapMotherboardSerialManuf(motherboards) {
-    const mb = motherboards[0];
-    return {
-      mb_yadro: "",
-      mb_manuf: mb?.serialNumber || "",
-      mb_revision: ""
     };
   }
 
@@ -378,7 +328,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // CPU: S/N ядро, S/N произв., ревизия
+  // CPU
   // =====================================================================
 
   mapCpuComponents(cpus) {
@@ -388,22 +338,13 @@ class UnifiedPassportsExportService {
     const cpu = cpus[0];
     return {
       cpu_yadro: cpu.serialNumberYadro || "",
-      cpu_manuf: "",
+      cpu_manuf: cpu.serialNumber || "",
       cpu_revision: this._getComponentRevision(cpu)
     };
   }
 
-  mapCpuSerialManuf(cpus) {
-    const cpu = cpus[0];
-    return {
-      cpu_yadro: "",
-      cpu_manuf: cpu?.serialNumber || "",
-      cpu_revision: ""
-    };
-  }
-
   // =====================================================================
-  // Блоки питания (2 шт): у каждого — S/N ядро, S/N произв., Ревизия
+  // Блоки питания (2 шт)
   // =====================================================================
 
   mapPsuComponents(psus) {
@@ -411,25 +352,14 @@ class UnifiedPassportsExportService {
     for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
       const psu = psus[i];
       result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || "";
-      result[`psu${i + 1}_manuf`] = "";
+      result[`psu${i + 1}_manuf`] = psu?.serialNumber || "";
       result[`psu${i + 1}_revision`] = this._getComponentRevision(psu);
     }
     return result;
   }
 
-  mapPsuSerialManuf(psus) {
-    const result = {};
-    for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
-      const psu = psus[i];
-      result[`psu${i + 1}_yadro`] = "";
-      result[`psu${i + 1}_manuf`] = psu?.serialNumber || "";
-      result[`psu${i + 1}_revision`] = "";
-    }
-    return result;
-  }
-
   // =====================================================================
-  // SSD Boot (2 шт): у каждого — S/N ядро, S/N произв., Ревизия
+  // SSD Boot (2 шт)
   // =====================================================================
 
   mapSsdBootComponents(ssds, nvmes) {
@@ -445,33 +375,14 @@ class UnifiedPassportsExportService {
     for (let i = 0; i < EXPORT_CONFIG.SSD_BOOT_COUNT; i++) {
       const ssd = finalBootSsds[i];
       result[`ssdBoot${i + 1}_yadro`] = ssd?.serialNumberYadro || "";
-      result[`ssdBoot${i + 1}_manuf`] = "";
+      result[`ssdBoot${i + 1}_manuf`] = ssd?.serialNumber || "";
       result[`ssdBoot${i + 1}_revision`] = this._getComponentRevision(ssd);
     }
     return result;
   }
 
-  mapSsdBootSerialManuf(ssds, nvmes) {
-    const bootSsds = ssds.filter(s => 
-      s.manufacturer?.toLowerCase()?.includes("intel") ||
-      s.model?.toLowerCase()?.includes("intel") ||
-      s.slot?.toLowerCase()?.includes("boot")
-    ).slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
-    
-    const finalBootSsds = bootSsds.length > 0 ? bootSsds : ssds.slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
-    
-    const result = {};
-    for (let i = 0; i < EXPORT_CONFIG.SSD_BOOT_COUNT; i++) {
-      const ssd = finalBootSsds[i];
-      result[`ssdBoot${i + 1}_yadro`] = "";
-      result[`ssdBoot${i + 1}_manuf`] = ssd?.serialNumber || "";
-      result[`ssdBoot${i + 1}_revision`] = "";
-    }
-    return result;
-  }
-
   // =====================================================================
-  // SSD Data/NVMe (2 шт): у каждого — S/N ядро, S/N произв., Ревизия
+  // SSD Data/NVMe (2 шт)
   // =====================================================================
 
   mapSsdDataComponents(ssds, nvmes) {
@@ -488,33 +399,14 @@ class UnifiedPassportsExportService {
     for (let i = 0; i < EXPORT_CONFIG.SSD_DATA_COUNT; i++) {
       const ssd = dataSsds[i];
       result[`ssdData${i + 1}_yadro`] = ssd?.serialNumberYadro || "";
-      result[`ssdData${i + 1}_manuf`] = "";
+      result[`ssdData${i + 1}_manuf`] = ssd?.serialNumber || "";
       result[`ssdData${i + 1}_revision`] = this._getComponentRevision(ssd);
     }
     return result;
   }
 
-  mapSsdDataSerialManuf(ssds, nvmes) {
-    const dataSsds = [
-      ...nvmes,
-      ...ssds.filter(s => 
-        s.manufacturer?.toLowerCase()?.includes("samsung") ||
-        s.model?.toLowerCase()?.includes("samsung")
-      )
-    ].slice(0, EXPORT_CONFIG.SSD_DATA_COUNT);
-    
-    const result = {};
-    for (let i = 0; i < EXPORT_CONFIG.SSD_DATA_COUNT; i++) {
-      const ssd = dataSsds[i];
-      result[`ssdData${i + 1}_yadro`] = "";
-      result[`ssdData${i + 1}_manuf`] = ssd?.serialNumber || "";
-      result[`ssdData${i + 1}_revision`] = "";
-    }
-    return result;
-  }
-
   // =====================================================================
-  // BMC: S/N ядро, S/N произв., ревизия
+  // BMC
   // =====================================================================
 
   mapBmcComponents(bmcs) {
@@ -524,17 +416,8 @@ class UnifiedPassportsExportService {
     }
     return {
       bmc_yadro: bmc.serialNumberYadro || "",
-      bmc_manuf: "",
+      bmc_manuf: bmc.serialNumber || "",
       bmc_revision: this._getComponentRevision(bmc)
-    };
-  }
-
-  mapBmcSerialManuf(bmcs) {
-    const bmc = bmcs[0];
-    return {
-      bmc_yadro: "",
-      bmc_manuf: bmc?.serialNumber || "",
-      bmc_revision: ""
     };
   }
 
@@ -547,7 +430,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // Планки памяти (12 шт): у каждой — S/N ядро, S/N произв., Ревизия
+  // Планки памяти (12 шт)
   // =====================================================================
 
   mapRamComponents(rams) {
@@ -555,25 +438,14 @@ class UnifiedPassportsExportService {
     for (let i = 0; i < EXPORT_CONFIG.RAM_COUNT; i++) {
       const ram = rams[i];
       result[`ram${i + 1}_yadro`] = ram?.serialNumberYadro || "";
-      result[`ram${i + 1}_manuf`] = "";
+      result[`ram${i + 1}_manuf`] = ram?.serialNumber || "";
       result[`ram${i + 1}_revision`] = this._getComponentRevision(ram);
     }
     return result;
   }
 
-  mapRamSerialManuf(rams) {
-    const result = {};
-    for (let i = 0; i < EXPORT_CONFIG.RAM_COUNT; i++) {
-      const ram = rams[i];
-      result[`ram${i + 1}_yadro`] = "";
-      result[`ram${i + 1}_manuf`] = ram?.serialNumber || "";
-      result[`ram${i + 1}_revision`] = "";
-    }
-    return result;
-  }
-
   // =====================================================================
-  // RAID-контроллер: S/N ядро, S/N произв., ревизия
+  // RAID-контроллер
   // =====================================================================
 
   mapRaidController(raids) {
@@ -583,22 +455,13 @@ class UnifiedPassportsExportService {
     }
     return {
       raid_yadro: raid.serialNumberYadro || "",
-      raid_manuf: "",
+      raid_manuf: raid.serialNumber || "",
       raid_revision: this._getComponentRevision(raid)
     };
   }
 
-  mapRaidSerialManuf(raids) {
-    const raid = raids[0];
-    return {
-      raid_yadro: "",
-      raid_manuf: raid?.serialNumber || "",
-      raid_revision: ""
-    };
-  }
-
   // =====================================================================
-  // Сетевая карта: S/N ядро, S/N произв., ревизия
+  // Сетевая карта
   // =====================================================================
 
   mapNicCard(nics) {
@@ -608,17 +471,8 @@ class UnifiedPassportsExportService {
     }
     return {
       nic_yadro: nic.serialNumberYadro || "",
-      nic_manuf: "",
+      nic_manuf: nic.serialNumber || "",
       nic_revision: this._getComponentRevision(nic)
-    };
-  }
-
-  mapNicSerialManuf(nics) {
-    const nic = nics[0];
-    return {
-      nic_yadro: "",
-      nic_manuf: nic?.serialNumber || "",
-      nic_revision: ""
     };
   }
 
@@ -632,7 +486,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // СОЗДАНИЕ EXCEL ФАЙЛА
+  // СОЗДАНИЕ EXCEL ФАЙЛА — одна строка на сервер
   // =====================================================================
 
   async createExcelFile(exportData, options = {}) {
@@ -686,29 +540,25 @@ class UnifiedPassportsExportService {
       width: col.width || 12
     }));
 
+    // Заголовки групп (строка 1)
     this.addGroupHeaders(sheet, columns, headerStyle);
+
+    // Подзаголовки (строка 2)
     this.addSubHeaders(sheet, columns, subHeaderStyle);
 
+    // Данные — одна строка на сервер
     let currentRow = 3;
     for (const rowData of exportData) {
-      const mainRowValues = columns.map(col => rowData.main[col.key] || "");
-      const mainRow = sheet.getRow(currentRow);
-      mainRow.values = mainRowValues;
-      mainRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const rowValues = columns.map(col => rowData.row[col.key] || "");
+      const excelRow = sheet.getRow(currentRow);
+      excelRow.values = rowValues;
+      excelRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         Object.assign(cell, dataStyle);
-      });
-      currentRow++;
-
-      const serialRowValues = columns.map(col => rowData.serial[col.key] || "");
-      const serialRow = sheet.getRow(currentRow);
-      serialRow.values = serialRowValues;
-      serialRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        Object.assign(cell, dataStyle);
-        cell.font = { size: 8, color: { argb: "FF666666" } };
       });
       currentRow++;
     }
 
+    // Объединяем заголовки групп
     this.applyHeaderMerges(sheet, columns);
 
     sheet.getRow(1).height = 30;
@@ -719,7 +569,7 @@ class UnifiedPassportsExportService {
   }
 
   // =====================================================================
-  // ОПРЕДЕЛЕНИЕ КОЛОНОК — у каждого компонента своя тройка колонок
+  // ОПРЕДЕЛЕНИЕ КОЛОНОК
   // =====================================================================
 
   buildColumnDefinitions() {
@@ -734,7 +584,7 @@ class UnifiedPassportsExportService {
       { key: "employees2", header: "", width: 18, group: "base" }
     );
     
-    // === HDD диски (12 шт) — каждый: S/N ядро, S/N произв., Ревизия ===
+    // === HDD диски (12 шт) ===
     for (let i = 1; i <= 12; i++) {
       columns.push(
         { key: `hdd${i}_yadro`, header: i === 1 ? "HDD диски" : "", subHeader: "S/N ядро", width: 15, group: "hdd" },
@@ -763,7 +613,7 @@ class UnifiedPassportsExportService {
       { key: "cpu_revision", header: "", subHeader: "Ревизия", width: 12, group: "cpu" }
     );
     
-    // === Блоки питания (2 шт) — каждый: S/N ядро, S/N произв., Ревизия ===
+    // === Блоки питания (2 шт) ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
         { key: `psu${i}_yadro`, header: i === 1 ? "Блоки питания" : "", subHeader: "S/N ядро", width: 18, group: "psu" },
@@ -772,7 +622,7 @@ class UnifiedPassportsExportService {
       );
     }
     
-    // === SSD Boot (2 шт) — каждый: S/N ядро, S/N произв., Ревизия ===
+    // === SSD Boot (2 шт) ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
         { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD Boot" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
@@ -781,7 +631,7 @@ class UnifiedPassportsExportService {
       );
     }
     
-    // === SSD Data/NVMe (2 шт) — каждый: S/N ядро, S/N произв., Ревизия ===
+    // === SSD Data/NVMe (2 шт) ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
         { key: `ssdData${i}_yadro`, header: i === 1 ? "SSD NVMe" : "", subHeader: "S/N ядро", width: 18, group: "ssd_data" },
@@ -800,7 +650,7 @@ class UnifiedPassportsExportService {
     // === Backplane SSD ===
     columns.push({ key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 20, group: "backplane_ssd" });
     
-    // === Планки памяти (12 шт) — каждая: S/N ядро, S/N произв., Ревизия ===
+    // === Планки памяти (12 шт) ===
     for (let i = 1; i <= 12; i++) {
       columns.push(
         { key: `ram${i}_yadro`, header: i === 1 ? "Планки памяти" : "", subHeader: "S/N ядро", width: 16, group: "ram" },
@@ -851,27 +701,8 @@ class UnifiedPassportsExportService {
   }
 
   applyHeaderMerges(sheet, columns) {
-    const groups = {};
-    let startIdx = null;
-    let currentGroup = null;
-    
-    columns.forEach((col, idx) => {
-      if (col.group !== currentGroup) {
-        if (currentGroup && startIdx !== null) {
-          if (!groups[currentGroup]) groups[currentGroup] = [];
-          groups[currentGroup].push({ start: startIdx, end: idx });
-        }
-        currentGroup = col.group;
-        startIdx = idx + 1;
-      }
-    });
-    
-    if (currentGroup && startIdx !== null) {
-      if (!groups[currentGroup]) groups[currentGroup] = [];
-      groups[currentGroup].push({ start: startIdx, end: columns.length + 1 });
-    }
-    
     const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram", "mb", "cpu", "bmc", "raid", "nic"];
+    
     for (const groupName of multiColumnGroups) {
       const groupRanges = [];
       let rangeStart = null;
@@ -897,8 +728,9 @@ class UnifiedPassportsExportService {
             );
             
             if (headerCol !== -1) {
-              const cell = sheet.getRow(1).getCell(headerCol + 1);
               sheet.mergeCells(1, range.start, 1, range.end);
+              const cell = sheet.getRow(1).getCell(range.start);
+              cell.value = columns[headerCol].header;
               cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
             }
           } catch (e) {
