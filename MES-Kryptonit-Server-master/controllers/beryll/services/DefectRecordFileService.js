@@ -75,7 +75,6 @@ class DefectRecordFileService {
             BeryllServer 
         } = require("../../../models");
         
-        // Проверяем существование записи о браке
         const defect = await BeryllDefectRecord.findByPk(defectRecordId, {
             include: [{ model: BeryllServer, as: "server" }]
         });
@@ -84,7 +83,6 @@ class DefectRecordFileService {
             throw new Error("Запись о браке не найдена");
         }
         
-        // Создаём запись о файле
         const file = await BeryllDefectRecordFile.create({
             defectRecordId,
             fileName: fileData.fileName,
@@ -95,7 +93,6 @@ class DefectRecordFileService {
             uploadedById: fileData.uploadedById
         });
         
-        // Записываем в историю
         await BeryllHistory.create({
             serverId: defect.serverId,
             serverIp: defect.server?.ipAddress,
@@ -141,13 +138,11 @@ class DefectRecordFileService {
             throw new Error("Файл не найден");
         }
         
-        // Удаляем файл с диска
         const fullPath = path.join(DEFECT_FILES_DIR, file.filePath);
         if (fs.existsSync(fullPath)) {
             fs.unlinkSync(fullPath);
         }
         
-        // Записываем в историю
         if (file.defectRecord) {
             await BeryllHistory.create({
                 serverId: file.defectRecord.serverId,
@@ -164,7 +159,6 @@ class DefectRecordFileService {
             });
         }
         
-        // Удаляем запись из БД
         await file.destroy();
         
         return { success: true, message: "Файл удалён" };
@@ -178,23 +172,19 @@ class DefectRecordFileService {
      * @returns {Promise<Object>}
      */
     async saveFile(defectRecordId, file, userId) {
-        // Создаём директорию для записи если не существует
         const recordDir = path.join(DEFECT_FILES_DIR, String(defectRecordId));
         if (!fs.existsSync(recordDir)) {
             fs.mkdirSync(recordDir, { recursive: true });
         }
         
-        // Генерируем уникальное имя файла
         const timestamp = Date.now();
         const safeOriginalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const fileName = `${timestamp}_${safeOriginalName}`;
         const filePath = path.join(recordDir, fileName);
         const relativePath = path.join(String(defectRecordId), fileName);
         
-        // Сохраняем файл на диск
         await file.mv(filePath);
         
-        // Создаём запись в БД
         const fileRecord = await this.addFile(defectRecordId, {
             fileName,
             originalName: file.name,
