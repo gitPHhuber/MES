@@ -4,9 +4,7 @@ const { Op } = require("sequelize");
 const HistoryService = require("./HistoryService");
 
 class ArchiveService {
-  /**
-   * Получение списка архивных серверов
-   */
+
   async getArchivedServers(filters = {}) {
     const { search, batchId, page = 1, limit = 50 } = filters;
     
@@ -45,9 +43,7 @@ class ArchiveService {
     };
   }
   
-  /**
-   * Перенос сервера в архив
-   */
+
   async archiveServer(id, userId) {
     const server = await BeryllServer.findByPk(id);
     
@@ -55,12 +51,11 @@ class ArchiveService {
       throw new Error("Сервер не найден");
     }
     
-    // Проверяем что сервер завершён
+
     if (server.status !== SERVER_STATUSES.DONE) {
       throw new Error("Можно архивировать только завершённые серверы");
     }
     
-    // Проверяем что есть серийный номер
     if (!server.apkSerialNumber) {
       throw new Error("Перед архивацией необходимо присвоить серийный номер АПК");
     }
@@ -83,9 +78,7 @@ class ArchiveService {
     return { success: true, message: "Сервер перенесён в архив" };
   }
   
-  /**
-   * Разархивация сервера (возврат из архива)
-   */
+
   async unarchiveServer(id, userId) {
     const server = await BeryllServer.findByPk(id);
     
@@ -100,10 +93,9 @@ class ArchiveService {
     await server.update({
       archivedAt: null,
       archivedById: null,
-      status: SERVER_STATUSES.DONE // Возвращаем в статус "Готово"
+      status: SERVER_STATUSES.DONE 
     });
     
-    // Логируем
     await HistoryService.logHistory(server.id, userId, HISTORY_ACTIONS.STATUS_CHANGED, {
       fromStatus: "ARCHIVED",
       toStatus: SERVER_STATUSES.DONE,
@@ -121,9 +113,7 @@ class ArchiveService {
     return updated;
   }
   
-  /**
-   * Присвоение серийного номера АПК
-   */
+
   async updateApkSerialNumber(id, apkSerialNumber, userId) {
     if (!apkSerialNumber || !apkSerialNumber.trim()) {
       throw new Error("Укажите серийный номер АПК");
@@ -134,7 +124,6 @@ class ArchiveService {
       throw new Error("Сервер не найден");
     }
     
-    // Проверка уникальности
     const existing = await BeryllServer.findOne({
       where: {
         apkSerialNumber: apkSerialNumber.trim(),

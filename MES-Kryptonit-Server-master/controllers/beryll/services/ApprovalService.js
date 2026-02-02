@@ -2,7 +2,6 @@
 const { Op } = require("sequelize");
 const sequelize = require("../../../db");
 
-// Импорт моделей
 const {
   BeryllServer,
   BeryllServerChecklist,
@@ -23,28 +22,26 @@ const User = require("../../../models/User");
 
 class ApprovalService {
   
-  // ============================================
-  // ОТПРАВКА НА ВЕРИФИКАЦИЮ
-  // ============================================
+
   
   /**
    * Отправить сервер на верификацию (завершить этап сборки)
    * @param {number} serverId - ID сервера
    * @param {number} userId - ID пользователя-отправителя
-   * @param {string} stageCode - Код стадии (ASSEMBLY или VERIFICATION)
+   * @param {string} stageCode - Код стадии (ASSEMBLY)
    * @returns {Promise<Object>} Созданная запись апрува
    */
   async submitForVerification(serverId, userId, stageCode = CHECKLIST_STAGES.ASSEMBLY) {
     const transaction = await sequelize.transaction();
     
     try {
-      // Проверяем существование сервера
+
       const server = await BeryllServer.findByPk(serverId);
       if (!server) {
         throw new Error("Сервер не найден");
       }
 
-      // Проверяем нет ли уже PENDING апрува на эту стадию
+
       const existingPending = await BeryllServerApproval.findOne({
         where: {
           serverId,
@@ -58,16 +55,14 @@ class ApprovalService {
         throw new Error("Сервер уже ожидает проверки на этой стадии");
       }
 
-      // Проверяем завершённость чеклиста для данной стадии
       const completionCheck = await this.checkStageCompletion(serverId, stageCode, transaction);
       if (!completionCheck.isComplete) {
         throw new Error(`Не все обязательные пункты чеклиста выполнены. Осталось: ${completionCheck.remaining.join(", ")}`);
       }
 
-      // Собираем снапшот текущего состояния чеклиста
+
       const checklistSnapshot = await this.getChecklistSnapshot(serverId, stageCode, transaction);
 
-      // Создаём запись апрува
       const approval = await BeryllServerApproval.create({
         serverId,
         stageCode,
@@ -86,7 +81,6 @@ class ApprovalService {
         }
       }, { transaction });
 
-      // Записываем в историю
       await BeryllHistory.create({
         serverId,
         userId,
@@ -99,7 +93,7 @@ class ApprovalService {
 
       await transaction.commit();
 
-      // Возвращаем с включёнными связями
+
       return await this.getApprovalById(approval.id);
       
     } catch (error) {
@@ -108,15 +102,8 @@ class ApprovalService {
     }
   }
 
-  // ============================================
-  // ПРОВЕРКА ЗАВЕРШЁННОСТИ СТАДИИ
-  // ============================================
-
-  /**
-   * Проверить завершённость всех обязательных пунктов чеклиста для стадии
-   */
   async checkStageCompletion(serverId, stageCode, transaction = null) {
-    // Получаем все шаблоны для данной стадии
+
     const templates = await BeryllChecklistTemplate.findAll({
       where: {
         stageCode,
@@ -130,7 +117,6 @@ class ApprovalService {
       return { isComplete: true, remaining: [], total: 0, completed: 0 };
     }
 
-    // Получаем выполненные пункты
     const serverChecklists = await BeryllServerChecklist.findAll({
       where: {
         serverId,
@@ -161,9 +147,7 @@ class ApprovalService {
     };
   }
 
-  /**
-   * Получить снапшот чеклиста
-   */
+
   async getChecklistSnapshot(serverId, stageCode, transaction = null) {
     const checklists = await BeryllServerChecklist.findAll({
       where: { serverId },
@@ -202,13 +186,7 @@ class ApprovalService {
     }));
   }
 
-  // ============================================
-  // ОДОБРЕНИЕ / ОТКЛОНЕНИЕ
-  // ============================================
 
-  /**
-   * Одобрить сервер
-   */
   async approveServer(approvalId, reviewerId, comment = null) {
     const transaction = await sequelize.transaction();
     
@@ -223,14 +201,14 @@ class ApprovalService {
         throw new Error("Эта запись уже обработана");
       }
 
-      // Обновляем статус
+
       approval.status = APPROVAL_STATUSES.APPROVED;
       approval.reviewedById = reviewerId;
       approval.reviewedAt = new Date();
       approval.comment = comment;
       await approval.save({ transaction });
 
-      // Записываем в историю
+
       await BeryllHistory.create({
         serverId: approval.serverId,
         userId: reviewerId,
@@ -249,9 +227,7 @@ class ApprovalService {
     }
   }
 
-  /**
-   * Отклонить сервер
-   */
+
   async rejectServer(approvalId, reviewerId, comment) {
     if (!comment?.trim()) {
       throw new Error("Укажите причину отклонения");
@@ -270,14 +246,14 @@ class ApprovalService {
         throw new Error("Эта запись уже обработана");
       }
 
-      // Обновляем статус
+
       approval.status = APPROVAL_STATUSES.REJECTED;
       approval.reviewedById = reviewerId;
       approval.reviewedAt = new Date();
       approval.comment = comment;
       await approval.save({ transaction });
 
-      // Записываем в историю
+
       await BeryllHistory.create({
         serverId: approval.serverId,
         userId: reviewerId,
@@ -296,13 +272,7 @@ class ApprovalService {
     }
   }
 
-  // ============================================
-  // ПОЛУЧЕНИЕ ДАННЫХ
-  // ============================================
 
-  /**
-   * Получить апрув по ID с полными данными
-   */
   async getApprovalById(approvalId) {
     return await BeryllServerApproval.findByPk(approvalId, {
       include: [
@@ -325,9 +295,7 @@ class ApprovalService {
     });
   }
 
-  /**
-   * Получить очередь на верификацию (PENDING)
-   */
+
   async getVerificationQueue(options = {}) {
     const {
       stageCode = null,
@@ -384,9 +352,7 @@ class ApprovalService {
     };
   }
 
-  /**
-   * Получить историю апрувов для сервера
-   */
+
   async getServerApprovalHistory(serverId) {
     return await BeryllServerApproval.findAll({
       where: { serverId },
@@ -406,11 +372,9 @@ class ApprovalService {
     });
   }
 
-  /**
-   * Получить текущий статус верификации сервера
-   */
+
   async getServerVerificationStatus(serverId) {
-    // Получаем последний апрув для каждой стадии
+
     const stages = Object.values(CHECKLIST_STAGES);
     const result = {};
 
@@ -445,9 +409,7 @@ class ApprovalService {
     return result;
   }
 
-  /**
-   * Получить детальные данные для страницы верификации
-   */
+
   async getVerificationDetails(approvalId) {
     const approval = await this.getApprovalById(approvalId);
     
@@ -455,7 +417,6 @@ class ApprovalService {
       throw new Error("Запись верификации не найдена");
     }
 
-    // Получаем полный чеклист с файлами
     const checklists = await BeryllServerChecklist.findAll({
       where: { serverId: approval.serverId },
       include: [
@@ -481,7 +442,6 @@ class ApprovalService {
       order: [[{ model: BeryllChecklistTemplate, as: "template" }, "sortOrder", "ASC"]]
     });
 
-    // Группируем по groupCode
     const groupedChecklists = {};
     for (const cl of checklists) {
       const groupCode = cl.template?.groupCode || "OTHER";
@@ -499,13 +459,7 @@ class ApprovalService {
     };
   }
 
-  // ============================================
-  // СТАТИСТИКА
-  // ============================================
 
-  /**
-   * Получить статистику верификации
-   */
   async getVerificationStats() {
     const pendingCount = await BeryllServerApproval.count({
       where: { status: APPROVAL_STATUSES.PENDING }
@@ -528,7 +482,6 @@ class ApprovalService {
       }
     });
 
-    // Средняя время на верификацию (за последние 7 дней)
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 

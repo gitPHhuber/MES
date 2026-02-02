@@ -1,26 +1,19 @@
-/**
- * DefectRecordController.js - Контроллер записей о браке серверов
- * Путь: controllers/beryll/controllers/DefectRecordController.js
- */
 
 const path = require("path");
 const fs = require("fs");
 const ApiError = require("../../../error/ApiError");
 const DefectRecordService = require("../services/DefectRecordService");
 
-// Директория для хранения файлов дефектов
+
 const DEFECT_FILES_DIR = path.join(__dirname, "../../../static/defect-records");
 
-// Убедимся, что директория существует
+
 if (!fs.existsSync(DEFECT_FILES_DIR)) {
     fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
 }
 
 class DefectRecordController {
     
-    // =========================================
-    // CRUD
-    // =========================================
     
     async getAll(req, res, next) {
         try {
@@ -135,9 +128,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: ДИАГНОСТИКА
-    // =========================================
+
     
     async startDiagnosis(req, res, next) {
         try {
@@ -163,9 +154,6 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: ОЖИДАНИЕ ЗАПЧАСТЕЙ
-    // =========================================
     
     async setWaitingParts(req, res, next) {
         try {
@@ -197,9 +185,6 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: РЕМОНТ
-    // =========================================
     
     async startRepair(req, res, next) {
         try {
@@ -225,9 +210,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: ЯДРО
-    // =========================================
+
     
     async sendToYadro(req, res, next) {
         try {
@@ -253,9 +236,6 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: ПОДМЕННЫЕ СЕРВЕРЫ
-    // =========================================
     
     async issueSubstitute(req, res, next) {
         try {
@@ -282,9 +262,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // WORKFLOW: ЗАКРЫТИЕ
-    // =========================================
+
     
     async resolve(req, res, next) {
         try {
@@ -298,10 +276,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // ФАЙЛЫ
-    // =========================================
-    
+
     async getFiles(req, res, next) {
         try {
             const { id } = req.params;
@@ -424,10 +399,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // СПРАВОЧНИКИ
-    // =========================================
-    
+ 
     async getRepairPartTypes(req, res, next) {
         try {
             const types = DefectRecordService.getRepairPartTypes();
@@ -446,10 +418,7 @@ class DefectRecordController {
         }
     }
     
-    // =========================================
-    // СТАТИСТИКА
-    // =========================================
-    
+
     async getStats(req, res, next) {
         try {
             const filters = {

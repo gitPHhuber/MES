@@ -1,16 +1,8 @@
-/**
- * DefectExportController.js - Контроллер экспорта дефектов в Excel
- * Путь: controllers/beryll/controllers/DefectExportController.js
- */
-
 const DefectExportService = require("../services/DefectExportService");
 const ApiError = require("../../../error/ApiError");
 
 class DefectExportController {
-    /**
-     * GET /api/beryll/defect-records/export
-     * Экспорт всех дефектов в Excel
-     */
+
     async exportDefects(req, res, next) {
         try {
             const { status, dateFrom, dateTo, serverId, search } = req.query;
@@ -44,10 +36,7 @@ class DefectExportController {
         }
     }
     
-    /**
-     * GET /api/beryll/defect-records/export/stats
-     * Экспорт статистики по дефектам
-     */
+
     async exportStats(req, res, next) {
         try {
             const buffer = await DefectExportService.exportStatsToExcel();

@@ -1,17 +1,3 @@
-/**
- * ServerComponentsManager.tsx
- * 
- * Расширенный компонент для управления комплектующими сервера:
- * - Просмотр комплектующих с двумя серийными номерами (Yadro и производителя)
- * - Добавление новых комплектующих
- * - Замена комплектующих
- * - Сканирование/ввод серийного номера Yadro
- * - Редактирование серийных номеров
- * - Синхронизация с BMC с выбором режима (compare/force/merge)
- * 
- * Положить в: src/components/beryll/ServerComponentsManager.tsx
- */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -25,9 +11,6 @@ import toast from 'react-hot-toast';
 
 import { $authHost } from '../../api/index';
 
-// ============================================
-// API ФУНКЦИИ
-// ============================================
 
 const BASE_URL = "/api/beryll";
 
@@ -36,7 +19,7 @@ async function checkBMC(serverId: number) {
   return data;
 }
 
-// Обновленная функция с поддержкой режимов синхронизации
+
 async function fetchComponentsFromBMC(
   serverId: number,
   mode: 'compare' | 'force' | 'merge' = 'compare',
@@ -79,9 +62,14 @@ async function deleteComponent(componentId: number, reason?: string) {
   return data;
 }
 
-// ============================================
-// ТИПЫ И КОНСТАНТЫ
-// ============================================
+// Загрузка каталога ревизий по типу компонента
+async function fetchCatalogByType(componentType: string) {
+  const { data } = await $authHost.get(`${BASE_URL}/catalog`, {
+    params: { type: componentType }
+  });
+  return data;
+}
+
 
 type ComponentType = 'CPU' | 'RAM' | 'HDD' | 'SSD' | 'NVME' | 'NIC' | 'MOTHERBOARD' | 'PSU' | 'GPU' | 'RAID' | 'BMC' | 'OTHER';
 type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'REPLACED';
@@ -120,7 +108,6 @@ interface ComponentsResponse {
   components: ServerComponent[];
 }
 
-// Тип для результата сравнения с BMC
 interface BMCComparisonResult {
   success: boolean;
   mode: 'compare';
@@ -146,6 +133,15 @@ interface Props {
   serverIp?: string;
   apkSerialNumber?: string;
   readOnly?: boolean;
+}
+
+// Интерфейс для записи каталога ревизий
+interface CatalogRevisionEntry {
+  revision: string;
+  label: string;
+  manufacturer?: string;
+  model?: string;
+  partNumber?: string;
 }
 
 const COMPONENT_TYPES: { value: ComponentType; label: string }[] = [
@@ -179,7 +175,7 @@ const COMPONENT_STATUS_COLORS: Record<ComponentStatus, string> = {
   REPLACED: 'bg-violet-100 text-violet-700 border-violet-300'
 };
 
-// Иконки по типам
+
 const TypeIcon: Record<ComponentType, React.FC<{ className?: string; size?: number }>> = {
   CPU: Cpu,
   RAM: MemoryStick,
@@ -195,7 +191,7 @@ const TypeIcon: Record<ComponentType, React.FC<{ className?: string; size?: numb
   OTHER: Settings
 };
 
-// Статус иконки
+
 const StatusIcon: React.FC<{ status: ComponentStatus; className?: string }> = ({ status, className }) => {
   switch (status) {
     case 'OK': return <CheckCircle className={clsx('text-emerald-500', className)} size={18} />;
@@ -206,7 +202,7 @@ const StatusIcon: React.FC<{ status: ComponentStatus; className?: string }> = ({
   }
 };
 
-// Утилита форматирования байт
+
 function formatBytes(bytes: number | string | null | undefined): string {
   if (!bytes) return '—';
   const b = typeof bytes === 'string' ? parseInt(bytes) : bytes;
@@ -217,7 +213,7 @@ function formatBytes(bytes: number | string | null | undefined): string {
   return `${(b / Math.pow(1024, i)).toFixed(i > 2 ? 1 : 0)} ${units[i]}`;
 }
 
-// Placeholder-ы для разных типов комплектующих
+
 const TYPE_PLACEHOLDERS: Record<ComponentType, {
   manufacturer: string;
   model: string;
@@ -338,6 +334,7 @@ interface ComponentFormData {
   partNumber: string;
   slot: string;
   status: ComponentStatus;
+  revision?: string;
   capacity?: string;
   speed?: string;
 }
@@ -354,6 +351,7 @@ interface ComponentModalProps {
 const ComponentModal: React.FC<ComponentModalProps> = ({
   isOpen, onClose, onSave, initialData, title, isReplacement
 }) => {
+
   const [formData, setFormData] = useState<ComponentFormData>({
     componentType: 'RAM',
     name: '',
@@ -364,16 +362,23 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
     partNumber: '',
     slot: '',
     status: 'OK',
+    revision: '',
     capacity: '',
     speed: ''
   });
   const [saving, setSaving] = useState(false);
   const yadroInputRef = useRef<HTMLInputElement>(null);
 
+  // === Состояния для каталога ревизий ===
+  const [catalogRevisions, setCatalogRevisions] = useState<CatalogRevisionEntry[]>([]);
+  const [loadingRevisions, setLoadingRevisions] = useState(false);
+  const [customRevision, setCustomRevision] = useState(false);
+
   useEffect(() => {
     if (initialData) {
       setFormData(prev => ({ ...prev, ...initialData }));
     } else {
+
       setFormData({
         componentType: 'RAM',
         name: '',
@@ -384,6 +389,7 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
         partNumber: '',
         slot: '',
         status: 'OK',
+        revision: '',
         capacity: '',
         speed: ''
       });
@@ -396,8 +402,111 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
     }
   }, [isOpen]);
 
+  // === Загрузка ревизий из каталога при смене типа компонента ===
+  useEffect(() => {
+    if (!isOpen || !formData.componentType) {
+      setCatalogRevisions([]);
+      setCustomRevision(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchRevisions = async () => {
+      setLoadingRevisions(true);
+      try {
+        const data = await fetchCatalogByType(formData.componentType);
+
+        if (cancelled) return;
+
+        // Собираем уникальные ревизии с описанием
+        const revMap = new Map<string, CatalogRevisionEntry>();
+        for (const entry of data) {
+          if (entry.revision) {
+            const label = [
+              entry.manufacturer || '',
+              entry.model || '',
+              `rev. ${entry.revision}`
+            ].filter(Boolean).join(' ').trim();
+
+            // Используем комбинированный ключ: model+revision для уникальности
+            const key = `${entry.model || ''}__${entry.revision}`;
+            if (!revMap.has(key)) {
+              revMap.set(key, {
+                revision: entry.revision,
+                label,
+                manufacturer: entry.manufacturer || undefined,
+                model: entry.model || undefined,
+                partNumber: entry.partNumber || undefined
+              });
+            }
+          }
+        }
+
+        const revisions = Array.from(revMap.values())
+          .sort((a, b) => {
+            // Сортировка: сначала по модели, потом по ревизии
+            const modelCmp = (a.model || '').localeCompare(b.model || '');
+            if (modelCmp !== 0) return modelCmp;
+            return a.revision.localeCompare(b.revision, undefined, { numeric: true });
+          });
+
+        setCatalogRevisions(revisions);
+
+        // Если текущее значение revision не пустое и его нет в каталоге — 
+        // переключаемся в режим ручного ввода
+        if (formData.revision) {
+          const exists = revisions.some(r => r.revision === formData.revision);
+          if (!exists && revisions.length > 0) {
+            setCustomRevision(true);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load catalog revisions:', err);
+        if (!cancelled) {
+          setCatalogRevisions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRevisions(false);
+        }
+      }
+    };
+
+    fetchRevisions();
+    setCustomRevision(false);
+
+    return () => { cancelled = true; };
+  }, [isOpen, formData.componentType]);
+
   const handleChange = (field: keyof ComponentFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Обработчик выбора ревизии из каталога — автозаполнение полей
+  const handleRevisionSelect = (selectedRevision: string) => {
+    if (selectedRevision === '__custom__') {
+      setCustomRevision(true);
+      handleChange('revision', '');
+      return;
+    }
+
+    handleChange('revision', selectedRevision);
+
+    // Автозаполнение manufacturer, model, partNumber из выбранной записи каталога
+    if (selectedRevision) {
+      const entry = catalogRevisions.find(r => r.revision === selectedRevision);
+      if (entry) {
+        setFormData(prev => ({
+          ...prev,
+          revision: selectedRevision,
+          // Автозаполняем только пустые поля (не перетираем уже заполненные)
+          manufacturer: prev.manufacturer || entry.manufacturer || '',
+          model: prev.model || entry.model || '',
+          partNumber: prev.partNumber || entry.partNumber || ''
+        }));
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -429,7 +538,6 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
   return createPortal(
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-violet-600">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -446,9 +554,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
           </div>
         </div>
 
-        {/* Form */}
+
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {/* Yadro Serial - приоритетное поле для сканирования */}
           <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
             <label className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
               <ScanLine size={18} />
@@ -468,7 +575,6 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
             </p>
           </div>
 
-          {/* Row: Type + Status */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Тип комплектующего *</label>
@@ -570,8 +676,59 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
             </div>
           </div>
 
-          {/* Row: Capacity + Speed */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Ревизия + Объём + Скорость */}
+          <div className="grid grid-cols-3 gap-4">
+
+            {/* === РЕВИЗИЯ: dropdown из каталога или ручной ввод === */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Ревизия</label>
+
+              {loadingRevisions ? (
+                /* Состояние загрузки */
+                <div className="w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50 flex items-center gap-2 text-sm text-slate-400">
+                  <RefreshCw size={14} className="animate-spin" />
+                  Загрузка...
+                </div>
+              ) : catalogRevisions.length > 0 && !customRevision ? (
+                /* Dropdown с ревизиями из каталога */
+                <div className="space-y-1">
+                  <select
+                    value={formData.revision || ''}
+                    onChange={(e) => handleRevisionSelect(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  >
+                    <option value="">— Выберите ревизию —</option>
+                    {catalogRevisions.map((r, idx) => (
+                      <option key={`${r.revision}-${idx}`} value={r.revision}>
+                        {r.label}
+                      </option>
+                    ))}
+                    <option value="__custom__">✏️ Ввести вручную...</option>
+                  </select>
+                </div>
+              ) : (
+                /* Ручной ввод (fallback если нет ревизий в каталоге, или пользователь выбрал «Ввести вручную») */
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    value={formData.revision}
+                    onChange={(e) => handleChange('revision', e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Rev.A, Rev.1.0..."
+                  />
+                  {catalogRevisions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setCustomRevision(false); handleChange('revision', ''); }}
+                      className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline transition-colors"
+                    >
+                      ← Выбрать из каталога
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Объём (GB)</label>
               <input
@@ -1053,6 +1210,12 @@ const ComponentCard: React.FC<ComponentCardProps> = ({
               <label className="text-xs text-slate-500">P/N</label>
               <p className="font-mono text-slate-800">{component.partNumber || '—'}</p>
             </div>
+            {component.metadata?.revision && (
+              <div>
+                <label className="text-xs text-slate-500">Ревизия</label>
+                <p className="font-medium text-slate-800">{component.metadata.revision}</p>
+              </div>
+            )}
             {component.capacity && (
               <div>
                 <label className="text-xs text-slate-500">Объём</label>
@@ -1163,7 +1326,7 @@ const ServerComponentsManager: React.FC<Props> = ({
     loadComponents();
   }, [loadComponents]);
 
-  // Выгрузка с BMC - ИСПРАВЛЕННАЯ ВЕРСИЯ
+  // Выгрузка с BMC
   const handleFetchFromBmc = async () => {
     setFetchingFromBmc(true);
     try {
@@ -1251,7 +1414,8 @@ const ServerComponentsManager: React.FC<Props> = ({
         slot: formData.slot,
         status: formData.status,
         capacity: formData.capacity ? parseInt(formData.capacity) * 1024 * 1024 * 1024 : undefined,
-        speed: formData.speed
+        speed: formData.speed,
+        metadata: formData.revision ? { revision: formData.revision } : undefined
       });
       toast.success('Комплектующее добавлено');
       await loadComponents();
@@ -1261,11 +1425,12 @@ const ServerComponentsManager: React.FC<Props> = ({
     }
   };
 
-  // Редактирование комплектующего
+  // Редактирование комплектующего: merge metadata.revision
   const handleEditComponent = async (formData: ComponentFormData) => {
     if (!editingComponent) return;
     
     try {
+      const existingMetadata = (editingComponent as any).metadata || {};
       await updateServerComponent(editingComponent.id, {
         name: formData.name,
         manufacturer: formData.manufacturer,
@@ -1274,7 +1439,11 @@ const ServerComponentsManager: React.FC<Props> = ({
         serialNumberYadro: formData.serialNumberYadro,
         partNumber: formData.partNumber,
         slot: formData.slot,
-        status: formData.status
+        status: formData.status,
+        metadata: {
+          ...existingMetadata,
+          revision: formData.revision || null
+        }
       });
       toast.success('Комплектующее обновлено');
       setEditingComponent(null);
@@ -1519,7 +1688,7 @@ const ServerComponentsManager: React.FC<Props> = ({
         title="Добавить комплектующее"
       />
 
-      {/* Edit Modal */}
+      {/* Edit Modal — initialData читает revision из metadata */}
       <ComponentModal
         isOpen={!!editingComponent}
         onClose={() => setEditingComponent(null)}
@@ -1533,7 +1702,8 @@ const ServerComponentsManager: React.FC<Props> = ({
           serialNumberYadro: editingComponent.serialNumberYadro || '',
           partNumber: editingComponent.partNumber || '',
           slot: editingComponent.slot || '',
-          status: editingComponent.status
+          status: editingComponent.status,
+          revision: (editingComponent as any).metadata?.revision || ''
         } : undefined}
         title="Редактировать комплектующее"
       />

@@ -1,16 +1,10 @@
-/**
- * DefectRecordFileService.js - Сервис для работы с файлами записей о браке
- * 
- * Путь: controllers/beryll/services/DefectRecordFileService.js
- */
 
 const path = require("path");
 const fs = require("fs");
 
-// Директория для хранения файлов
 const DEFECT_FILES_DIR = path.join(__dirname, "../../../static/defect-records");
 
-// Создаём директорию если не существует
+
 if (!fs.existsSync(DEFECT_FILES_DIR)) {
     fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
 }
@@ -272,13 +266,12 @@ class DefectRecordFileService {
             }
         }
         
-        // Удаляем директорию если пустая
         const recordDir = path.join(DEFECT_FILES_DIR, String(defectRecordId));
         if (fs.existsSync(recordDir)) {
             try {
                 fs.rmdirSync(recordDir);
             } catch (e) {
-                // Директория не пустая, игнорируем
+
             }
         }
         

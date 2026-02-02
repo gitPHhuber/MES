@@ -1,8 +1,3 @@
-/**
- * Конфигурация Sequelize CLI
- * Использует переменные окружения из .env
- */
-
 require('dotenv').config();
 
 module.exports = {

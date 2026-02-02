@@ -1,31 +1,10 @@
-/**
- * RackController.js
- * 
- * Контроллер для работы со стойками и размещением серверов
- * 
- * Новые endpoints:
- * - POST /racks/:rackId/units/:unitNumber/place - Разместить сервер БЕЗ взятия в работу
- * - POST /racks/:rackId/sync-dhcp - Синхронизировать IP с DHCP
- * - GET /racks/:rackId/summary - Получить сводку по стойке
- * - GET /racks/:rackId/units-by-status - Юниты по статусу
- * - GET /dhcp/find-ip/:mac - Найти IP по MAC адресу
- * 
- * Положить в: controllers/beryll/controllers/RackController.js
- */
 
 const RackService = require("../services/RackService");
 const ApiError = require("../../../error/ApiError");
 
 class RackController {
   
-  // =============================================
-  // СТОЙКИ
-  // =============================================
-  
-  /**
-   * Получить все стойки
-   * GET /api/beryll/racks
-   */
+
   async getAllRacks(req, res, next) {
     try {
       const { status, search, includeUnits } = req.query;
@@ -41,10 +20,6 @@ class RackController {
     }
   }
   
-  /**
-   * Получить стойку по ID
-   * GET /api/beryll/racks/:id
-   */
   async getRackById(req, res, next) {
     try {
       const { id } = req.params;
@@ -61,10 +36,6 @@ class RackController {
     }
   }
   
-  /**
-   * Создать стойку
-   * POST /api/beryll/racks
-   */
   async createRack(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -76,10 +47,7 @@ class RackController {
     }
   }
   
-  /**
-   * Обновить стойку
-   * PUT /api/beryll/racks/:id
-   */
+
   async updateRack(req, res, next) {
     try {
       const { id } = req.params;
@@ -92,10 +60,7 @@ class RackController {
     }
   }
   
-  /**
-   * Удалить стойку
-   * DELETE /api/beryll/racks/:id
-   */
+
   async deleteRack(req, res, next) {
     try {
       const { id } = req.params;
@@ -108,10 +73,7 @@ class RackController {
     }
   }
   
-  /**
-   * Получить историю стойки
-   * GET /api/beryll/racks/:id/history
-   */
+
   async getRackHistory(req, res, next) {
     try {
       const { id } = req.params;
@@ -129,10 +91,7 @@ class RackController {
     }
   }
   
-  /**
-   * НОВЫЙ: Получить сводку по стойке
-   * GET /api/beryll/racks/:rackId/summary
-   */
+
   async getRackSummary(req, res, next) {
     try {
       const { rackId } = req.params;
@@ -144,14 +103,7 @@ class RackController {
     }
   }
   
-  // =============================================
-  // ЮНИТЫ
-  // =============================================
-  
-  /**
-   * Получить свободные юниты в стойке
-   * GET /api/beryll/racks/:rackId/free-units
-   */
+
   async getFreeUnits(req, res, next) {
     try {
       const { rackId } = req.params;
@@ -163,10 +115,6 @@ class RackController {
     }
   }
   
-  /**
-   * Получить юнит по номеру
-   * GET /api/beryll/racks/:rackId/units/:unitNumber
-   */
   async getUnit(req, res, next) {
     try {
       const { rackId, unitNumber } = req.params;
@@ -183,10 +131,7 @@ class RackController {
     }
   }
   
-  /**
-   * НОВЫЙ: Получить юниты по статусу сервера
-   * GET /api/beryll/racks/:rackId/units-by-status?status=IN_WORK
-   */
+
   async getUnitsByStatus(req, res, next) {
     try {
       const { rackId } = req.params;
@@ -200,11 +145,7 @@ class RackController {
     }
   }
   
-  /**
-   * НОВЫЙ: Разместить сервер в стойку БЕЗ взятия в работу
-   * POST /api/beryll/racks/:rackId/units/:unitNumber/place
-   * Body: { serverId: number }
-   */
+
   async placeServer(req, res, next) {
     try {
       const { rackId, unitNumber } = req.params;
@@ -229,10 +170,7 @@ class RackController {
     }
   }
   
-  /**
-   * Установить сервер и взять в работу
-   * POST /api/beryll/racks/:rackId/units/:unitNumber/install
-   */
+
   async installServer(req, res, next) {
     try {
       const { rackId, unitNumber } = req.params;
@@ -258,10 +196,6 @@ class RackController {
     }
   }
   
-  /**
-   * Извлечь сервер из стойки
-   * POST /api/beryll/racks/:rackId/units/:unitNumber/remove
-   */
   async removeServer(req, res, next) {
     try {
       const { rackId, unitNumber } = req.params;
@@ -280,10 +214,7 @@ class RackController {
     }
   }
   
-  /**
-   * Обновить данные юнита
-   * PUT /api/beryll/rack-units/:unitId
-   */
+
   async updateUnit(req, res, next) {
     try {
       const { unitId } = req.params;
@@ -296,10 +227,7 @@ class RackController {
     }
   }
   
-  /**
-   * Переместить сервер между юнитами/стойками
-   * POST /api/beryll/rack-units/move
-   */
+
   async moveServer(req, res, next) {
     try {
       const { fromRackId, fromUnit, toRackId, toUnit } = req.body;
@@ -317,10 +245,6 @@ class RackController {
     }
   }
   
-  /**
-   * Найти сервер в стойках
-   * GET /api/beryll/servers/:serverId/rack-location
-   */
   async findServerInRacks(req, res, next) {
     try {
       const { serverId } = req.params;
@@ -332,14 +256,6 @@ class RackController {
     }
   }
   
-  // =============================================
-  // DHCP ИНТЕГРАЦИЯ
-  // =============================================
-  
-  /**
-   * НОВЫЙ: Синхронизировать стойку с DHCP
-   * POST /api/beryll/racks/:rackId/sync-dhcp
-   */
   async syncWithDhcp(req, res, next) {
     try {
       const { rackId } = req.params;
@@ -353,10 +269,6 @@ class RackController {
     }
   }
   
-  /**
-   * НОВЫЙ: Найти IP по MAC адресу в DHCP
-   * GET /api/beryll/dhcp/find-ip/:mac
-   */
   async findIpByMac(req, res, next) {
     try {
       const { mac } = req.params;
@@ -373,24 +285,6 @@ class RackController {
     }
   }
   
-  // =============================================
-  // РУЧНОЕ СОЗДАНИЕ СЕРВЕРОВ
-  // =============================================
-  
-  /**
-   * Создать сервер вручную
-   * POST /api/beryll/servers/create
-   * 
-   * Body: {
-   *   apkSerialNumber: string,  // Серийный номер АПК (обязательный)
-   *   serialNumber?: string,    // Серийный номер сервера
-   *   macAddress?: string,      // MAC адрес
-   *   hostname?: string,        // Hostname  
-   *   batchId?: number,         // ID партии
-   *   notes?: string,           // Примечания
-   *   searchDhcp?: boolean      // Искать ли в DHCP (default: true)
-   * }
-   */
   async createServer(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -402,22 +296,6 @@ class RackController {
     }
   }
   
-  /**
-   * Создать сервер и сразу разместить в стойку
-   * POST /api/beryll/servers/create-and-place
-   * 
-   * Body: {
-   *   apkSerialNumber: string,
-   *   serialNumber?: string,
-   *   macAddress?: string,
-   *   hostname?: string,
-   *   batchId?: number,
-   *   notes?: string,
-   *   searchDhcp?: boolean,
-   *   rackId?: number,          // ID стойки для размещения
-   *   unitNumber?: number       // Номер юнита
-   * }
-   */
   async createAndPlaceServer(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -429,10 +307,7 @@ class RackController {
     }
   }
   
-  /**
-   * Поиск сервера в DHCP по серийнику
-   * GET /api/beryll/dhcp/find-server/:serial
-   */
+
   async findServerInDhcp(req, res, next) {
     try {
       const { serial } = req.params;

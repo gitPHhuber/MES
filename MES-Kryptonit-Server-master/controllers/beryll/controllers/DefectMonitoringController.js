@@ -1,10 +1,3 @@
-/**
- * DefectMonitoringController.js
- * 
- * Контроллер для мониторинга серверов и управления дефектами
- * Положить в: controllers/beryll/controllers/DefectMonitoringController.js
- */
-
 const { exec } = require("child_process");
 const { promisify } = require("util");
 const path = require("path");
@@ -18,38 +11,31 @@ const { User } = require("../../../models/index");
 const execAsync = promisify(exec);
 
 // Настройки пинга
-const PING_TIMEOUT = 2; // секунды
-const CACHE_TTL = 60000; // 1 минута
+const PING_TIMEOUT = 2;
+const CACHE_TTL = 60000; 
 
-// Кэш мониторинга
+
 let pingCache = new Map();
 let lastFullScan = null;
 
-// Директория для файлов дефектов
+
 const DEFECT_FILES_DIR = path.join(__dirname, "../../../uploads/beryll/defects");
 
-// Убедимся что директория существует
+
 if (!fs.existsSync(DEFECT_FILES_DIR)) {
   fs.mkdirSync(DEFECT_FILES_DIR, { recursive: true });
 }
 
 class DefectMonitoringController {
   
-  // =============================================
-  // МОНИТОРИНГ (PING)
-  // =============================================
-  
-  /**
-   * Пинг одного IP адреса
-   */
+
   async pingHost(ipAddress) {
     if (!ipAddress) {
       return { online: false, latency: null, error: "IP не указан" };
     }
     
     try {
-      // Linux/Mac: ping -c 1 -W timeout
-      // Windows: ping -n 1 -w timeout_ms
+
       const isWindows = process.platform === 'win32';
       const cmd = isWindows 
         ? `ping -n 1 -w ${PING_TIMEOUT * 1000} ${ipAddress}`
@@ -59,7 +45,6 @@ class DefectMonitoringController {
         timeout: (PING_TIMEOUT + 1) * 1000 
       });
       
-      // Парсим latency из вывода
       const latencyMatch = stdout.match(/time[=<](\d+\.?\d*)/);
       return { 
         online: true, 
@@ -75,10 +60,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/monitoring/ping/:id
-   * Пинг одного сервера по ID
-   */
   async pingServer(req, res, next) {
     try {
       const serverId = parseInt(req.params.id);
@@ -105,7 +86,6 @@ class DefectMonitoringController {
       
       const result = await this.pingHost(server.ipAddress);
       
-      // Сохраняем в кэш
       const cacheEntry = {
         serverId,
         ipAddress: server.ipAddress,
@@ -126,20 +106,15 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * POST /api/beryll/monitoring/ping-all
-   * Массовый пинг всех серверов
-   */
+
   async pingAllServers(req, res, next) {
     try {
       const { batchId, status, forceRefresh } = req.query;
       
-      // Возвращаем кэш если не прошло достаточно времени
       if (forceRefresh !== "true" && lastFullScan && (Date.now() - lastFullScan.getTime() < CACHE_TTL)) {
         return res.json(this.getCachedStatusesData());
       }
       
-      // Фильтры
       const where = { 
         ipAddress: { [Op.ne]: null },
         status: { [Op.notIn]: ["ARCHIVED"] }
@@ -155,7 +130,7 @@ class DefectMonitoringController {
       console.log(`[Monitoring] Пингуем ${servers.length} серверов...`);
       
       const results = [];
-      const batchSize = 10; // Пинг пачками по 10
+      const batchSize = 10;
       
       for (let i = 0; i < servers.length; i += batchSize) {
         const batch = servers.slice(i, i + batchSize);
@@ -198,10 +173,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/monitoring/status
-   * Получить кэшированные статусы
-   */
+
   async getCachedStatus(req, res, next) {
     try {
       return res.json(this.getCachedStatusesData());
@@ -210,17 +182,14 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/monitoring/stats
-   * Статистика мониторинга
-   */
+
   async getMonitoringStats(req, res, next) {
     try {
       const results = Array.from(pingCache.values());
       const online = results.filter(r => r.online).length;
       const offline = results.filter(r => !r.online).length;
       
-      // Средний latency
+
       const latencies = results.filter(r => r.online && r.latency).map(r => r.latency);
       const avgLatency = latencies.length > 0 
         ? (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2)
@@ -245,9 +214,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/monitoring/servers/online
-   */
+
   async getOnlineServers(req, res, next) {
     try {
       const results = Array.from(pingCache.values()).filter(r => r.online);
@@ -257,9 +224,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/monitoring/servers/offline
-   */
+
   async getOfflineServers(req, res, next) {
     try {
       const results = Array.from(pingCache.values()).filter(r => !r.online);
@@ -269,9 +234,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * POST /api/beryll/monitoring/clear-cache
-   */
+
   async clearCache(req, res, next) {
     try {
       pingCache.clear();
@@ -282,9 +245,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * Вспомогательный метод для получения кэша
-   */
+
   getCachedStatusesData() {
     const results = Array.from(pingCache.values());
     const online = results.filter(r => r.online).length;
@@ -298,26 +259,16 @@ class DefectMonitoringController {
     };
   }
   
-  // =============================================
-  // ДЕФЕКТЫ (КОММЕНТАРИИ К БРАКУ)
-  // =============================================
-  
-  /**
-   * GET /api/beryll/servers/:serverId/defects
-   * Получить дефекты сервера
-   */
   async getServerDefects(req, res, next) {
     try {
       const { serverId } = req.params;
       const { status, category, limit = 50, offset = 0 } = req.query;
       
-      // Проверяем существование сервера
       const server = await BeryllServer.findByPk(serverId);
       if (!server) {
         return next(ApiError.notFound("Сервер не найден"));
       }
       
-      // Пока возвращаем пустой список (функционал дефектов можно расширить позже)
       return res.json({
         count: 0,
         rows: [],
@@ -330,23 +281,16 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/defects/:id
-   * Получить дефект по ID
-   */
   async getDefectById(req, res, next) {
     try {
-      // Заглушка - функционал можно расширить позже
+      // Заглушка
       return next(ApiError.notFound("Дефект не найден"));
     } catch (e) {
       return next(ApiError.internal(e.message));
     }
   }
   
-  /**
-   * POST /api/beryll/servers/:serverId/defects
-   * Создать дефект
-   */
+
   async createDefect(req, res, next) {
     try {
       const { serverId } = req.params;
@@ -361,7 +305,6 @@ class DefectMonitoringController {
         return next(ApiError.notFound("Сервер не найден"));
       }
       
-      // Записываем в историю как NOTE_ADDED с меткой дефекта
       await BeryllHistory.create({
         serverId,
         serverIp: server.ipAddress,
@@ -382,10 +325,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * PUT /api/beryll/defects/:id
-   * Обновить дефект
-   */
   async updateDefect(req, res, next) {
     try {
       return next(ApiError.notFound("Дефект не найден"));
@@ -394,10 +333,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/defects/:id
-   * Удалить дефект
-   */
   async deleteDefect(req, res, next) {
     try {
       return next(ApiError.notFound("Дефект не найден"));
@@ -406,10 +341,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * POST /api/beryll/defects/:id/resolve
-   * Отметить дефект исправленным
-   */
   async resolveDefect(req, res, next) {
     try {
       return next(ApiError.notFound("Дефект не найден"));
@@ -418,10 +349,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * POST /api/beryll/defects/:id/files
-   * Загрузить файл к дефекту
-   */
   async uploadDefectFile(req, res, next) {
     try {
       if (!req.file) {
@@ -442,10 +369,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/defect-files/:id/download
-   * Скачать файл дефекта
-   */
+
   async downloadDefectFile(req, res, next) {
     try {
       return next(ApiError.notFound("Файл не найден"));
@@ -454,10 +378,7 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/defect-files/:id
-   * Удалить файл дефекта
-   */
+
   async deleteDefectFile(req, res, next) {
     try {
       return next(ApiError.notFound("Файл не найден"));
@@ -466,10 +387,6 @@ class DefectMonitoringController {
     }
   }
   
-  /**
-   * GET /api/beryll/defects/stats
-   * Статистика по дефектам
-   */
   async getDefectStats(req, res, next) {
     try {
       return res.json({
@@ -486,10 +403,8 @@ class DefectMonitoringController {
   }
 }
 
-// Создаём экземпляр
 const controller = new DefectMonitoringController();
 
-// Экспортируем объект с забинденными методами
 module.exports = {
   // Мониторинг
   pingServer: controller.pingServer.bind(controller),

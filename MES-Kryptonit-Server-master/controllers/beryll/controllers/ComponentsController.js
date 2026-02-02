@@ -3,9 +3,7 @@ const OpenBMCService = require("../services/OpenBMCService");
 const ApiError = require("../../../error/ApiError");
 const { Op } = require("sequelize");
 
-/**
- * Сформировать имя компонента из данных BMC
- */
+
 function generateComponentName(comp) {
   const parts = [];
   if (comp.manufacturer) parts.push(comp.manufacturer);
@@ -14,9 +12,7 @@ function generateComponentName(comp) {
   return parts.join(" ") || `${comp.componentType} Component`;
 }
 
-/**
- * Сравнить компоненты из БД и BMC
- */
+
 function compareComponents(dbComponents, bmcComponents) {
   const result = {
     missingInBmc: [],
@@ -107,10 +103,7 @@ function compareComponents(dbComponents, bmcComponents) {
 }
 
 class ComponentsController {
-  /**
-   * Проверить доступность BMC сервера
-   * GET /api/beryll/servers/:id/bmc/check
-   */
+
   async checkBMC(req, res, next) {
     try {
       const { id } = req.params;
@@ -139,10 +132,7 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Сравнить компоненты с BMC (без сохранения)
-   * GET /api/beryll/servers/:id/components/compare
-   */
+
   async compareWithBMC(req, res, next) {
     try {
       const { id } = req.params;
@@ -193,10 +183,6 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Выгрузить комплектующие с BMC
-   * POST /api/beryll/servers/:id/components/fetch
-   */
   async fetchComponents(req, res, next) {
     try {
       const { id } = req.params;
@@ -479,10 +465,7 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Получить комплектующие сервера
-   * GET /api/beryll/servers/:id/components
-   */
+
   async getComponents(req, res, next) {
     try {
       const { id } = req.params;
@@ -520,10 +503,7 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Получить компонент по ID
-   * GET /api/beryll/components/:id
-   */
+ 
   async getComponentById(req, res, next) {
     try {
       const { id } = req.params;
@@ -549,10 +529,7 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Удалить все комплектующие сервера
-   * DELETE /api/beryll/servers/:id/components
-   */
+
   async deleteComponents(req, res, next) {
     try {
       const { id } = req.params;
@@ -570,7 +547,6 @@ class ComponentsController {
         { where: { id } }
       );
       
-      // Записываем в историю
       if (deleted > 0) {
         await BeryllHistory.create({
           serverId: id,
@@ -593,10 +569,6 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Обновить адрес BMC
-   * PUT /api/beryll/servers/:id/bmc-address
-   */
   async updateBMCAddress(req, res, next) {
     try {
       const { id } = req.params;
@@ -611,7 +583,6 @@ class ComponentsController {
       const oldAddress = server.bmcAddress;
       await server.update({ bmcAddress });
       
-      // Записываем в историю
       await BeryllHistory.create({
         serverId: id,
         serverIp: server.ipAddress,
@@ -632,10 +603,6 @@ class ComponentsController {
     }
   }
 
-  /**
-   * Сбросить флаг расхождения с BMC
-   * PUT /api/beryll/servers/:serverId/components/:componentId/resolve-discrepancy
-   */
   async resolveDiscrepancy(req, res, next) {
     try {
       const { serverId, componentId } = req.params;

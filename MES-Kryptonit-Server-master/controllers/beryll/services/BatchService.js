@@ -4,9 +4,7 @@ const { Op, fn, col } = require("sequelize");
 const HistoryService = require("./HistoryService");
 
 class BatchService {
-  /**
-   * Получить список партий с фильтрами
-   */
+
   async getBatches(filters = {}) {
     const { status, search } = filters;
     
@@ -31,7 +29,6 @@ class BatchService {
       order: [["createdAt", "DESC"]]
     });
     
-    // Добавляем статистику по каждой партии
     const batchesWithStats = await Promise.all(batches.map(async (batch) => {
       const stats = await BeryllServer.findAll({
         where: { batchId: batch.id },
@@ -58,9 +55,6 @@ class BatchService {
     return batchesWithStats;
   }
   
-  /**
-   * Получить партию по ID
-   */
   async getBatchById(id) {
     const batch = await BeryllBatch.findByPk(id, {
       include: [
@@ -77,7 +71,6 @@ class BatchService {
       throw new Error("Партия не найдена");
     }
     
-    // Статистика
     const stats = await BeryllServer.findAll({
       where: { batchId: id },
       attributes: ["status", [fn("COUNT", col("id")), "count"]],
@@ -94,9 +87,6 @@ class BatchService {
     };
   }
   
-  /**
-   * Создать партию
-   */
   async createBatch(data, userId) {
     const { title, supplier, deliveryDate, expectedCount, notes } = data;
     
@@ -116,9 +106,6 @@ class BatchService {
     return batch;
   }
   
-  /**
-   * Обновить партию
-   */
   async updateBatch(id, data) {
     const { title, supplier, deliveryDate, expectedCount, notes, status } = data;
     
@@ -146,9 +133,6 @@ class BatchService {
     return batch;
   }
   
-  /**
-   * Удалить партию
-   */
   async deleteBatch(id) {
     const batch = await BeryllBatch.findByPk(id);
     
@@ -156,7 +140,6 @@ class BatchService {
       throw new Error("Партия не найдена");
     }
     
-    // Отвязываем серверы от партии
     await BeryllServer.update(
       { batchId: null },
       { where: { batchId: id } }
@@ -167,9 +150,6 @@ class BatchService {
     return { success: true };
   }
   
-  /**
-   * Привязать серверы к партии
-   */
   async assignServersToBatch(id, serverIds, userId) {
     const batch = await BeryllBatch.findByPk(id);
     
@@ -186,7 +166,6 @@ class BatchService {
       { where: { id: { [Op.in]: serverIds } } }
     );
     
-    // Логируем для каждого сервера
     for (const serverId of serverIds) {
       await HistoryService.logHistory(serverId, userId, HISTORY_ACTIONS.BATCH_ASSIGNED, {
         comment: `Привязан к партии: ${batch.title}`,
@@ -197,9 +176,6 @@ class BatchService {
     return { success: true, count: serverIds.length };
   }
   
-  /**
-   * Отвязать серверы от партии
-   */
   async removeServersFromBatch(id, serverIds, userId) {
     const batch = await BeryllBatch.findByPk(id);
     

@@ -1,12 +1,3 @@
-/**
- * ComponentInventoryService.js - Сервис управления инвентарём компонентов
- * 
- * Полная бизнес-логика для:
- * - Учёт запасных частей
- * - Резервирование под ремонт
- * - Отслеживание перемещений
- * - Импорт из Excel
- */
 
 const { Op } = require("sequelize");
 const sequelize = require("../../../db");
@@ -25,13 +16,7 @@ const {
 
 class ComponentInventoryService {
     
-    // =========================================
-    // СПРАВОЧНИК КОМПОНЕНТОВ
-    // =========================================
-    
-    /**
-     * Получить или создать запись в справочнике
-     */
+
     async getOrCreateCatalogEntry(data) {
         const { type, manufacturer, model, revision, partNumber, specifications } = data;
         
@@ -48,9 +33,7 @@ class ComponentInventoryService {
         return { catalog, created };
     }
     
-    /**
-     * Получить справочник по типу
-     */
+
     async getCatalogByType(type) {
         return ComponentCatalog.findAll({
             where: { type, isActive: true },
@@ -58,9 +41,7 @@ class ComponentInventoryService {
         });
     }
     
-    /**
-     * Обновить запись справочника
-     */
+
     async updateCatalogEntry(id, data) {
         const catalog = await ComponentCatalog.findByPk(id);
         if (!catalog) throw new Error("Запись справочника не найдена");
@@ -69,13 +50,6 @@ class ComponentInventoryService {
         return catalog;
     }
     
-    // =========================================
-    // ИНВЕНТАРЬ
-    // =========================================
-    
-    /**
-     * Добавить компонент в инвентарь
-     */
     async addToInventory(data, userId) {
         const transaction = await sequelize.transaction();
         
@@ -93,7 +67,6 @@ class ComponentInventoryService {
                 notes
             } = data;
             
-            // Проверяем уникальность серийного номера
             const existing = await ComponentInventory.findOne({
                 where: {
                     [Op.or]: [
@@ -107,14 +80,12 @@ class ComponentInventoryService {
                 throw new Error(`Компонент с серийным номером ${serialNumber} уже существует`);
             }
             
-            // Находим или создаём запись в справочнике
             let catalogId = null;
             if (manufacturer && model) {
                 const { catalog } = await this.getOrCreateCatalogEntry({ type, manufacturer, model });
                 catalogId = catalog.id;
             }
             
-            // Создаём запись
             const component = await ComponentInventory.create({
                 catalogId,
                 type,
@@ -131,7 +102,6 @@ class ComponentInventoryService {
                 createdById: userId
             }, { transaction });
             
-            // Логируем
             await ComponentHistory.create({
                 inventoryComponentId: component.id,
                 action: HISTORY_ACTIONS.RECEIVED,
@@ -149,9 +119,6 @@ class ComponentInventoryService {
         }
     }
     
-    /**
-     * Массовое добавление компонентов
-     */
     async bulkAddToInventory(items, userId) {
         const results = {
             success: [],
@@ -176,9 +143,6 @@ class ComponentInventoryService {
         return results;
     }
     
-    /**
-     * Получить компонент по ID
-     */
     async getById(id) {
         return ComponentInventory.findByPk(id, {
             include: [
@@ -189,9 +153,7 @@ class ComponentInventoryService {
         });
     }
     
-    /**
-     * Получить компонент по серийному номеру
-     */
+
     async getBySerial(serial) {
         return ComponentInventory.findOne({
             where: {
@@ -207,9 +169,7 @@ class ComponentInventoryService {
         });
     }
     
-    /**
-     * Получить список компонентов с фильтрами
-     */
+
     async getAll(filters = {}) {
         const {
             type,
@@ -261,9 +221,7 @@ class ComponentInventoryService {
         });
     }
     
-    /**
-     * Получить доступные компоненты по типу
-     */
+
     async getAvailableByType(type, count = 10) {
         return ComponentInventory.findAll({
             where: {
@@ -272,20 +230,14 @@ class ComponentInventoryService {
             },
             include: [{ model: ComponentCatalog, as: "catalog" }],
             order: [
-                ["condition", "ASC"], // NEW first
+                ["condition", "ASC"],
                 ["createdAt", "ASC"]
             ],
             limit: count
         });
     }
     
-    // =========================================
-    // ОПЕРАЦИИ С КОМПОНЕНТАМИ
-    // =========================================
-    
-    /**
-     * Резервирование компонента
-     */
+
     async reserve(id, defectId, userId) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -293,9 +245,6 @@ class ComponentInventoryService {
         return component.reserve(defectId, userId);
     }
     
-    /**
-     * Снять резервирование
-     */
     async release(id, userId, notes = null) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -303,9 +252,7 @@ class ComponentInventoryService {
         return component.release(userId, notes);
     }
     
-    /**
-     * Установить в сервер
-     */
+
     async installToServer(id, serverId, userId, defectId = null) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -316,9 +263,7 @@ class ComponentInventoryService {
         return component.installToServer(serverId, userId, defectId);
     }
     
-    /**
-     * Извлечь из сервера
-     */
+
     async removeFromServer(id, userId, reason = null, defectId = null) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -326,9 +271,7 @@ class ComponentInventoryService {
         return component.removeFromServer(userId, reason, defectId);
     }
     
-    /**
-     * Отправить на ремонт в Ядро
-     */
+
     async sendToYadro(id, ticketNumber, userId) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -336,9 +279,7 @@ class ComponentInventoryService {
         return component.sendToYadro(ticketNumber, userId);
     }
     
-    /**
-     * Вернуть из Ядро
-     */
+
     async returnFromYadro(id, userId, condition = COMPONENT_CONDITIONS.REFURBISHED) {
         const component = await ComponentInventory.findByPk(id);
         if (!component) throw new Error("Компонент не найден");
@@ -346,9 +287,6 @@ class ComponentInventoryService {
         return component.returnFromYadro(userId, condition);
     }
     
-    /**
-     * Списать компонент
-     */
     async scrap(id, userId, reason) {
         const transaction = await sequelize.transaction();
         
@@ -378,9 +316,7 @@ class ComponentInventoryService {
         }
     }
     
-    /**
-     * Обновить местоположение
-     */
+
     async updateLocation(id, location, userId) {
         const transaction = await sequelize.transaction();
         
@@ -410,9 +346,6 @@ class ComponentInventoryService {
         }
     }
     
-    /**
-     * Отметить тестирование
-     */
     async markTested(id, userId, passed, notes = null) {
         const transaction = await sequelize.transaction();
         
@@ -442,13 +375,7 @@ class ComponentInventoryService {
         }
     }
     
-    // =========================================
-    // ИСТОРИЯ
-    // =========================================
-    
-    /**
-     * Получить историю компонента
-     */
+
     async getHistory(id) {
         return ComponentHistory.findAll({
             where: { inventoryComponentId: id },
@@ -461,15 +388,8 @@ class ComponentInventoryService {
         });
     }
     
-    // =========================================
-    // СТАТИСТИКА
-    // =========================================
-    
-    /**
-     * Получить статистику инвентаря
-     */
     async getStats() {
-        // По типам и статусам
+
         const byTypeStatus = await ComponentInventory.findAll({
             attributes: [
                 "type",
@@ -480,7 +400,7 @@ class ComponentInventoryService {
             raw: true
         });
         
-        // Форматируем результат
+
         const stats = {};
         for (const row of byTypeStatus) {
             if (!stats[row.type]) {
@@ -490,7 +410,6 @@ class ComponentInventoryService {
             stats[row.type].total += parseInt(row.count);
         }
         
-        // Общие показатели
         const totals = await ComponentInventory.findOne({
             attributes: [
                 [sequelize.fn("COUNT", sequelize.col("id")), "total"],
@@ -502,7 +421,6 @@ class ComponentInventoryService {
             raw: true
         });
         
-        // Истекающая гарантия (в течение 30 дней)
         const warrantyExpiringSoon = await ComponentInventory.count({
             where: {
                 warrantyExpires: {
@@ -524,9 +442,7 @@ class ComponentInventoryService {
         };
     }
     
-    /**
-     * Получить компоненты с истекающей гарантией
-     */
+
     async getWarrantyExpiring(days = 30) {
         return ComponentInventory.findAll({
             where: {
@@ -539,17 +455,11 @@ class ComponentInventoryService {
         });
     }
     
-    // =========================================
-    // ИМПОРТ ИЗ EXCEL
-    // =========================================
-    
-    /**
-     * Парсинг данных из Excel (формат Состав_серверов)
-     */
+
     parseExcelRow(row, columnMapping) {
         const components = [];
         
-        // HDD диски (12 штук)
+
         for (let i = 0; i < 12; i++) {
             const snYadro = row[columnMapping.hdd[i]?.yadro];
             const snManuf = row[columnMapping.hdd[i]?.manuf];
@@ -565,7 +475,7 @@ class ComponentInventoryService {
             }
         }
         
-        // RAM (12 штук)
+
         for (let i = 0; i < 12; i++) {
             const snYadro = row[columnMapping.ram[i]?.yadro];
             const snManuf = row[columnMapping.ram[i]?.manuf];
@@ -581,7 +491,6 @@ class ComponentInventoryService {
             }
         }
         
-        // SSD (4 штуки)
         for (let i = 0; i < 4; i++) {
             const snYadro = row[columnMapping.ssd[i]?.yadro];
             const snManuf = row[columnMapping.ssd[i]?.manuf];
@@ -595,7 +504,6 @@ class ComponentInventoryService {
             }
         }
         
-        // Блоки питания (2 штуки)
         for (let i = 0; i < 2; i++) {
             const snYadro = row[columnMapping.psu[i]?.yadro];
             const snManuf = row[columnMapping.psu[i]?.manuf];
@@ -614,9 +522,7 @@ class ComponentInventoryService {
         return components;
     }
     
-    /**
-     * Импорт компонентов сервера из Excel-данных
-     */
+
     async importServerComponents(serverId, componentsData, userId) {
         const transaction = await sequelize.transaction();
         const results = { created: 0, errors: [] };
@@ -624,7 +530,6 @@ class ComponentInventoryService {
         try {
             for (const data of componentsData) {
                 try {
-                    // Проверяем существование
                     const existing = await ComponentInventory.findOne({
                         where: {
                             [Op.or]: [
@@ -635,13 +540,11 @@ class ComponentInventoryService {
                     });
                     
                     if (existing) {
-                        // Обновляем привязку к серверу
                         await existing.update({
                             currentServerId: serverId,
                             status: INVENTORY_STATUSES.IN_USE
                         }, { transaction });
                     } else {
-                        // Создаём новый
                         await ComponentInventory.create({
                             ...data,
                             currentServerId: serverId,

@@ -1,28 +1,7 @@
-/**
- * DefectExportService.js
- * 
- * Сервис экспорта записей о браке (дефектов) в Excel
- * Формирует таблицу со всеми инцидентами по структуре:
- * - Заявка из Ядра
- * - Серийный номер сервера
- * - Номер в составе АПК Берилл (кластер)
- * - Вид комплектующего
- * - Проделанные шаги (история workflow)
- * - Комментарий
- * - Ответственный
- * 
- * ИСПРАВЛЕНО:
- * - serverSerial берётся из record.serverSerial ИЛИ record.server?.apkSerialNumber
- * - Убран include substituteServer (используется поле substituteServerSerial)
- * - Добавлен поиск по serverSerial
- * 
- * Положить в: MES-Kryptonit-Server-master/controllers/beryll/services/DefectExportService.js
- */
 
 const ExcelJS = require("exceljs");
 const { Op } = require("sequelize");
 
-// Статусы для отображения в истории
 const STATUS_LABELS = {
     NEW: "Новая",
     DIAGNOSING: "Диагностика",
@@ -35,7 +14,7 @@ const STATUS_LABELS = {
     CLOSED: "Закрыто"
 };
 
-// Типы деталей для отображения
+
 const PART_TYPE_LABELS = {
     RAM: "ОЗУ",
     HDD: "HDD",
@@ -53,9 +32,7 @@ const PART_TYPE_LABELS = {
     OTHER: "Прочее"
 };
 
-/**
- * Форматирование имени пользователя
- */
+
 function formatUserName(user) {
     if (!user) return "";
     
@@ -69,9 +46,7 @@ function formatUserName(user) {
     return surname || name || "";
 }
 
-/**
- * Форматирование даты
- */
+
 function formatDate(date) {
     if (!date) return "";
     const d = new Date(date);
@@ -82,9 +57,6 @@ function formatDate(date) {
     });
 }
 
-/**
- * Формирование истории шагов по записи
- */
 function buildStepsHistory(record) {
     const steps = [];
     
@@ -131,9 +103,7 @@ function buildStepsHistory(record) {
     return steps.join("\n");
 }
 
-/**
- * Определение ответственного лица
- */
+
 function getResponsiblePerson(record) {
     if (record.diagnostician) {
         return formatUserName(record.diagnostician);
@@ -147,9 +117,7 @@ function getResponsiblePerson(record) {
     return "";
 }
 
-/**
- * Применение стилей к заголовкам
- */
+
 function applyHeaderStyle(sheet) {
     sheet.getRow(1).height = 30;
     sheet.getRow(1).eachCell((cell) => {
@@ -165,9 +133,6 @@ function applyHeaderStyle(sheet) {
     });
 }
 
-// ============================================
-// ЭКСПОРТИРУЕМЫЙ ОБЪЕКТ
-// ============================================
 
 const DefectExportService = {
     
@@ -185,14 +150,13 @@ const DefectExportService = {
             search
         } = options;
         
-        // Получаем модели
         const {
             BeryllDefectRecord,
             BeryllServer,
             User
         } = require("../../../models/index");
         
-        // Формируем условия фильтрации
+
         const where = {};
         
         if (status) {
@@ -210,7 +174,6 @@ const DefectExportService = {
         }
         
         if (search) {
-            // ИСПРАВЛЕНО: добавлен поиск по serverSerial
             where[Op.or] = [
                 { yadroTicketNumber: { [Op.iLike]: `%${search}%` } },
                 { problemDescription: { [Op.iLike]: `%${search}%` } },
@@ -219,8 +182,7 @@ const DefectExportService = {
             ];
         }
         
-        // Получаем записи
-        // ИСПРАВЛЕНО: убран substituteServer из include (ассоциация может отсутствовать)
+
         const records = await BeryllDefectRecord.findAll({
             where,
             include: [
@@ -248,12 +210,12 @@ const DefectExportService = {
                     attributes: ["id", "name", "surname"],
                     required: false 
                 }
-                // УБРАНО: substituteServer - используем поле substituteServerSerial
+
             ],
             order: [["detectedAt", "DESC"]]
         });
         
-        // Создаем Excel файл
+
         const workbook = new ExcelJS.Workbook();
         workbook.creator = "MES Kryptonit";
         workbook.created = new Date();
@@ -265,7 +227,6 @@ const DefectExportService = {
             }
         });
         
-        // Определяем колонки
         sheet.columns = [
             { header: "№", key: "num", width: 5 },
             { header: "Номер заявки в Ядре", key: "yadroTicket", width: 18 },
@@ -290,22 +251,20 @@ const DefectExportService = {
             { header: "Ответственный", key: "responsible", width: 20 }
         ];
         
-        // Применяем стили к заголовкам
+
         applyHeaderStyle(sheet);
         
-        // Добавляем данные
         let rowNum = 1;
         for (const record of records) {
             const steps = buildStepsHistory(record);
             const responsible = getResponsiblePerson(record);
             
-            // ИСПРАВЛЕНО: берём серийник из serverSerial или server.apkSerialNumber
             const serverSerialValue = record.serverSerial || record.server?.apkSerialNumber || "";
             
             const row = sheet.addRow({
                 num: rowNum++,
                 yadroTicket: record.yadroTicketNumber || "",
-                serverSerial: serverSerialValue,  // ИСПРАВЛЕНО
+                serverSerial: serverSerialValue,
                 hasSPISI: record.hasSPISI ? "Да" : "Нет",
                 cluster: record.clusterCode || "",
                 problem: record.problemDescription || "",
@@ -319,7 +278,7 @@ const DefectExportService = {
                 notes: record.notes || "",
                 repeated: record.isRepeatedDefect ? 
                     `Да: ${record.repeatedDefectReason || "причина не указана"}` : "",
-                substitute: record.substituteServerSerial || "",  // ИСПРАВЛЕНО: только из поля
+                substitute: record.substituteServerSerial || "",
                 sentToYadro: record.sentToYadroAt ? new Date(record.sentToYadroAt) : "",
                 returnedFromYadro: record.returnedFromYadroAt ? new Date(record.returnedFromYadroAt) : "",
                 status: STATUS_LABELS[record.status] || record.status,
@@ -327,7 +286,7 @@ const DefectExportService = {
                 responsible: responsible
             });
             
-            // Стили для строк данных
+
             row.eachCell((cell) => {
                 cell.alignment = { vertical: "middle", wrapText: true };
                 cell.border = {
@@ -338,7 +297,7 @@ const DefectExportService = {
                 };
             });
             
-            // Форматирование дат
+
             ["detectedAt", "sentToYadro", "returnedFromYadro"].forEach(col => {
                 const cell = row.getCell(col);
                 if (cell.value instanceof Date) {
@@ -346,7 +305,6 @@ const DefectExportService = {
                 }
             });
             
-            // Выделение повторного брака красным
             if (record.isRepeatedDefect) {
                 row.getCell("repeated").fill = {
                     type: "pattern",
@@ -356,7 +314,6 @@ const DefectExportService = {
                 row.getCell("repeated").font = { color: { argb: "FFFFFFFF" } };
             }
             
-            // Выделение критичных статусов
             if (record.status === "SENT_TO_YADRO") {
                 row.getCell("status").fill = {
                     type: "pattern",
@@ -365,24 +322,18 @@ const DefectExportService = {
                 };
             }
         }
-        
-        // Автофильтр
+
         sheet.autoFilter = {
             from: { row: 1, column: 1 },
             to: { row: records.length + 1, column: sheet.columns.length }
         };
         
-        // Закрепление заголовков
         sheet.views = [{ state: "frozen", ySplit: 1 }];
         
-        // Генерируем буфер
         const buffer = await workbook.xlsx.writeBuffer();
         return buffer;
     },
     
-    /**
-     * Экспорт статистики по дефектам
-     */
     exportStatsToExcel: async function(options = {}) {
         const { BeryllDefectRecord, User } = require("../../../models/index");
         const { Sequelize } = require("sequelize");
@@ -391,7 +342,6 @@ const DefectExportService = {
         workbook.creator = "MES Kryptonit";
         workbook.created = new Date();
         
-        // Лист 1: Сводка по статусам
         const summarySheet = workbook.addWorksheet("Сводка по статусам");
         
         const statusStats = await BeryllDefectRecord.findAll({
@@ -428,7 +378,6 @@ const DefectExportService = {
             });
         });
         
-        // Итоговая строка
         const totalRow = summarySheet.addRow({ status: "ИТОГО", count: totalCount });
         totalRow.font = { bold: true };
         totalRow.eachCell(cell => {
@@ -441,7 +390,6 @@ const DefectExportService = {
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2EFDA" } };
         });
         
-        // Лист 2: Сводка по типам деталей
         const partTypeSheet = workbook.addWorksheet("По типам деталей");
         
         const partTypeStats = await BeryllDefectRecord.findAll({
@@ -478,7 +426,6 @@ const DefectExportService = {
             });
         });
         
-        // Лист 3: Сводка по диагностам
         const diagnosticianSheet = workbook.addWorksheet("По диагностам");
         
         const diagnosticianStats = await BeryllDefectRecord.findAll({
@@ -521,7 +468,6 @@ const DefectExportService = {
             });
         });
         
-        // Лист 4: Повторный брак
         const repeatedSheet = workbook.addWorksheet("Повторный брак");
         
         const repeatedStats = await BeryllDefectRecord.findAll({

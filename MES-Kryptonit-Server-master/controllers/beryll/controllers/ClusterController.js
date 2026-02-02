@@ -1,23 +1,9 @@
-/**
- * ClusterController.js
- * 
- * Контроллер для работы с кластерами и комплектами/отгрузками
- * 
- * Положить в: controllers/beryll/controllers/ClusterController.js
- */
 
 const ClusterService = require("../services/ClusterService");
 const ApiError = require("../../../error/ApiError");
 
 class ClusterController {
   
-  // =============================================
-  // КОМПЛЕКТЫ/ОТГРУЗКИ
-  // =============================================
-  
-  /**
-   * GET /api/beryll/shipments
-   */
   async getAllShipments(req, res, next) {
     try {
       const { status, search, city } = req.query;
@@ -29,9 +15,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/shipments/:id
-   */
+
   async getShipmentById(req, res, next) {
     try {
       const { id } = req.params;
@@ -47,10 +31,7 @@ class ClusterController {
       next(ApiError.internal(error.message));
     }
   }
-  
-  /**
-   * POST /api/beryll/shipments
-   */
+
   async createShipment(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -62,9 +43,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * PUT /api/beryll/shipments/:id
-   */
+ 
   async updateShipment(req, res, next) {
     try {
       const { id } = req.params;
@@ -77,9 +56,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/shipments/:id
-   */
+
   async deleteShipment(req, res, next) {
     try {
       const { id } = req.params;
@@ -92,9 +69,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/shipments/:id/history
-   */
+
   async getShipmentHistory(req, res, next) {
     try {
       const { id } = req.params;
@@ -107,13 +82,7 @@ class ClusterController {
     }
   }
   
-  // =============================================
-  // КЛАСТЕРЫ
-  // =============================================
-  
-  /**
-   * GET /api/beryll/clusters
-   */
+
   async getAllClusters(req, res, next) {
     try {
       const { status, shipmentId, search } = req.query;
@@ -125,9 +94,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/clusters/:id
-   */
+
   async getClusterById(req, res, next) {
     try {
       const { id } = req.params;
@@ -144,9 +111,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * POST /api/beryll/clusters
-   */
+
   async createCluster(req, res, next) {
     try {
       const userId = req.user?.id;
@@ -157,10 +122,7 @@ class ClusterController {
       next(ApiError.badRequest(error.message));
     }
   }
-  
-  /**
-   * PUT /api/beryll/clusters/:id
-   */
+
   async updateCluster(req, res, next) {
     try {
       const { id } = req.params;
@@ -173,9 +135,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/clusters/:id
-   */
+
   async deleteCluster(req, res, next) {
     try {
       const { id } = req.params;
@@ -188,9 +148,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/clusters/:id/history
-   */
+
   async getClusterHistory(req, res, next) {
     try {
       const { id } = req.params;
@@ -203,13 +161,7 @@ class ClusterController {
     }
   }
   
-  // =============================================
-  // СЕРВЕРЫ В КЛАСТЕРЕ
-  // =============================================
-  
-  /**
-   * POST /api/beryll/clusters/:clusterId/servers
-   */
+
   async addServerToCluster(req, res, next) {
     try {
       const { clusterId } = req.params;
@@ -228,9 +180,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * POST /api/beryll/clusters/:clusterId/servers/bulk
-   */
+
   async addServersToCluster(req, res, next) {
     try {
       const { clusterId } = req.params;
@@ -249,9 +199,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/clusters/:clusterId/servers/:serverId
-   */
+
   async removeServerFromCluster(req, res, next) {
     try {
       const { clusterId, serverId } = req.params;
@@ -264,10 +212,7 @@ class ClusterController {
       next(ApiError.badRequest(error.message));
     }
   }
-  
-  /**
-   * PUT /api/beryll/cluster-servers/:id
-   */
+
   async updateClusterServer(req, res, next) {
     try {
       const { id } = req.params;
@@ -280,9 +225,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/servers/unassigned
-   */
+
   async getUnassignedServers(req, res, next) {
     try {
       const { status, batchId, search, limit } = req.query;
@@ -294,9 +237,7 @@ class ClusterController {
     }
   }
   
-  /**
-   * GET /api/beryll/servers/:serverId/clusters
-   */
+
   async getServerClusters(req, res, next) {
     try {
       const { serverId } = req.params;

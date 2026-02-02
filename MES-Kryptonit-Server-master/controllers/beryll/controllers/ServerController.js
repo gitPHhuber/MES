@@ -28,15 +28,12 @@ class ServerController {
     }
   }
   
-  /**
-   * Взять сервер в работу
-   * ОБНОВЛЕНО: передаём userRole для проверки SUPER_ADMIN
-   */
+
   async takeServer(req, res, next) {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
-      const userRole = req.user?.role;  // ДОБАВЛЕНО: передаём роль
+      const userRole = req.user?.role; 
       
       if (!userId) {
         return next(ApiError.unauthorized("Не авторизован"));
@@ -59,10 +56,7 @@ class ServerController {
     }
   }
   
-  /**
-   * Освободить сервер
-   * SUPER_ADMIN может освободить любой сервер
-   */
+
   async releaseServer(req, res, next) {
     try {
       const { id } = req.params;

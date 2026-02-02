@@ -75,7 +75,6 @@ function extractRamSpecsFromName(name, model) {
     'M393A2K40DB2': { capacity: '16 GB', type: 'DDR4', speed: '2933 MT/s' },
     'M393A2K40DB3': { capacity: '16 GB', type: 'DDR4', speed: '3200 MT/s' },
     'M393A1K43DB2': { capacity: '8 GB', type: 'DDR4', speed: '2933 MT/s' },
-    // DDR5
     'M321R8GA0BB0': { capacity: '64 GB', type: 'DDR5', speed: '4800 MT/s' },
     'M321R4GA0BB0': { capacity: '32 GB', type: 'DDR5', speed: '4800 MT/s' },
   };
@@ -154,7 +153,7 @@ function extractStorageSpecsFromName(name, model, componentType) {
   } else if (source.includes('SATA')) {
     specs.interface = 'SATA';
   } else if (componentType === 'HDD') {
-    specs.interface = 'SAS'; // По умолчанию для HDD
+    specs.interface = 'SAS';
   }
   
   return Object.keys(specs).length > 0 ? specs : null;
@@ -196,14 +195,15 @@ class PassportService {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Паспорт");
     
-    // Настройки столбцов
+    // Настройки столбцов — 7 штук (добавлен F — Ревизия)
     sheet.columns = [
       { width: 8 },   // A - №
       { width: 35 },  // B - Тип
       { width: 50 },  // C - Наименование
       { width: 22 },  // D - Серийный номер
       { width: 22 },  // E - S/N Yadro
-      { width: 18 }   // F - Характеристики (расширил)
+      { width: 15 },  // F - Ревизия          ← НОВЫЙ
+      { width: 18 }   // G - Характеристики
     ];
     
     // Стили
@@ -225,7 +225,7 @@ class PassportService {
     sheet.getCell("A1").value = "АО «НПК Криптонит»";
     sheet.getCell("A1").font = titleFont;
     
-    sheet.mergeCells("C1:F1");
+    sheet.mergeCells("C1:G1");
     sheet.getCell("C1").value = "СОПРОВОДИТЕЛЬНЫЙ ПАСПОРТ ПРОИЗВОДСТВА";
     sheet.getCell("C1").font = headerFont;
     sheet.getCell("C1").alignment = centerAlign;
@@ -234,7 +234,7 @@ class PassportService {
     sheet.getCell("A2").value = "АПК \"Берилл\"";
     sheet.getCell("A2").font = titleFont;
     
-    sheet.mergeCells("C2:F2");
+    sheet.mergeCells("C2:G2");
     sheet.getCell("C2").value = `МРТН.466514.002 - ${server.apkSerialNumber || "___"}`;
     sheet.getCell("C2").font = titleFont;
     sheet.getCell("C2").alignment = centerAlign;
@@ -252,7 +252,7 @@ class PassportService {
     
     if (components.length > 0) {
       // Заголовок раздела
-      sheet.mergeCells(`A${currentRow}:F${currentRow}`);
+      sheet.mergeCells(`A${currentRow}:G${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "КОМПЛЕКТУЮЩИЕ СЕРВЕРА";
       sheet.getCell(`A${currentRow}`).font = headerFont;
       sheet.getCell(`A${currentRow}`).alignment = centerAlign;
@@ -263,15 +263,16 @@ class PassportService {
       };
       currentRow++;
       
-      // Заголовки таблицы
+      // Заголовки таблицы — 7 столбцов
       sheet.getCell(`A${currentRow}`).value = "№";
       sheet.getCell(`B${currentRow}`).value = "Тип";
       sheet.getCell(`C${currentRow}`).value = "Наименование / Модель";
       sheet.getCell(`D${currentRow}`).value = "Серийный номер";
       sheet.getCell(`E${currentRow}`).value = "S/N Yadro";
-      sheet.getCell(`F${currentRow}`).value = "Характеристики";
+      sheet.getCell(`F${currentRow}`).value = "Ревизия";
+      sheet.getCell(`G${currentRow}`).value = "Характеристики";
       
-      for (let col of ["A", "B", "C", "D", "E", "F"]) {
+      for (let col of ["A", "B", "C", "D", "E", "F", "G"]) {
         const cell = sheet.getCell(`${col}${currentRow}`);
         cell.font = titleFont;
         cell.alignment = centerAlign;
@@ -322,42 +323,48 @@ class PassportService {
       for (const comp of allGrouped) {
         compNumber++;
         
-        // Номер
+        // A — №
         sheet.getCell(`A${currentRow}`).value = compNumber;
         sheet.getCell(`A${currentRow}`).font = normalFont;
         sheet.getCell(`A${currentRow}`).alignment = centerAlign;
         
-        // Тип
+        // B — Тип
         sheet.getCell(`B${currentRow}`).value = typeLabels[comp.componentType] || comp.componentType;
         sheet.getCell(`B${currentRow}`).font = normalFont;
         sheet.getCell(`B${currentRow}`).alignment = leftAlign;
         
-        // Наименование
+        // C — Наименование / Модель
         const name = comp.name || comp.model || "—";
         sheet.getCell(`C${currentRow}`).value = name;
         sheet.getCell(`C${currentRow}`).font = normalFont;
         sheet.getCell(`C${currentRow}`).alignment = { ...leftAlign, wrapText: true };
         
-        // Серийный номер
+        // D — Серийный номер
         sheet.getCell(`D${currentRow}`).value = comp.serialNumber || "—";
         sheet.getCell(`D${currentRow}`).font = normalFont;
         sheet.getCell(`D${currentRow}`).alignment = centerAlign;
         
-        // S/N Yadro
+        // E — S/N Yadro
         sheet.getCell(`E${currentRow}`).value = comp.serialNumberYadro || "—";
         sheet.getCell(`E${currentRow}`).font = normalFont;
         sheet.getCell(`E${currentRow}`).alignment = centerAlign;
         
-        // ============ ИСПРАВЛЕНО: Характеристики ============
-        // Формируем характеристики независимо от наличия S/N Yadro
-        let specs = this.formatComponentSpecs(comp);
-        
-        sheet.getCell(`F${currentRow}`).value = specs || "—";
+        // F — Ревизия (из metadata.revision)
+        const revision = comp.metadata?.revision || "";
+        sheet.getCell(`F${currentRow}`).value = revision || "—";
         sheet.getCell(`F${currentRow}`).font = normalFont;
         sheet.getCell(`F${currentRow}`).alignment = centerAlign;
         
-        // Границы
-        for (let col of ["A", "B", "C", "D", "E", "F"]) {
+        // G — Характеристики
+        // ============ ИСПРАВЛЕНО: Характеристики ============
+        // Формируем характеристики независимо от наличия S/N Yadro
+        let specs = this.formatComponentSpecs(comp);
+        sheet.getCell(`G${currentRow}`).value = specs || "—";
+        sheet.getCell(`G${currentRow}`).font = normalFont;
+        sheet.getCell(`G${currentRow}`).alignment = centerAlign;
+        
+        // Границы — 7 столбцов
+        for (let col of ["A", "B", "C", "D", "E", "F", "G"]) {
           sheet.getCell(`${col}${currentRow}`).border = thinBorder;
         }
         
@@ -365,7 +372,7 @@ class PassportService {
       }
       
       // Итого
-      sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+      sheet.mergeCells(`A${currentRow}:E${currentRow}`);
       sheet.getCell(`A${currentRow}`).value = "Итого комплектующих:";
       sheet.getCell(`A${currentRow}`).font = titleFont;
       sheet.getCell(`A${currentRow}`).alignment = { horizontal: "right", vertical: "middle" };
@@ -376,21 +383,20 @@ class PassportService {
       const totalStorage = grouped.storage.reduce((sum, s) => sum + (parseInt(s.capacity) || 0), 0);
       const totalCores = grouped.CPU.reduce((sum, c) => sum + (c.metadata?.cores || 0), 0);
       
-      // Форматируем RAM (может быть в GB или в байтах)
       const ramFormatted = formatRamCapacity(totalRAM) || formatBytes(totalRAM) || "—";
       const storageFormatted = formatStorageCapacity(totalStorage) || formatBytes(totalStorage) || "—";
       
-      sheet.mergeCells(`E${currentRow}:F${currentRow}`);
-      sheet.getCell(`E${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${ramFormatted} | Storage: ${storageFormatted}`;
-      sheet.getCell(`E${currentRow}`).font = titleFont;
-      sheet.getCell(`E${currentRow}`).alignment = centerAlign;
-      sheet.getCell(`E${currentRow}`).border = thinBorder;
+      sheet.mergeCells(`F${currentRow}:G${currentRow}`);
+      sheet.getCell(`F${currentRow}`).value = `CPU: ${totalCores} ядер | RAM: ${ramFormatted} | Storage: ${storageFormatted}`;
+      sheet.getCell(`F${currentRow}`).font = titleFont;
+      sheet.getCell(`F${currentRow}`).alignment = centerAlign;
+      sheet.getCell(`F${currentRow}`).border = thinBorder;
       
       currentRow += 2;
     }
     
     // ============ ОПЕРАЦИИ ПРОИЗВОДСТВА ============
-    sheet.mergeCells(`A${currentRow}:F${currentRow}`);
+    sheet.mergeCells(`A${currentRow}:G${currentRow}`);
     sheet.getCell(`A${currentRow}`).value = "ОПЕРАЦИИ ПРОИЗВОДСТВА";
     sheet.getCell(`A${currentRow}`).font = headerFont;
     sheet.getCell(`A${currentRow}`).alignment = centerAlign;
@@ -405,12 +411,12 @@ class PassportService {
     const headerRow = currentRow;
     sheet.getCell(`A${headerRow}`).value = "№\nп/п";
     sheet.getCell(`B${headerRow}`).value = "Операция";
-    sheet.mergeCells(`C${headerRow}:D${headerRow}`);
+    sheet.mergeCells(`C${headerRow}:E${headerRow}`);
     sheet.getCell(`C${headerRow}`).value = "Этап";
-    sheet.getCell(`E${headerRow}`).value = "Подпись";
-    sheet.getCell(`F${headerRow}`).value = "Дата";
+    sheet.getCell(`F${headerRow}`).value = "Подпись";
+    sheet.getCell(`G${headerRow}`).value = "Дата";
     
-    for (let col of ["A", "B", "C", "E", "F"]) {
+    for (let col of ["A", "B", "C", "F", "G"]) {
       const cell = sheet.getCell(`${col}${headerRow}`);
       cell.font = titleFont;
       cell.alignment = centerAlign;
@@ -423,6 +429,7 @@ class PassportService {
     }
     
     sheet.getCell(`D${headerRow}`).border = thinBorder;
+    sheet.getCell(`E${headerRow}`).border = thinBorder;
     sheet.getRow(headerRow).height = 30;
     currentRow++;
     
@@ -452,40 +459,38 @@ class PassportService {
         currentGroup = template.groupCode;
         groupNumber++;
         
-        // Номер группы
         sheet.getCell(`A${currentRow}`).value = groupNumber;
         sheet.getCell(`A${currentRow}`).font = titleFont;
         sheet.getCell(`A${currentRow}`).alignment = centerAlign;
         
-        // Название группы
         sheet.getCell(`B${currentRow}`).value = groupLabels[currentGroup] || template.groupCode;
         sheet.getCell(`B${currentRow}`).font = titleFont;
       }
       
-      // Этап
-      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
+      // Этап — merge C:E
+      sheet.mergeCells(`C${currentRow}:E${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = template.title;
       sheet.getCell(`C${currentRow}`).font = normalFont;
       sheet.getCell(`C${currentRow}`).alignment = { ...leftAlign, wrapText: true };
       
-      // Подпись
+      // Подпись — F
       if (checklist.completed && checklist.completedBy) {
-        sheet.getCell(`E${currentRow}`).value = 
+        sheet.getCell(`F${currentRow}`).value = 
           `${checklist.completedBy.surname} ${checklist.completedBy.name?.charAt(0) || ""}.`;
-      }
-      sheet.getCell(`E${currentRow}`).font = normalFont;
-      sheet.getCell(`E${currentRow}`).alignment = centerAlign;
-      
-      // Дата
-      if (checklist.completedAt) {
-        const date = new Date(checklist.completedAt);
-        sheet.getCell(`F${currentRow}`).value = date.toLocaleDateString("ru-RU");
       }
       sheet.getCell(`F${currentRow}`).font = normalFont;
       sheet.getCell(`F${currentRow}`).alignment = centerAlign;
       
-      // Границы
-      for (let col of ["A", "B", "C", "D", "E", "F"]) {
+      // Дата — G
+      if (checklist.completedAt) {
+        const date = new Date(checklist.completedAt);
+        sheet.getCell(`G${currentRow}`).value = date.toLocaleDateString("ru-RU");
+      }
+      sheet.getCell(`G${currentRow}`).font = normalFont;
+      sheet.getCell(`G${currentRow}`).alignment = centerAlign;
+      
+      // Границы — 7 столбцов
+      for (let col of ["A", "B", "C", "D", "E", "F", "G"]) {
         sheet.getCell(`${col}${currentRow}`).border = thinBorder;
       }
       
@@ -497,7 +502,7 @@ class PassportService {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время установки на технологический прогон:";
       sheet.getCell(`B${currentRow}`).font = normalFont;
-      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
+      sheet.mergeCells(`C${currentRow}:E${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = new Date(server.burnInStartAt).toLocaleString("ru-RU");
       sheet.getCell(`C${currentRow}`).font = normalFont;
     }
@@ -506,7 +511,7 @@ class PassportService {
       currentRow++;
       sheet.getCell(`B${currentRow}`).value = "Дата и время завершения технологического прогона:";
       sheet.getCell(`B${currentRow}`).font = normalFont;
-      sheet.mergeCells(`C${currentRow}:D${currentRow}`);
+      sheet.mergeCells(`C${currentRow}:E${currentRow}`);
       sheet.getCell(`C${currentRow}`).value = new Date(server.burnInEndAt).toLocaleString("ru-RU");
       sheet.getCell(`C${currentRow}`).font = normalFont;
     }

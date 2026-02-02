@@ -1,7 +1,3 @@
-/**
- * ImportController.js - Контроллер импорта данных из Excel
- */
-
 const ApiError = require("../../error/ApiError");
 const ExcelImportService = require("../../services/ExcelImportService");
 const path = require("path");
@@ -11,10 +7,6 @@ const UPLOADS_DIR = path.join(__dirname, "../../../uploads/imports");
 
 class ImportController {
     
-    /**
-     * Импорт компонентов серверов из Excel
-     * POST /api/beryll/import/server-components
-     */
     async importServerComponents(req, res, next) {
         try {
             if (!req.files || !req.files.file) {
@@ -25,13 +17,13 @@ class ImportController {
             const dryRun = req.body.dryRun === "true";
             const skipExisting = req.body.skipExisting !== "false";
             
-            // Проверяем расширение
+
             const ext = path.extname(file.name).toLowerCase();
             if (![".xlsx", ".xls", ".xlsm"].includes(ext)) {
                 return next(ApiError.badRequest("Неподдерживаемый формат файла. Используйте .xlsx, .xls или .xlsm"));
             }
             
-            // Сохраняем временный файл
+
             if (!fs.existsSync(UPLOADS_DIR)) {
                 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
             }
@@ -40,13 +32,12 @@ class ImportController {
             await file.mv(tempPath);
             
             try {
-                // Выполняем импорт
+ 
                 const results = await ExcelImportService.importServerComponents(tempPath, {
                     dryRun,
                     skipExisting
                 });
                 
-                // Удаляем временный файл
                 fs.unlinkSync(tempPath);
                 
                 return res.json({
@@ -63,7 +54,6 @@ class ImportController {
                 });
                 
             } catch (importError) {
-                // Удаляем временный файл в случае ошибки
                 if (fs.existsSync(tempPath)) {
                     fs.unlinkSync(tempPath);
                 }
@@ -75,10 +65,6 @@ class ImportController {
         }
     }
     
-    /**
-     * Импорт записей о браке из Excel
-     * POST /api/beryll/import/defect-records
-     */
     async importDefectRecords(req, res, next) {
         try {
             if (!req.files || !req.files.file) {
@@ -88,13 +74,11 @@ class ImportController {
             const file = req.files.file;
             const dryRun = req.body.dryRun === "true";
             
-            // Проверяем расширение
             const ext = path.extname(file.name).toLowerCase();
             if (![".xlsx", ".xls", ".xlsm"].includes(ext)) {
                 return next(ApiError.badRequest("Неподдерживаемый формат файла. Используйте .xlsx, .xls или .xlsm"));
             }
             
-            // Сохраняем временный файл
             if (!fs.existsSync(UPLOADS_DIR)) {
                 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
             }
@@ -103,12 +87,12 @@ class ImportController {
             await file.mv(tempPath);
             
             try {
-                // Выполняем импорт
+
                 const results = await ExcelImportService.importDefectRecords(tempPath, {
                     dryRun
                 });
                 
-                // Удаляем временный файл
+
                 fs.unlinkSync(tempPath);
                 
                 return res.json({
@@ -134,15 +118,12 @@ class ImportController {
         }
     }
     
-    /**
-     * Скачать шаблон для импорта компонентов
-     * GET /api/beryll/import/template/server-components
-     */
+
     async downloadServerComponentsTemplate(req, res, next) {
         try {
             const XLSX = require("xlsx");
             
-            // Создаём шаблон
+
             const headers = [
                 "S/N сервера",
                 ...Array.from({ length: 12 }, (_, i) => `HDD_${i + 1} (Yadro S/N)`),
@@ -176,15 +157,11 @@ class ImportController {
         }
     }
     
-    /**
-     * Скачать шаблон для импорта записей о браке
-     * GET /api/beryll/import/template/defect-records
-     */
+
     async downloadDefectRecordsTemplate(req, res, next) {
         try {
             const XLSX = require("xlsx");
             
-            // Создаём шаблон
             const headers = [
                 "№ заявки",
                 "S/N сервер",

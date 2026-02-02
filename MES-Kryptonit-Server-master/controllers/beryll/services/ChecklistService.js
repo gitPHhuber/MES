@@ -1,15 +1,4 @@
-/**
- * ChecklistService.js - Сервис для работы с чек-листами
- * 
- * Функции:
- * - Управление шаблонами (CRUD, изменение порядка, восстановление)
- * - Выполнение пунктов чек-листа с валидацией requiresFile
- * - Работа с файлами доказательств (загрузка, удаление, получение)
- * 
- * Путь: controllers/beryll/services/ChecklistService.js
- */
 
-// Импортируем модели Beryll из definitions
 const { 
   BeryllChecklistTemplate, 
   BeryllServerChecklist,
@@ -18,7 +7,7 @@ const {
   HISTORY_ACTIONS
 } = require("../../../models/definitions/Beryll");
 
-// User из основного index.js
+
 const { User } = require("../../../models/index");
 
 const HistoryService = require("./HistoryService");
@@ -26,26 +15,18 @@ const { Op } = require("sequelize");
 const path = require("path");
 const fs = require("fs");
 
-// Директория для загрузки файлов
 const UPLOAD_DIR = path.join(__dirname, "../../../uploads/beryll");
 
-// ============================================
-// УТИЛИТЫ
-// ============================================
 
-/**
- * Декодирование имени файла из latin1 в UTF-8
- * express-fileupload некорректно обрабатывает UTF-8 имена файлов
- */
 function decodeFileName(name) {
   if (!name) return name;
   
   try {
-    // Проверяем, нужно ли декодирование (есть ли "битые" символы)
+
     const hasInvalidChars = /[\u0080-\u00ff]/.test(name);
     
     if (hasInvalidChars) {
-      // Декодируем из latin1 (ISO-8859-1) в UTF-8
+
       return Buffer.from(name, 'latin1').toString('utf8');
     }
     
@@ -58,13 +39,7 @@ function decodeFileName(name) {
 
 class ChecklistService {
   
-  // ============================================
-  // ШАБЛОНЫ ЧЕК-ЛИСТОВ
-  // ============================================
-  
-  /**
-   * Инициализация чек-листа для сервера
-   */
+
   async initializeServerChecklist(serverId) {
     try {
       const templates = await BeryllChecklistTemplate.findAll({
@@ -84,9 +59,7 @@ class ChecklistService {
     }
   }
   
-  /**
-   * Получить шаблоны чек-листов (только активные)
-   */
+
   async getChecklistTemplates() {
     const templates = await BeryllChecklistTemplate.findAll({
       where: { isActive: true },
@@ -96,9 +69,6 @@ class ChecklistService {
     return templates;
   }
   
-  /**
-   * Получить все шаблоны (включая неактивные) для админки
-   */
   async getAllChecklistTemplates(includeInactive = false) {
     const where = includeInactive ? {} : { isActive: true };
     
@@ -110,9 +80,6 @@ class ChecklistService {
     return templates;
   }
   
-  /**
-   * Создать шаблон чек-листа
-   */
   async createChecklistTemplate(data) {
     const { 
       title, 
@@ -129,7 +96,6 @@ class ChecklistService {
       throw new Error("Название обязательно");
     }
     
-    // Если sortOrder не указан, ставим в конец
     let order = sortOrder;
     if (order === undefined || order === null) {
       const maxOrder = await BeryllChecklistTemplate.max('sortOrder') || 0;
@@ -151,9 +117,6 @@ class ChecklistService {
     return template;
   }
   
-  /**
-   * Обновить шаблон чек-листа
-   */
   async updateChecklistTemplate(id, data) {
     const { 
       title, 
@@ -189,9 +152,7 @@ class ChecklistService {
     return template;
   }
   
-  /**
-   * Удалить шаблон чек-листа (деактивировать или полное удаление)
-   */
+
   async deleteChecklistTemplate(id, hardDelete = false) {
     const template = await BeryllChecklistTemplate.findByPk(id);
     
@@ -200,7 +161,6 @@ class ChecklistService {
     }
     
     if (hardDelete) {
-      // Проверяем, есть ли связанные записи
       const usageCount = await BeryllServerChecklist.count({
         where: { checklistTemplateId: id }
       });
@@ -211,16 +171,13 @@ class ChecklistService {
       
       await template.destroy();
     } else {
-      // Деактивируем вместо удаления
       await template.update({ isActive: false });
     }
     
     return { success: true };
   }
   
-  /**
-   * Восстановить деактивированный шаблон
-   */
+
   async restoreChecklistTemplate(id) {
     const template = await BeryllChecklistTemplate.findByPk(id);
     
@@ -233,9 +190,7 @@ class ChecklistService {
     return template;
   }
   
-  /**
-   * Изменить порядок шаблонов (Drag & Drop)
-   */
+
   async reorderChecklistTemplates(orderedIds) {
     const updates = orderedIds.map((id, index) => 
       BeryllChecklistTemplate.update(
@@ -249,21 +204,13 @@ class ChecklistService {
     return { success: true };
   }
   
-  // ============================================
-  // ЧЕК-ЛИСТ СЕРВЕРА
-  // ============================================
-  
-  /**
-   * Получить чек-лист сервера с файлами
-   */
+
   async getServerChecklist(serverId) {
-    // Получаем активные шаблоны
     const templates = await BeryllChecklistTemplate.findAll({
       where: { isActive: true },
       order: [["sortOrder", "ASC"]]
     });
     
-    // Получаем записи чек-листа для этого сервера
     const serverChecklists = await BeryllServerChecklist.findAll({
       where: { serverId },
       include: [
@@ -278,7 +225,6 @@ class ChecklistService {
       ]
     });
     
-    // Объединяем шаблоны с данными выполнения
     return templates.map(template => {
       const serverChecklist = serverChecklists.find(
         sc => sc.checklistTemplateId === template.id
@@ -299,36 +245,32 @@ class ChecklistService {
     });
   }
   
-  /**
-   * Переключить статус пункта чек-листа с валидацией
-   */
+
   async toggleChecklistItem(serverId, checklistTemplateId, completed, notes, userId) {
-    // Находим шаблон
+
     const template = await BeryllChecklistTemplate.findByPk(checklistTemplateId);
     
     if (!template) {
       throw new Error("Шаблон чек-листа не найден");
     }
     
-    // Находим или создаём запись чек-листа
     let [checklist, created] = await BeryllServerChecklist.findOrCreate({
       where: { serverId, checklistTemplateId },
       defaults: { completed: false }
     });
     
-    // Загружаем файлы для валидации
     const files = await BeryllChecklistFile.findAll({
       where: { serverChecklistId: checklist.id }
     });
     
-    // Валидация: если требуется доказательство и пытаемся отметить выполненным
+
     if (completed && template.requiresFile) {
       if (!files || files.length === 0) {
         throw new Error("Для выполнения этого этапа необходимо загрузить доказательство (скриншот)");
       }
     }
     
-    // Обновляем статус
+
     const updateData = {
       completed,
       notes: notes !== undefined ? notes : checklist.notes
@@ -344,7 +286,7 @@ class ChecklistService {
     
     await checklist.update(updateData);
     
-    // Логируем выполнение
+
     if (completed) {
       try {
         await HistoryService.logHistory(parseInt(serverId), userId, HISTORY_ACTIONS.CHECKLIST_COMPLETED, {
@@ -356,7 +298,6 @@ class ChecklistService {
       }
     }
     
-    // Возвращаем обновлённую запись с ассоциациями
     return await BeryllServerChecklist.findByPk(checklist.id, {
       include: [
         { model: BeryllChecklistTemplate, as: "template" },
@@ -372,70 +313,60 @@ class ChecklistService {
     });
   }
   
-  // ============================================
-  // ФАЙЛЫ ДОКАЗАТЕЛЬСТВ
-  // ============================================
   
   /**
    * Загрузить файл доказательства к пункту чек-листа
    * @param serverId ID сервера
    * @param checklistTemplateId ID шаблона чек-листа
-   * @param file Объект файла от express-fileupload: { name, data, size, mimetype, mv() }
+   * @param file Объект файла от express-fileupload
    * @param userId ID пользователя
    */
   async uploadChecklistFile(serverId, checklistTemplateId, file, userId) {
-    // Проверяем существование шаблона
     const template = await BeryllChecklistTemplate.findByPk(checklistTemplateId);
     if (!template) {
       throw new Error("Шаблон чек-листа не найден");
     }
     
-    // Находим или создаём запись чек-листа для сервера
     let [checklist, created] = await BeryllServerChecklist.findOrCreate({
       where: { serverId, checklistTemplateId },
       defaults: { completed: false }
     });
     
-    // Создаём директорию для сервера если не существует
     const serverDir = path.join(UPLOAD_DIR, `server_${serverId}`);
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
     }
     
-    // ✅ Декодируем имя файла из latin1 в UTF-8
     const originalName = decodeFileName(file.name);
     
-    // Генерируем уникальное имя файла
     const ext = path.extname(file.name);
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const fileName = `checklist_${checklistTemplateId}_${uniqueSuffix}${ext}`;
     const filePath = path.join(serverDir, fileName);
     
-    // Сохраняем файл на диск (express-fileupload использует mv())
+
     await file.mv(filePath);
     
-    // Формируем относительный путь для хранения в БД
+
     const relativePath = path.join(`server_${serverId}`, fileName);
     
-    // Создаём запись файла в БД
     const checklistFile = await BeryllChecklistFile.create({
       serverChecklistId: checklist.id,
       fileName: fileName,
-      originalName: originalName,  // ✅ Используем декодированное имя
+      originalName: originalName, 
       mimetype: file.mimetype,
       fileSize: file.size,
       filePath: relativePath,
       uploadedById: userId
     });
     
-    // Логируем
     try {
       await HistoryService.logHistory(parseInt(serverId), userId, HISTORY_ACTIONS.FILE_UPLOADED, {
         checklistItemId: checklistTemplateId,
-        comment: `Загружен файл: ${originalName}`,  // ✅ Используем декодированное имя
+        comment: `Загружен файл: ${originalName}`,  
         metadata: { 
           fileName: fileName, 
-          originalName: originalName,  // ✅ Используем декодированное имя
+          originalName: originalName,
           fileSize: file.size 
         }
       });
@@ -443,7 +374,7 @@ class ChecklistService {
       console.error("Error logging history:", e);
     }
     
-    // Возвращаем файл с информацией о загрузившем
+
     return await BeryllChecklistFile.findByPk(checklistFile.id, {
       include: [
         { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
@@ -451,9 +382,6 @@ class ChecklistService {
     });
   }
   
-  /**
-   * Получить все файлы сервера
-   */
   async getServerFiles(serverId) {
     const serverChecklists = await BeryllServerChecklist.findAll({
       where: { serverId },
@@ -483,10 +411,7 @@ class ChecklistService {
     
     return files;
   }
-  
-  /**
-   * Получить файл по ID (для скачивания)
-   */
+
   async getFileById(fileId) {
     const file = await BeryllChecklistFile.findByPk(fileId);
     
@@ -494,10 +419,8 @@ class ChecklistService {
       throw new Error("Файл не найден");
     }
     
-    // Формируем полный путь к файлу
     const fullPath = path.join(UPLOAD_DIR, file.filePath);
     
-    // Проверяем существование файла
     if (!fs.existsSync(fullPath)) {
       throw new Error("Файл не найден на диске");
     }
@@ -512,9 +435,6 @@ class ChecklistService {
     };
   }
   
-  /**
-   * Удалить файл доказательства
-   */
   async deleteChecklistFile(fileId, userId) {
     const file = await BeryllChecklistFile.findByPk(fileId, {
       include: [{
@@ -533,7 +453,6 @@ class ChecklistService {
     const templateRequiresFile = file.checklist?.template?.requiresFile;
     const originalName = file.originalName;
     
-    // Удаляем физический файл
     try {
       const fullPath = path.join(UPLOAD_DIR, file.filePath);
       if (fs.existsSync(fullPath)) {
@@ -543,10 +462,9 @@ class ChecklistService {
       console.error("Error deleting physical file:", e);
     }
     
-    // Удаляем запись из БД
     await file.destroy();
     
-    // Логируем
+
     if (serverId) {
       try {
         await HistoryService.logHistory(serverId, userId, HISTORY_ACTIONS.FILE_DELETED, {
@@ -559,7 +477,6 @@ class ChecklistService {
       }
     }
     
-    // Если это был последний файл и этап требует доказательство - снимаем отметку выполнения
     if (templateRequiresFile && checklistId) {
       const remainingFiles = await BeryllChecklistFile.count({
         where: { serverChecklistId: checklistId }
@@ -581,13 +498,6 @@ class ChecklistService {
   }
 }
 
-// ============================================
-// ИНИЦИАЛИЗАЦИЯ ШАБЛОНОВ
-// ============================================
-
-/**
- * Инициализация шаблонов чек-листа (вызывается при старте сервера)
- */
 async function initChecklistTemplates() {
   try {
     const count = await BeryllChecklistTemplate.count();
@@ -597,10 +507,10 @@ async function initChecklistTemplates() {
     }
 
     const templates = [
-      // ГРУППА 1: Визуальный осмотр
+
       { groupCode: 'VISUAL', title: 'Визуальный контроль сервера', description: 'Провести визуальный контроль (механические повреждения)', fileCode: null, requiresFile: false, sortOrder: 100, isRequired: true, estimatedMinutes: 10 },
       
-      // ГРУППА 2: Проверка работоспособности  
+ 
       { groupCode: 'TESTING', title: 'Скрин при включении', description: 'Скриншот при включении сервера', fileCode: 'sn_on2', requiresFile: true, sortOrder: 200, isRequired: true, estimatedMinutes: 5 },
       { groupCode: 'TESTING', title: 'Тест RAID (cachevault)', description: 'Проверить RAID контроллер и cachevault', fileCode: 'sn_cachevault2', requiresFile: true, sortOrder: 210, isRequired: true, estimatedMinutes: 15 },
       { groupCode: 'TESTING', title: 'Стресс тест 3 (60 мин)', description: 'Провести стресс-тестирование 60 минут', fileCode: 'sn_gtk32', requiresFile: true, sortOrder: 220, isRequired: true, estimatedMinutes: 60 },
@@ -612,13 +522,10 @@ async function initChecklistTemplates() {
       { groupCode: 'TESTING', title: 'Выгрузка файлов на общий диск', description: 'Выгрузка файлов тестирования', fileCode: null, requiresFile: false, sortOrder: 280, isRequired: true, estimatedMinutes: 10 },
       { groupCode: 'TESTING', title: 'Скрин BIOS, BMC [dts, die]', description: 'Включение сервера + скрин', fileCode: 'sn_Bios2', requiresFile: true, sortOrder: 290, isRequired: true, estimatedMinutes: 10 },
       
-      // ГРУППА 3: Контрольная (ОТК) - первичная
       { groupCode: 'QC_PRIMARY', title: 'Проверка результатов тестов (ОТК)', description: 'Проверка результатов', fileCode: null, requiresFile: false, sortOrder: 300, isRequired: true, estimatedMinutes: 15 },
       
-      // ГРУППА 4: Испытательная
       { groupCode: 'BURN_IN', title: 'Технологический прогон', description: 'Установка на прогон (burn-in)', fileCode: null, requiresFile: false, sortOrder: 400, isRequired: true, estimatedMinutes: 1440 },
       
-      // ГРУППА 5: Контрольная (ОТК) - финальная
       { groupCode: 'QC_FINAL', title: 'Проверка результатов прогона (ОТК)', description: 'Проверить результаты прогона', fileCode: null, requiresFile: false, sortOrder: 500, isRequired: true, estimatedMinutes: 10 }
     ];
 

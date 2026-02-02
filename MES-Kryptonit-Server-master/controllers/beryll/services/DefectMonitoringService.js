@@ -1,8 +1,3 @@
-/**
- * DefectMonitoringService.js
- * 
- * Положить в: controllers/beryll/services/DefectMonitoringService.js
- */
 
 const path = require("path");
 const fs = require("fs");
@@ -12,7 +7,7 @@ const { Op, fn, col } = require("sequelize");
 
 const execAsync = promisify(exec);
 
-// Модели
+
 const { 
   BeryllServer, BeryllHistory, BeryllDefectComment, BeryllDefectFile,
   HISTORY_ACTIONS, DEFECT_STATUSES 
@@ -20,10 +15,8 @@ const {
 const { User } = require("../../../models/index");
 const sequelize = require("../../../db");
 
-// Директория файлов
 const DEFECT_FILES_DIR = path.join(__dirname, "../../../../uploads/beryll/defects");
 
-// Кэш мониторинга
 let pingCache = new Map();
 let lastFullScan = null;
 const PING_TIMEOUT = 2;
@@ -31,13 +24,6 @@ const CACHE_TTL = 60000;
 
 class DefectMonitoringService {
   
-  // =============================================
-  // КОММЕНТАРИИ К ДЕФЕКТАМ
-  // =============================================
-  
-  /**
-   * Получить комментарии сервера
-   */
   async getCommentsByServer(serverId, options = {}) {
     const { status, category, limit = 50, offset = 0 } = options;
     const where = { serverId };
@@ -61,9 +47,6 @@ class DefectMonitoringService {
     return { count: comments.count, rows: comments.rows, page: Math.floor(offset / limit) + 1, totalPages: Math.ceil(comments.count / limit) };
   }
   
-  /**
-   * Получить комментарий по ID
-   */
   async getCommentById(commentId) {
     const comment = await BeryllDefectComment.findByPk(commentId, {
       include: [
@@ -79,9 +62,6 @@ class DefectMonitoringService {
     return comment;
   }
   
-  /**
-   * Создать комментарий
-   */
   async createComment(serverId, userId, data) {
     const { text, defectCategory, priority } = data;
     const server = await BeryllServer.findByPk(serverId);
@@ -104,9 +84,6 @@ class DefectMonitoringService {
     return this.getCommentById(comment.id);
   }
   
-  /**
-   * Обновить комментарий
-   */
   async updateComment(commentId, userId, data) {
     const { text, defectCategory, priority, status, resolution } = data;
     const comment = await BeryllDefectComment.findByPk(commentId);
@@ -142,16 +119,12 @@ class DefectMonitoringService {
     return this.getCommentById(commentId);
   }
   
-  /**
-   * Удалить комментарий
-   */
   async deleteComment(commentId, userId) {
     const comment = await BeryllDefectComment.findByPk(commentId, {
       include: [{ model: BeryllDefectFile, as: "files" }]
     });
     if (!comment) throw new Error("Комментарий не найден");
     
-    // Удаляем файлы с диска
     for (const file of comment.files || []) {
       const fullPath = path.join(DEFECT_FILES_DIR, file.filePath);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
@@ -169,9 +142,6 @@ class DefectMonitoringService {
     return { success: true, message: "Комментарий удалён" };
   }
   
-  /**
-   * Загрузить файл
-   */
   async uploadFile(commentId, file, userId) {
     const comment = await BeryllDefectComment.findByPk(commentId, {
       include: [{ model: BeryllServer, as: "server" }]
@@ -203,10 +173,7 @@ class DefectMonitoringService {
     
     return { success: true, file: { id: fileRecord.id, fileName, originalName: file.name, fileSize: file.size } };
   }
-  
-  /**
-   * Получить файл для скачивания
-   */
+
   async getFileForDownload(fileId) {
     const file = await BeryllDefectFile.findByPk(fileId);
     if (!file) throw new Error("Файл не найден");
@@ -216,10 +183,7 @@ class DefectMonitoringService {
     
     return { fullPath, originalName: file.originalName, mimeType: file.mimeType };
   }
-  
-  /**
-   * Удалить файл
-   */
+
   async deleteFile(fileId, userId) {
     const file = await BeryllDefectFile.findByPk(fileId, {
       include: [{ model: BeryllDefectComment, as: "comment", include: [{ model: BeryllServer, as: "server" }] }]
@@ -240,9 +204,6 @@ class DefectMonitoringService {
     return { success: true, message: "Файл удалён" };
   }
   
-  /**
-   * Статистика дефектов
-   */
   async getDefectStats(options = {}) {
     const { serverId, batchId, dateFrom, dateTo } = options;
     const where = {};
@@ -273,14 +234,7 @@ class DefectMonitoringService {
       byPriority: byPriority.reduce((acc, i) => { acc[i.priority] = parseInt(i.count); return acc; }, {})
     };
   }
-  
-  // =============================================
-  // МОНИТОРИНГ (PING)
-  // =============================================
-  
-  /**
-   * Пинг одного IP
-   */
+
   async pingHost(ipAddress) {
     if (!ipAddress) return { online: false, latency: null, error: "IP не указан" };
     
@@ -292,10 +246,7 @@ class DefectMonitoringService {
       return { online: false, latency: null, error: error.message || "Timeout" };
     }
   }
-  
-  /**
-   * Пинг одного сервера
-   */
+
   async pingServer(serverId) {
     const server = await BeryllServer.findByPk(serverId);
     if (!server) throw new Error("Сервер не найден");
@@ -313,10 +264,7 @@ class DefectMonitoringService {
     
     return { serverId, ipAddress: server.ipAddress, hostname: server.hostname, serialNumber: server.serialNumber, apkSerialNumber: server.apkSerialNumber, ...result, checkedAt: new Date() };
   }
-  
-  /**
-   * Массовый пинг
-   */
+ 
   async pingAllServers(options = {}) {
     const { batchId, status, forceRefresh = false } = options;
     
@@ -359,19 +307,13 @@ class DefectMonitoringService {
     
     return { total: results.length, online, offline: results.length - online, checkedAt: lastFullScan, servers: results };
   }
-  
-  /**
-   * Статусы из кэша
-   */
+
   getCachedStatuses() {
     const results = Array.from(pingCache.values());
     const online = results.filter(r => r.online).length;
     return { total: results.length, online, offline: results.length - online, checkedAt: lastFullScan, cached: true, servers: results };
   }
-  
-  /**
-   * Статистика мониторинга
-   */
+
   async getMonitoringStats() {
     const stats = await BeryllServer.findAll({
       where: { ipAddress: { [Op.ne]: null }, status: { [Op.notIn]: ["ARCHIVED"] } },
@@ -400,10 +342,7 @@ class DefectMonitoringService {
       staleServers, avgLatency: avgLatency?.avgLatency ? parseFloat(avgLatency.avgLatency).toFixed(2) : null, lastFullScan
     };
   }
-  
-  /**
-   * Серверы по статусу пинга
-   */
+
   async getServersByPingStatus(pingStatus, options = {}) {
     const { batchId, limit = 50, offset = 0 } = options;
     const where = { status: { [Op.notIn]: ["ARCHIVED"] } };

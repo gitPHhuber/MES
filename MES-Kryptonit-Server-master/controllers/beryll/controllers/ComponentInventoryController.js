@@ -1,16 +1,10 @@
-/**
- * ComponentInventoryController.js - Контроллер инвентаря компонентов
- */
 
 const ApiError = require("../../../error/ApiError");
 const ComponentInventoryService = require("../services/ComponentInventoryService");
 
 class ComponentInventoryController {
     
-    // =========================================
-    // СПРАВОЧНИК
-    // =========================================
-    
+
     async getCatalog(req, res, next) {
         try {
             const { type } = req.query;
@@ -52,9 +46,7 @@ class ComponentInventoryController {
         }
     }
     
-    // =========================================
-    // ИНВЕНТАРЬ - CRUD
-    // =========================================
+
     
     async getAll(req, res, next) {
         try {
@@ -147,10 +139,7 @@ class ComponentInventoryController {
             next(ApiError.internal(error.message));
         }
     }
-    
-    // =========================================
-    // ОПЕРАЦИИ
-    // =========================================
+
     
     async reserve(req, res, next) {
         try {
@@ -288,10 +277,7 @@ class ComponentInventoryController {
             next(ApiError.badRequest(error.message));
         }
     }
-    
-    // =========================================
-    // ИСТОРИЯ
-    // =========================================
+
     
     async getHistory(req, res, next) {
         try {
@@ -303,9 +289,7 @@ class ComponentInventoryController {
         }
     }
     
-    // =========================================
-    // СТАТИСТИКА
-    // =========================================
+
     
     async getStats(req, res, next) {
         try {

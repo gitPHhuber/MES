@@ -1,13 +1,6 @@
-/**
- * ClusterService.js
- * 
- * Сервис для работы с кластерами и комплектами/отгрузками
- * 
- * Положить в: controllers/beryll/services/ClusterService.js
- */
 
 const { Op } = require("sequelize");
-// Импортируем всё из models/index.js (после интеграции там будут все модели)
+
 const {
   BeryllShipment,
   BeryllCluster,
@@ -22,13 +15,7 @@ const {
 
 class ClusterService {
   
-  // =============================================
-  // КОМПЛЕКТЫ/ОТГРУЗКИ (SHIPMENTS)
-  // =============================================
-  
-  /**
-   * Получить все комплекты
-   */
+
   async getAllShipments(options = {}) {
     const { status, search, city } = options;
     
@@ -62,7 +49,7 @@ class ClusterService {
       order: [["createdAt", "DESC"]]
     });
     
-    // Добавляем статистику
+
     return shipments.map(shipment => {
       const data = shipment.toJSON();
       const totalServers = data.clusters?.reduce((sum, c) => sum + (c.clusterServers?.length || 0), 0) || 0;
@@ -79,9 +66,7 @@ class ClusterService {
     });
   }
   
-  /**
-   * Получить комплект по ID
-   */
+
   async getShipmentById(id) {
     const shipment = await BeryllShipment.findByPk(id, {
       include: [
@@ -122,9 +107,7 @@ class ClusterService {
     };
   }
   
-  /**
-   * Создать комплект
-   */
+
   async createShipment(data, userId) {
     const shipment = await BeryllShipment.create({
       name: data.name,
@@ -147,9 +130,7 @@ class ClusterService {
     return this.getShipmentById(shipment.id);
   }
   
-  /**
-   * Обновить комплект
-   */
+
   async updateShipment(id, data, userId) {
     const shipment = await BeryllShipment.findByPk(id);
     if (!shipment) throw new Error("Комплект не найден");
@@ -158,7 +139,7 @@ class ClusterService {
     
     await shipment.update(data);
     
-    // Обработка изменения статуса
+
     if (data.status && data.status !== oldData.status) {
       if (data.status === SHIPMENT_STATUSES.SHIPPED && !shipment.actualShipDate) {
         await shipment.update({ actualShipDate: new Date() });
@@ -171,7 +152,6 @@ class ClusterService {
       }
     }
     
-    // Логируем изменения
     const changes = {};
     Object.keys(data).forEach(key => {
       if (oldData[key] !== data[key]) {
@@ -186,9 +166,7 @@ class ClusterService {
     return this.getShipmentById(id);
   }
   
-  /**
-   * Удалить комплект
-   */
+
   async deleteShipment(id, userId) {
     const shipment = await BeryllShipment.findByPk(id, {
       include: [{ model: BeryllCluster, as: "clusters" }]
@@ -207,13 +185,6 @@ class ClusterService {
     return { success: true, message: "Комплект удалён" };
   }
   
-  // =============================================
-  // КЛАСТЕРЫ
-  // =============================================
-  
-  /**
-   * Получить все кластеры
-   */
   async getAllClusters(options = {}) {
     const { status, shipmentId, search } = options;
     
@@ -263,9 +234,7 @@ class ClusterService {
     });
   }
   
-  /**
-   * Получить кластер по ID
-   */
+
   async getClusterById(id) {
     const cluster = await BeryllCluster.findByPk(id, {
       include: [
@@ -301,9 +270,7 @@ class ClusterService {
     };
   }
   
-  /**
-   * Создать кластер
-   */
+
   async createCluster(data, userId) {
     const cluster = await BeryllCluster.create({
       name: data.name,
@@ -322,9 +289,7 @@ class ClusterService {
     return this.getClusterById(cluster.id);
   }
   
-  /**
-   * Обновить кластер
-   */
+
   async updateCluster(id, data, userId) {
     const cluster = await BeryllCluster.findByPk(id);
     if (!cluster) throw new Error("Кластер не найден");
@@ -333,7 +298,6 @@ class ClusterService {
     
     await cluster.update(data);
     
-    // Логируем изменения
     const changes = {};
     Object.keys(data).forEach(key => {
       if (oldData[key] !== data[key]) {
@@ -347,37 +311,27 @@ class ClusterService {
     
     return this.getClusterById(id);
   }
-  
-  /**
-   * Удалить кластер
-   */
+
   async deleteCluster(id, userId) {
     const cluster = await BeryllCluster.findByPk(id);
     if (!cluster) throw new Error("Кластер не найден");
     
     await this.logHistory("CLUSTER", id, "DELETED", userId, `Удалён кластер "${cluster.name}"`);
     
-    await cluster.destroy(); // CASCADE удалит связи с серверами
+    await cluster.destroy(); 
     
     return { success: true, message: "Кластер удалён" };
   }
   
-  // =============================================
-  // СЕРВЕРЫ В КЛАСТЕРЕ
-  // =============================================
-  
-  /**
-   * Добавить сервер в кластер
-   */
+
   async addServerToCluster(clusterId, serverId, data, userId) {
-    // Проверяем существование кластера и сервера
+
     const cluster = await BeryllCluster.findByPk(clusterId);
     if (!cluster) throw new Error("Кластер не найден");
     
     const server = await BeryllServer.findByPk(serverId);
     if (!server) throw new Error("Сервер не найден");
     
-    // Проверяем, не добавлен ли уже сервер в этот кластер
     const existing = await BeryllClusterServer.findOne({
       where: { clusterId, serverId }
     });
@@ -385,8 +339,7 @@ class ClusterService {
     if (existing) {
       throw new Error("Сервер уже добавлен в этот кластер");
     }
-    
-    // Определяем порядковый номер
+
     const lastOrder = await BeryllClusterServer.max("orderNumber", {
       where: { clusterId }
     });
@@ -411,9 +364,7 @@ class ClusterService {
     return this.getClusterServerById(clusterServer.id);
   }
   
-  /**
-   * Добавить несколько серверов в кластер
-   */
+
   async addServersToCluster(clusterId, serverIds, data, userId) {
     const cluster = await BeryllCluster.findByPk(clusterId);
     if (!cluster) throw new Error("Кластер не найден");
@@ -423,7 +374,7 @@ class ClusterService {
     
     for (const serverId of serverIds) {
       try {
-        // Проверяем, не добавлен ли уже
+
         const existing = await BeryllClusterServer.findOne({ where: { clusterId, serverId } });
         if (existing) continue;
         
@@ -452,9 +403,6 @@ class ClusterService {
     return { added: successCount, results };
   }
   
-  /**
-   * Удалить сервер из кластера
-   */
   async removeServerFromCluster(clusterId, serverId, userId) {
     const clusterServer = await BeryllClusterServer.findOne({
       where: { clusterId, serverId },
@@ -477,9 +425,6 @@ class ClusterService {
     return { success: true, message: "Сервер удалён из кластера" };
   }
   
-  /**
-   * Обновить данные сервера в кластере
-   */
   async updateClusterServer(clusterServerId, data, userId) {
     const clusterServer = await BeryllClusterServer.findByPk(clusterServerId);
     if (!clusterServer) throw new Error("Запись не найдена");
@@ -499,9 +444,6 @@ class ClusterService {
     return this.getClusterServerById(clusterServerId);
   }
   
-  /**
-   * Получить связь кластер-сервер по ID
-   */
   async getClusterServerById(id) {
     return BeryllClusterServer.findByPk(id, {
       include: [
@@ -512,13 +454,10 @@ class ClusterService {
     });
   }
   
-  /**
-   * Получить серверы, не включённые ни в один кластер
-   */
+
   async getUnassignedServers(options = {}) {
     const { status, batchId, search, limit = 100 } = options;
-    
-    // Получаем ID серверов, которые уже в кластерах
+
     const assignedServerIds = await BeryllClusterServer.findAll({
       attributes: ["serverId"]
     }).then(rows => rows.map(r => r.serverId));
@@ -545,9 +484,6 @@ class ClusterService {
     });
   }
   
-  /**
-   * Найти кластеры, в которых состоит сервер
-   */
   async getServerClusters(serverId) {
     return BeryllClusterServer.findAll({
       where: { serverId },
@@ -557,10 +493,7 @@ class ClusterService {
     });
   }
   
-  // =============================================
-  // ИСТОРИЯ
-  // =============================================
-  
+
   async logHistory(entityType, entityId, action, userId, comment, changes = null) {
     return BeryllExtendedHistory.create({
       entityType,

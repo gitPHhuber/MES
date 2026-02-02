@@ -107,6 +107,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Client-main/src/pages/AssemblyRecipes/components/ProductPassportModal.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/BeryllMonitoringPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/BeryllPage.tsx
+- MES-Kryptonit-Client-main/src/pages/Beryll/ComponentRevisionsPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/components/ServerChecklistSection.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/pages/BatchDetailPage.tsx
 - MES-Kryptonit-Client-main/src/pages/Beryll/pages/ServerDetailPage.tsx
@@ -272,6 +273,8 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/assemblyController.js
 - MES-Kryptonit-Server-master/controllers/assemblyRecipeController.js
 - MES-Kryptonit-Server-master/controllers/auditController.js
+- MES-Kryptonit-Server-master/controllers/beryll/ApprovalController.js
+- MES-Kryptonit-Server-master/controllers/beryll/CatalogExtendedController.js
 - MES-Kryptonit-Server-master/controllers/beryll/ComponentsExtendedController.js
 - MES-Kryptonit-Server-master/controllers/beryll/config/beryll.config.js
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/ArchiveController.js
@@ -295,6 +298,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/controllers/beryll/controllers/YadroController.js
 - MES-Kryptonit-Server-master/controllers/beryll/index.js
 - MES-Kryptonit-Server-master/controllers/beryll/passportsExportController.js
+- MES-Kryptonit-Server-master/controllers/beryll/services/ApprovalService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/ArchiveService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/BatchService.js
 - MES-Kryptonit-Server-master/controllers/beryll/services/ChecklistService.js
@@ -405,6 +409,7 @@ PROJECT CORE FILES OVERVIEW
 - MES-Kryptonit-Server-master/seeders/20260123-beryll-abilities.js
 - MES-Kryptonit-Server-master/seeders/20260123-component-catalog.js
 - MES-Kryptonit-Server-master/seeders/20260123-sla-config.js
+- MES-Kryptonit-Server-master/seeders/20260201-vegman-component-revisions.js
 - MES-Kryptonit-Server-master/seeders/beryllSeeder.js
 - MES-Kryptonit-Server-master/services/ExcelImportService.js
 - MES-Kryptonit-Server-master/services/PdfService.js
@@ -6665,16 +6670,6 @@ FILE: MES-Kryptonit-Client-main/src/components/Header/Header.tsx
 ================================================================================
 
 
-
-
-
-
-
-
-
-
-
-
 import React, { useContext, Fragment, useState, useEffect, useRef } from "react";
 import Logo from "assets/images/logo.svg";
 import { NavLink, useLocation } from "react-router-dom";
@@ -6710,6 +6705,7 @@ import {
   MQTT_CHECK_FC_ROUTE, MQTT_CHECK_ESC_ROUTE, PROFILE_ROUTE, RANKINGS_CHARTS_ROUTE,
   BERYLL_ROUTE,
   BERYLL_MONITORING_ROUTE,
+  BERYLL_REVISIONS_ROUTE,
   DEFECTS_ROUTE,
   PRODUCTION_ROUTE
 } from "src/utils/consts";
@@ -6824,6 +6820,7 @@ export const Header: React.FC = observer(() => {
       children: [
         { label: "Серверы", to: BERYLL_ROUTE, icon: Server },
         { label: "Мониторинг", to: BERYLL_MONITORING_ROUTE, icon: Activity },
+        { label: "Ревизии комплектующих", to: BERYLL_REVISIONS_ROUTE, icon: CircuitBoard },
       ]
     },
 
@@ -9958,18 +9955,6 @@ FILE: MES-Kryptonit-Client-main/src/components/beryll/ServerComponentsManager.ts
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -9982,9 +9967,6 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
 import { $authHost } from '../../api/index';
-
-
-
 
 
 const BASE_URL = "/api/beryll";
@@ -10038,9 +10020,6 @@ async function deleteComponent(componentId: number, reason?: string) {
 }
 
 
-
-
-
 type ComponentType = 'CPU' | 'RAM' | 'HDD' | 'SSD' | 'NVME' | 'NIC' | 'MOTHERBOARD' | 'PSU' | 'GPU' | 'RAID' | 'BMC' | 'OTHER';
 type ComponentStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'REPLACED';
 
@@ -10077,7 +10056,6 @@ interface ComponentsResponse {
   grouped: any;
   components: ServerComponent[];
 }
-
 
 interface BMCComparisonResult {
   success: boolean;
@@ -10283,9 +10261,6 @@ const TYPE_PLACEHOLDERS: Record<ComponentType, {
 };
 
 
-
-
-
 interface ComponentFormData {
   componentType: ComponentType;
   name: string;
@@ -10296,6 +10271,7 @@ interface ComponentFormData {
   partNumber: string;
   slot: string;
   status: ComponentStatus;
+  revision?: string;
   capacity?: string;
   speed?: string;
 }
@@ -10312,6 +10288,7 @@ interface ComponentModalProps {
 const ComponentModal: React.FC<ComponentModalProps> = ({
   isOpen, onClose, onSave, initialData, title, isReplacement
 }) => {
+
   const [formData, setFormData] = useState<ComponentFormData>({
     componentType: 'RAM',
     name: '',
@@ -10322,6 +10299,7 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
     partNumber: '',
     slot: '',
     status: 'OK',
+    revision: '',
     capacity: '',
     speed: ''
   });
@@ -10332,6 +10310,7 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
     if (initialData) {
       setFormData(prev => ({ ...prev, ...initialData }));
     } else {
+
       setFormData({
         componentType: 'RAM',
         name: '',
@@ -10342,6 +10321,7 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
         partNumber: '',
         slot: '',
         status: 'OK',
+        revision: '',
         capacity: '',
         speed: ''
       });
@@ -10387,7 +10367,6 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
   return createPortal(
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-        {}
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-600 to-violet-600">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -10404,9 +10383,8 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
           </div>
         </div>
 
-        {}
+
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {}
           <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
             <label className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
               <ScanLine size={18} />
@@ -10426,7 +10404,6 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
             </p>
           </div>
 
-          {}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Тип комплектующего *</label>
@@ -10529,7 +10506,17 @@ const ComponentModal: React.FC<ComponentModalProps> = ({
           </div>
 
           {}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Ревизия</label>
+              <input
+                type="text"
+                value={formData.revision}
+                onChange={(e) => handleChange('revision', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Rev.A, Rev.1.0..."
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Объём (GB)</label>
               <input
@@ -11011,6 +10998,12 @@ const ComponentCard: React.FC<ComponentCardProps> = ({
               <label className="text-xs text-slate-500">P/N</label>
               <p className="font-mono text-slate-800">{component.partNumber || '—'}</p>
             </div>
+            {component.metadata?.revision && (
+              <div>
+                <label className="text-xs text-slate-500">Ревизия</label>
+                <p className="font-medium text-slate-800">{component.metadata.revision}</p>
+              </div>
+            )}
             {component.capacity && (
               <div>
                 <label className="text-xs text-slate-500">Объём</label>
@@ -11209,7 +11202,8 @@ const ServerComponentsManager: React.FC<Props> = ({
         slot: formData.slot,
         status: formData.status,
         capacity: formData.capacity ? parseInt(formData.capacity) * 1024 * 1024 * 1024 : undefined,
-        speed: formData.speed
+        speed: formData.speed,
+        metadata: formData.revision ? { revision: formData.revision } : undefined
       });
       toast.success('Комплектующее добавлено');
       await loadComponents();
@@ -11224,6 +11218,7 @@ const ServerComponentsManager: React.FC<Props> = ({
     if (!editingComponent) return;
     
     try {
+      const existingMetadata = (editingComponent as any).metadata || {};
       await updateServerComponent(editingComponent.id, {
         name: formData.name,
         manufacturer: formData.manufacturer,
@@ -11232,7 +11227,11 @@ const ServerComponentsManager: React.FC<Props> = ({
         serialNumberYadro: formData.serialNumberYadro,
         partNumber: formData.partNumber,
         slot: formData.slot,
-        status: formData.status
+        status: formData.status,
+        metadata: {
+          ...existingMetadata,
+          revision: formData.revision || null
+        }
       });
       toast.success('Комплектующее обновлено');
       setEditingComponent(null);
@@ -11491,7 +11490,8 @@ const ServerComponentsManager: React.FC<Props> = ({
           serialNumberYadro: editingComponent.serialNumberYadro || '',
           partNumber: editingComponent.partNumber || '',
           slot: editingComponent.slot || '',
-          status: editingComponent.status
+          status: editingComponent.status,
+          revision: (editingComponent as any).metadata?.revision || ''
         } : undefined}
         title="Редактировать комплектующее"
       />
@@ -11570,6 +11570,7 @@ const ServerComponentsManager: React.FC<Props> = ({
 };
 
 export default ServerComponentsManager;
+
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/components/common/Preloader.tsx
 ================================================================================
@@ -23028,6 +23029,1136 @@ const BeryllPage: React.FC = () => {
 
 export default BeryllPage;
 ================================================================================
+FILE: MES-Kryptonit-Client-main/src/pages/Beryll/ComponentRevisionsPage.tsx
+================================================================================
+
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import {
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Cpu,
+  HardDrive,
+  MemoryStick,
+  Fan,
+  CircuitBoard,
+  Server,
+  Zap,
+  Package,
+  Settings,
+  X,
+  Save,
+  Loader2,
+  Eye,
+  EyeOff,
+  Info,
+  ListFilter
+} from "lucide-react";
+import { BERYLL_ROUTE } from "src/utils/consts";
+
+
+
+
+
+interface ComponentCatalog {
+  id: number;
+  type: string;
+  manufacturer: string | null;
+  model: string;
+  revision: string | null;
+  partNumber: string | null;
+  specifications: Record<string, any> | null;
+  serialNumberPattern: string | null;
+  isActive: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type ComponentType =
+  | "CPU" | "RAM" | "HDD" | "SSD" | "NVME" | "NIC"
+  | "MOTHERBOARD" | "PSU" | "GPU" | "RAID" | "BMC"
+  | "FAN" | "CHASSIS" | "BACKPLANE" | "CABLE" | "OTHER";
+
+
+
+
+
+const COMPONENT_TYPE_LABELS: Record<string, string> = {
+  MOTHERBOARD: "Материнская плата",
+  CPU: "Процессор",
+  RAM: "Планки памяти",
+  HDD: "HDD диски",
+  SSD: "SSD диски",
+  NVME: "NVMe накопители",
+  NIC: "Сетевая карта",
+  PSU: "Блок питания",
+  GPU: "Видеокарта",
+  RAID: "RAID-контроллер",
+  BMC: "BMC",
+  FAN: "Кулеры",
+  BACKPLANE: "Backplane",
+  CHASSIS: "Корпус",
+  CABLE: "Кабели",
+  OTHER: "Прочее"
+};
+
+const COMPONENT_TYPE_ICONS: Record<string, React.ReactNode> = {
+  MOTHERBOARD: <CircuitBoard size={18} />,
+  CPU: <Cpu size={18} />,
+  RAM: <MemoryStick size={18} />,
+  HDD: <HardDrive size={18} />,
+  SSD: <HardDrive size={18} />,
+  NVME: <HardDrive size={18} />,
+  NIC: <Settings size={18} />,
+  PSU: <Zap size={18} />,
+  GPU: <Cpu size={18} />,
+  RAID: <Server size={18} />,
+  BMC: <CircuitBoard size={18} />,
+  FAN: <Fan size={18} />,
+  BACKPLANE: <Package size={18} />,
+  CHASSIS: <Server size={18} />,
+  CABLE: <Package size={18} />,
+  OTHER: <Package size={18} />
+};
+
+const COMPONENT_TYPE_COLORS: Record<string, string> = {
+  MOTHERBOARD: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  CPU: "bg-blue-50 text-blue-700 border-blue-200",
+  RAM: "bg-violet-50 text-violet-700 border-violet-200",
+  HDD: "bg-amber-50 text-amber-700 border-amber-200",
+  SSD: "bg-orange-50 text-orange-700 border-orange-200",
+  NVME: "bg-red-50 text-red-700 border-red-200",
+  NIC: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  PSU: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  GPU: "bg-pink-50 text-pink-700 border-pink-200",
+  RAID: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  BMC: "bg-teal-50 text-teal-700 border-teal-200",
+  FAN: "bg-sky-50 text-sky-700 border-sky-200",
+  BACKPLANE: "bg-lime-50 text-lime-700 border-lime-200",
+  CHASSIS: "bg-stone-50 text-stone-700 border-stone-200",
+  CABLE: "bg-gray-50 text-gray-700 border-gray-200",
+  OTHER: "bg-slate-50 text-slate-700 border-slate-200"
+};
+
+
+const TYPE_ORDER: string[] = [
+  "MOTHERBOARD", "CPU", "RAM", "SSD", "HDD", "NVME",
+  "NIC", "RAID", "BMC", "PSU", "FAN", "BACKPLANE",
+  "GPU", "CHASSIS", "CABLE", "OTHER"
+];
+
+const ALL_TYPES: ComponentType[] = [
+  "CPU", "RAM", "HDD", "SSD", "NVME", "NIC",
+  "MOTHERBOARD", "PSU", "GPU", "RAID", "BMC",
+  "FAN", "CHASSIS", "BACKPLANE", "CABLE", "OTHER"
+];
+
+
+
+
+
+
+import { $authHost } from "src/api/index";
+
+const catalogApi = {
+  
+  getAll: async (): Promise<ComponentCatalog[]> => {
+    const { data } = await $authHost.get("api/beryll/catalog");
+    return data;
+  },
+
+  
+  create: async (entry: Partial<ComponentCatalog>): Promise<{ catalog: ComponentCatalog; created: boolean }> => {
+    const { data } = await $authHost.post("api/beryll/catalog", entry);
+    return data;
+  },
+
+  
+  update: async (id: number, entry: Partial<ComponentCatalog>): Promise<ComponentCatalog> => {
+    const { data } = await $authHost.put(`api/beryll/catalog/${id}`, entry);
+    return data;
+  },
+
+  
+  delete: async (id: number): Promise<void> => {
+    await $authHost.delete(`api/beryll/catalog/${id}`);
+  }
+};
+
+
+
+
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  maxWidth?: string;
+}
+
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = "max-w-lg" }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+      <div
+        className={`relative bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-hidden`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+          <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-white/60 transition text-gray-500 hover:text-gray-700"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {}
+        <div className="overflow-y-auto max-h-[calc(90vh-70px)]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+interface CatalogFormData {
+  type: string;
+  manufacturer: string;
+  model: string;
+  revision: string;
+  partNumber: string;
+  notes: string;
+  specifications: string; 
+}
+
+const emptyCatalogForm: CatalogFormData = {
+  type: "",
+  manufacturer: "",
+  model: "",
+  revision: "",
+  partNumber: "",
+  notes: "",
+  specifications: "{}"
+};
+
+interface CatalogFormProps {
+  initialData?: CatalogFormData;
+  presetType?: string;
+  onSubmit: (data: CatalogFormData) => Promise<void>;
+  onCancel: () => void;
+  submitLabel: string;
+  loading: boolean;
+}
+
+const CatalogForm: React.FC<CatalogFormProps> = ({
+  initialData,
+  presetType,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  loading
+}) => {
+  const [form, setForm] = useState<CatalogFormData>(
+    initialData || { ...emptyCatalogForm, type: presetType || "" }
+  );
+  const [showSpecs, setShowSpecs] = useState(false);
+
+  const handleChange = (field: keyof CatalogFormData, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.type) {
+      toast.error("Выберите тип комплектующего");
+      return;
+    }
+    if (!form.model) {
+      toast.error("Укажите модель");
+      return;
+    }
+    await onSubmit(form);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      {}
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          Тип комплектующего <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={form.type}
+          onChange={(e) => handleChange("type", e.target.value)}
+          disabled={!!presetType}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition disabled:bg-gray-50 disabled:text-gray-500"
+        >
+          <option value="">— Выберите тип —</option>
+          {ALL_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {COMPONENT_TYPE_LABELS[t] || t}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-1">Производитель</label>
+          <input
+            type="text"
+            value={form.manufacturer}
+            onChange={(e) => handleChange("manufacturer", e.target.value)}
+            placeholder="Samsung, Intel, Yadro..."
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-1">
+            Модель <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={form.model}
+            onChange={(e) => handleChange("model", e.target.value)}
+            placeholder="Модель / артикул"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+          />
+        </div>
+      </div>
+
+      {}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-1">Ревизия</label>
+          <input
+            type="text"
+            value={form.revision}
+            onChange={(e) => handleChange("revision", e.target.value)}
+            placeholder="Rev.20, 2245, 1E1-..."
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-1">Part Number</label>
+          <input
+            type="text"
+            value={form.partNumber}
+            onChange={(e) => handleChange("partNumber", e.target.value)}
+            placeholder="Артикул производителя"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+          />
+        </div>
+      </div>
+
+      {}
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">Заметки</label>
+        <textarea
+          value={form.notes}
+          onChange={(e) => handleChange("notes", e.target.value)}
+          placeholder="Дополнительная информация..."
+          rows={2}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition resize-none"
+        />
+      </div>
+
+      {}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowSpecs(!showSpecs)}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition"
+        >
+          {showSpecs ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showSpecs ? "Скрыть спецификации" : "Показать спецификации (JSON)"}
+        </button>
+        {showSpecs && (
+          <textarea
+            value={form.specifications}
+            onChange={(e) => handleChange("specifications", e.target.value)}
+            rows={4}
+            className="w-full mt-2 px-3 py-2.5 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition resize-none bg-gray-50"
+          />
+        )}
+      </div>
+
+      {}
+      <div className="flex items-center justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition"
+        >
+          Отмена
+        </button>
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 rounded-xl shadow-md hover:shadow-lg transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          {submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+
+
+
+
+interface RevisionCardProps {
+  entry: ComponentCatalog;
+  onEdit: (entry: ComponentCatalog) => void;
+  onDelete: (entry: ComponentCatalog) => void;
+}
+
+const RevisionCard: React.FC<RevisionCardProps> = ({ entry, onEdit, onDelete }) => {
+  const specs = entry.specifications || {};
+  const specKeys = Object.keys(specs).filter(
+    (k) => !["serverModel", "variants"].includes(k)
+  );
+
+  return (
+    <div className="group relative bg-white border border-gray-100 rounded-xl p-4 hover:border-indigo-200 hover:shadow-sm transition-all duration-200">
+      {}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sm text-gray-800 truncate">
+              {entry.manufacturer ? `${entry.manufacturer} ` : ""}
+              {entry.model}
+            </span>
+            {entry.revision && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
+                rev. {entry.revision}
+              </span>
+            )}
+          </div>
+
+          {}
+          {entry.partNumber && (
+            <div className="mt-1 text-xs text-gray-400">
+              P/N: {entry.partNumber}
+            </div>
+          )}
+
+          {}
+          {specKeys.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {specKeys.slice(0, 4).map((key) => (
+                <span
+                  key={key}
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-xs bg-gray-50 text-gray-600 border border-gray-100"
+                >
+                  {key}: {String(specs[key])}
+                </span>
+              ))}
+              {specKeys.length > 4 && (
+                <span className="text-xs text-gray-400">+{specKeys.length - 4}</span>
+              )}
+            </div>
+          )}
+
+          {}
+          {entry.notes && (
+            <div className="mt-1.5 text-xs text-gray-400 truncate" title={entry.notes}>
+              {entry.notes}
+            </div>
+          )}
+        </div>
+
+        {}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onEdit(entry)}
+            className="p-1.5 rounded-lg hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition"
+            title="Редактировать"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={() => onDelete(entry)}
+            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
+            title="Деактивировать"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+interface TypeSectionProps {
+  type: string;
+  entries: ComponentCatalog[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  onAddRevision: (type: string) => void;
+  onEdit: (entry: ComponentCatalog) => void;
+  onDelete: (entry: ComponentCatalog) => void;
+}
+
+const TypeSection: React.FC<TypeSectionProps> = ({
+  type,
+  entries,
+  isExpanded,
+  onToggle,
+  onAddRevision,
+  onEdit,
+  onDelete
+}) => {
+  const label = COMPONENT_TYPE_LABELS[type] || type;
+  const icon = COMPONENT_TYPE_ICONS[type] || <Package size={18} />;
+  const colorClass = COMPONENT_TYPE_COLORS[type] || COMPONENT_TYPE_COLORS.OTHER;
+
+  return (
+    <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+      {}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center justify-center w-9 h-9 rounded-xl border ${colorClass}`}>
+            {icon}
+          </div>
+          <div className="text-left">
+            <div className="font-semibold text-gray-800">{label}</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              {entries.length} {entries.length === 1 ? "ревизия" : entries.length < 5 ? "ревизии" : "ревизий"}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {}
+          <div className="hidden sm:flex items-center gap-1 mr-2">
+            {entries.slice(0, 5).map((e) => (
+              <span
+                key={e.id}
+                className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-500 max-w-[80px] truncate"
+                title={`${e.manufacturer || ""} ${e.model} ${e.revision ? `(${e.revision})` : ""}`}
+              >
+                {e.revision || e.model.slice(0, 12)}
+              </span>
+            ))}
+            {entries.length > 5 && (
+              <span className="text-[10px] text-gray-400">+{entries.length - 5}</span>
+            )}
+          </div>
+          {isExpanded ? (
+            <ChevronDown size={18} className="text-gray-400" />
+          ) : (
+            <ChevronRight size={18} className="text-gray-400" />
+          )}
+        </div>
+      </button>
+
+      {}
+      {isExpanded && (
+        <div className="border-t border-gray-100 px-5 pb-4 pt-3">
+          {}
+          <div className="mb-3">
+            <button
+              onClick={() => onAddRevision(type)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
+            >
+              <Plus size={14} />
+              Добавить ревизию
+            </button>
+          </div>
+
+          {}
+          <div className="grid gap-2">
+            {entries.map((entry) => (
+              <RevisionCard
+                key={entry.id}
+                entry={entry}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+
+          {entries.length === 0 && (
+            <div className="text-center py-6 text-sm text-gray-400">
+              Нет записей. Добавьте первую ревизию.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+const ComponentRevisionsPage: React.FC = () => {
+  const navigate = useNavigate();
+
+  
+  const [catalog, setCatalog] = useState<ComponentCatalog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<string>("");
+
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ComponentCatalog | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<ComponentCatalog | null>(null);
+  const [presetType, setPresetType] = useState<string>("");
+
+  
+  
+  
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await catalogApi.getAll();
+      setCatalog(data.filter((d) => d.isActive));
+    } catch (error: any) {
+      toast.error("Ошибка загрузки каталога");
+      console.error("loadCatalog error:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  
+  
+  
+
+  const grouped = useMemo(() => {
+    let filtered = catalog;
+
+    
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          (c.manufacturer || "").toLowerCase().includes(q) ||
+          c.model.toLowerCase().includes(q) ||
+          (c.revision || "").toLowerCase().includes(q) ||
+          (c.partNumber || "").toLowerCase().includes(q) ||
+          (c.notes || "").toLowerCase().includes(q)
+      );
+    }
+
+    
+    if (filterType) {
+      filtered = filtered.filter((c) => c.type === filterType);
+    }
+
+    
+    const map = new Map<string, ComponentCatalog[]>();
+    for (const entry of filtered) {
+      const list = map.get(entry.type) || [];
+      list.push(entry);
+      map.set(entry.type, list);
+    }
+
+    
+    const result: Array<{ type: string; entries: ComponentCatalog[] }> = [];
+    for (const type of TYPE_ORDER) {
+      const entries = map.get(type);
+      if (entries && entries.length > 0) {
+        result.push({ type, entries });
+      }
+    }
+    
+    for (const [type, entries] of map) {
+      if (!TYPE_ORDER.includes(type)) {
+        result.push({ type, entries });
+      }
+    }
+
+    return result;
+  }, [catalog, searchQuery, filterType]);
+
+  
+  const availableTypes = useMemo(() => {
+    return [...new Set(catalog.map((c) => c.type))].sort();
+  }, [catalog]);
+
+  
+  
+  
+
+  const toggleType = (type: string) => {
+    setExpandedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    setExpandedTypes(new Set(grouped.map((g) => g.type)));
+  };
+
+  const collapseAll = () => {
+    setExpandedTypes(new Set());
+  };
+
+  
+  const handleAddRevision = (type: string) => {
+    setPresetType(type);
+    setShowCreateModal(true);
+  };
+
+  const handleCreate = async (formData: CatalogFormData) => {
+    setSaving(true);
+    try {
+      let specs = {};
+      try {
+        specs = JSON.parse(formData.specifications || "{}");
+      } catch {
+        
+      }
+
+      const { created } = await catalogApi.create({
+        type: formData.type as ComponentType,
+        manufacturer: formData.manufacturer || null,
+        model: formData.model,
+        revision: formData.revision || null,
+        partNumber: formData.partNumber || null,
+        notes: formData.notes || null,
+        specifications: specs
+      });
+
+      if (created) {
+        toast.success("Ревизия добавлена");
+      } else {
+        toast.success("Запись уже существует, обновлена");
+      }
+
+      setShowCreateModal(false);
+      setPresetType("");
+      await loadCatalog();
+
+      
+      setExpandedTypes((prev) => new Set([...prev, formData.type]));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Ошибка создания");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  
+  const handleEdit = (entry: ComponentCatalog) => {
+    setEditingEntry(entry);
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async (formData: CatalogFormData) => {
+    if (!editingEntry) return;
+    setSaving(true);
+    try {
+      let specs = {};
+      try {
+        specs = JSON.parse(formData.specifications || "{}");
+      } catch {
+        
+      }
+
+      await catalogApi.update(editingEntry.id, {
+        type: formData.type as ComponentType,
+        manufacturer: formData.manufacturer || null,
+        model: formData.model,
+        revision: formData.revision || null,
+        partNumber: formData.partNumber || null,
+        notes: formData.notes || null,
+        specifications: specs
+      });
+
+      toast.success("Запись обновлена");
+      setShowEditModal(false);
+      setEditingEntry(null);
+      await loadCatalog();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Ошибка обновления");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  
+  const handleDeleteClick = (entry: ComponentCatalog) => {
+    setDeletingEntry(entry);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingEntry) return;
+    setSaving(true);
+    try {
+      await catalogApi.delete(deletingEntry.id);
+      toast.success("Запись деактивирована");
+      setShowDeleteConfirm(false);
+      setDeletingEntry(null);
+      await loadCatalog();
+    } catch (error: any) {
+      
+      try {
+        await catalogApi.update(deletingEntry.id, { isActive: false } as any);
+        toast.success("Запись деактивирована");
+        setShowDeleteConfirm(false);
+        setDeletingEntry(null);
+        await loadCatalog();
+      } catch (err2: any) {
+        toast.error(err2.response?.data?.message || "Ошибка удаления");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  
+  
+  
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50/30">
+      {}
+      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(BERYLL_ROUTE)}
+                className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">
+                  Ревизии комплектующих
+                </h1>
+                <p className="text-xs text-gray-400">
+                  VegmanS220v8 — справочник моделей и ревизий
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setPresetType("");
+                setShowCreateModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 rounded-xl shadow-md hover:shadow-lg transition"
+            >
+              <Plus size={16} />
+              <span className="hidden sm:inline">Новое комплектующее</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {}
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск по модели, производителю, ревизии..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition bg-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {}
+          <div className="relative">
+            <ListFilter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition bg-white appearance-none"
+            >
+              <option value="">Все типы</option>
+              {availableTypes.map((t) => (
+                <option key={t} value={t}>
+                  {COMPONENT_TYPE_LABELS[t] || t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {}
+          <div className="flex gap-1">
+            <button
+              onClick={expandAll}
+              className="px-3 py-2.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-xl transition"
+              title="Развернуть всё"
+            >
+              Развернуть
+            </button>
+            <button
+              onClick={collapseAll}
+              className="px-3 py-2.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-xl transition"
+              title="Свернуть всё"
+            >
+              Свернуть
+            </button>
+          </div>
+        </div>
+
+        {}
+        <div className="mt-3 flex items-center gap-4 text-xs text-gray-400">
+          <span>
+            Всего: <strong className="text-gray-600">{catalog.length}</strong> записей
+          </span>
+          <span>
+            Типов: <strong className="text-gray-600">{availableTypes.length}</strong>
+          </span>
+          {searchQuery && (
+            <span>
+              Найдено: <strong className="text-indigo-600">
+                {grouped.reduce((sum, g) => sum + g.entries.length, 0)}
+              </strong>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-indigo-400" />
+            <span className="ml-3 text-gray-500">Загрузка каталога...</span>
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="text-center py-20">
+            <Package size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-600">
+              {searchQuery || filterType
+                ? "Ничего не найдено"
+                : "Каталог пуст"
+              }
+            </h3>
+            <p className="mt-1 text-sm text-gray-400">
+              {searchQuery || filterType
+                ? "Попробуйте изменить параметры поиска"
+                : "Добавьте первое комплектующее"
+              }
+            </p>
+            {!searchQuery && !filterType && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition"
+              >
+                <Plus size={16} />
+                Добавить комплектующее
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {grouped.map(({ type, entries }) => (
+              <TypeSection
+                key={type}
+                type={type}
+                entries={entries}
+                isExpanded={expandedTypes.has(type)}
+                onToggle={() => toggleType(type)}
+                onAddRevision={handleAddRevision}
+                onEdit={handleEdit}
+                onDelete={handleDeleteClick}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {}
+      {}
+      {}
+
+      {}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setPresetType("");
+        }}
+        title={presetType
+          ? `Добавить ревизию — ${COMPONENT_TYPE_LABELS[presetType] || presetType}`
+          : "Новое комплектующее"
+        }
+      >
+        <CatalogForm
+          presetType={presetType || undefined}
+          onSubmit={handleCreate}
+          onCancel={() => {
+            setShowCreateModal(false);
+            setPresetType("");
+          }}
+          submitLabel="Добавить"
+          loading={saving}
+        />
+      </Modal>
+
+      {}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingEntry(null);
+        }}
+        title="Редактирование"
+      >
+        {editingEntry && (
+          <CatalogForm
+            initialData={{
+              type: editingEntry.type,
+              manufacturer: editingEntry.manufacturer || "",
+              model: editingEntry.model,
+              revision: editingEntry.revision || "",
+              partNumber: editingEntry.partNumber || "",
+              notes: editingEntry.notes || "",
+              specifications: JSON.stringify(editingEntry.specifications || {}, null, 2)
+            }}
+            onSubmit={handleUpdate}
+            onCancel={() => {
+              setShowEditModal(false);
+              setEditingEntry(null);
+            }}
+            submitLabel="Сохранить"
+            loading={saving}
+          />
+        )}
+      </Modal>
+
+      {}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setDeletingEntry(null);
+        }}
+        title="Деактивировать запись?"
+        maxWidth="max-w-sm"
+      >
+        <div className="p-6">
+          {deletingEntry && (
+            <>
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <Trash2 size={18} className="text-red-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Вы уверены, что хотите деактивировать запись?
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {deletingEntry.manufacturer ? `${deletingEntry.manufacturer} ` : ""}
+                    {deletingEntry.model}
+                    {deletingEntry.revision ? ` (rev. ${deletingEntry.revision})` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Запись станет неактивной и не будет отображаться при добавлении комплектующих на сервер.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeletingEntry(null);
+                  }}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl shadow transition disabled:opacity-50"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Деактивировать
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {}
+      <div className="fixed bottom-4 right-4 z-20">
+        <div className="group relative">
+          <button className="w-10 h-10 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:border-indigo-200 transition">
+            <Info size={18} />
+          </button>
+          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute bottom-12 right-0 w-72 bg-white rounded-xl shadow-xl border border-gray-100 p-4 text-xs text-gray-500 transition-all duration-200">
+            <p className="font-semibold text-gray-700 mb-1">Справочник ревизий</p>
+            <p>Здесь управляются модели и ревизии комплектующих, которые доступны при добавлении компонентов на сервер.</p>
+            <p className="mt-2">Данные из этого каталога используются в формах добавления комплектующих (модальное окно «Добавить комплектующее» на странице сервера).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ComponentRevisionsPage;
+================================================================================
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/components/ServerChecklistSection.tsx
 ================================================================================
 
@@ -28720,6 +29851,7 @@ export default ClustersTab;
 FILE: MES-Kryptonit-Client-main/src/pages/Beryll/tabs/DefectRecordsTab.tsx
 ================================================================================
 
+
 import React, { useState, useEffect, useCallback } from "react";
 import { 
   AlertTriangle, Plus, Search, Filter, FileText, Download,
@@ -28779,6 +29911,18 @@ const downloadBlob = (blob: Blob, filename: string): void => {
   link.remove();
   window.URL.revokeObjectURL(url);
 };
+
+
+
+
+
+
+
+
+
+function getServerDisplaySerial(record: BeryllDefectRecord): string {
+  return record.serverSerial || record.server?.apkSerialNumber || `#${record.serverId}`;
+}
 
 
 const STATUS_CONFIG: Record<DefectRecordStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -29123,7 +30267,7 @@ const DefectRecordsTab: React.FC = () => {
         
         {}
         <td className="px-3 py-2 text-sm">
-          <div className="font-medium">{record.server?.apkSerialNumber || `#${record.serverId}`}</div>
+          <div className="font-medium font-mono">{getServerDisplaySerial(record)}</div>
         </td>
         
         {}
@@ -29649,8 +30793,9 @@ const RecordDetails: React.FC<{
         {record.yadroTicketNumber && (
           <div className="text-lg font-semibold">{record.yadroTicketNumber}</div>
         )}
+        {}
         <div className="text-sm text-gray-500">
-          Сервер: {record.server?.apkSerialNumber || `#${record.serverId}`}
+          Сервер: <span className="font-mono">{getServerDisplaySerial(record)}</span>
         </div>
       </div>
       
@@ -29865,6 +31010,7 @@ const RecordDetails: React.FC<{
 
 
 
+
 const CreateRecordModal: React.FC<{
   isOpen: boolean;
   servers: any[];
@@ -29873,7 +31019,8 @@ const CreateRecordModal: React.FC<{
   onSuccess: () => void;
 }> = ({ isOpen, servers, users, onClose, onSuccess }) => {
   const [form, setForm] = useState({
-    serverId: 0,
+    serverId: null as number | null,
+    serverSerial: "",       
     problemDescription: "",
     yadroTicketNumber: "",
     hasSPISI: false,
@@ -29895,6 +31042,7 @@ const CreateRecordModal: React.FC<{
   });
   const [saving, setSaving] = useState(false);
   const [serverSearch, setServerSearch] = useState("");
+  const [manualSerialMode, setManualSerialMode] = useState(false);  
   
   const filteredServers = servers.filter(s =>
     !serverSearch ||
@@ -29906,7 +31054,8 @@ const CreateRecordModal: React.FC<{
   useEffect(() => {
     if (isOpen) {
       setForm({
-        serverId: 0,
+        serverId: null,
+        serverSerial: "",
         problemDescription: "",
         yadroTicketNumber: "",
         hasSPISI: false,
@@ -29927,14 +31076,16 @@ const CreateRecordModal: React.FC<{
         returnedFromYadroAt: ""
       });
       setServerSearch("");
+      setManualSerialMode(false);
     }
   }, [isOpen]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.serverId) {
-      toast.error("Выберите сервер");
+    
+    if (!form.serverId && !form.serverSerial.trim()) {
+      toast.error("Выберите сервер или введите серийный номер вручную");
       return;
     }
     if (!form.problemDescription.trim()) {
@@ -29946,6 +31097,8 @@ const CreateRecordModal: React.FC<{
       setSaving(true);
       await createDefectRecord({
         ...form,
+        serverId: form.serverId || undefined,
+        serverSerial: form.serverSerial || undefined,
         repairPartType: form.repairPartType || undefined,
         diagnosticianId: form.diagnosticianId || undefined,
         sentToYadroAt: form.sentToYadroAt ? new Date(form.sentToYadroAt).toISOString() : undefined,
@@ -29973,26 +31126,68 @@ const CreateRecordModal: React.FC<{
             
             {}
             <div>
-              <label className="block text-sm font-medium mb-1">Сервер *</label>
-              <input
-                type="text"
-                placeholder="Поиск по S/N, hostname..."
-                value={serverSearch}
-                onChange={(e) => setServerSearch(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg mb-2"
-              />
-              <div className="max-h-28 overflow-y-auto border rounded-lg">
-                {filteredServers.slice(0, 10).map(server => (
-                  <div
-                    key={server.id}
-                    className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
-                    onClick={() => setForm({ ...form, serverId: server.id })}
-                  >
-                    <div className="font-medium">{server.apkSerialNumber || `#${server.id}`}</div>
-                    <div className="text-xs text-gray-500">{server.hostname}</div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium">Сервер *</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualSerialMode(!manualSerialMode);
+                    if (!manualSerialMode) {
+                      
+                      setForm({ ...form, serverId: null });
+                    } else {
+                      
+                      setForm({ ...form, serverSerial: "" });
+                    }
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {manualSerialMode ? "← Выбрать из списка" : "Ввести вручную →"}
+                </button>
               </div>
+              
+              {manualSerialMode ? (
+                
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Введите серийный номер сервера"
+                    value={form.serverSerial}
+                    onChange={(e) => setForm({ ...form, serverSerial: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg border-orange-300 bg-orange-50"
+                  />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Ручной ввод — сервер может отсутствовать в базе
+                  </p>
+                </div>
+              ) : (
+                
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Поиск по S/N, hostname..."
+                    value={serverSearch}
+                    onChange={(e) => setServerSearch(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg mb-2"
+                  />
+                  <div className="max-h-28 overflow-y-auto border rounded-lg">
+                    {filteredServers.slice(0, 10).map(server => (
+                      <div
+                        key={server.id}
+                        className={`p-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 ${form.serverId === server.id ? "bg-blue-100" : ""}`}
+                        onClick={() => setForm({ 
+                          ...form, 
+                          serverId: server.id,
+                          serverSerial: server.apkSerialNumber || ""  
+                        })}
+                      >
+                        <div className="font-medium font-mono">{server.apkSerialNumber || `#${server.id}`}</div>
+                        <div className="text-xs text-gray-500">{server.hostname}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div>
@@ -30289,6 +31484,18 @@ const EditRecordModal: React.FC<{
         <div className="grid grid-cols-2 gap-6">
           {}
           <div className="space-y-4">
+            {}
+            <div>
+              <label className="block text-sm font-medium mb-1">Серийный номер сервера</label>
+              <input
+                type="text"
+                value={form.serverSerial || ""}
+                onChange={(e) => setForm({ ...form, serverSerial: e.target.value })}
+                placeholder="Серийный номер"
+                className="w-full px-3 py-2 border rounded-lg font-mono"
+              />
+            </div>
+            
             <div>
               <label className="block text-sm font-medium mb-1">Описание проблемы</label>
               <textarea
@@ -55720,6 +56927,7 @@ import BeryllPage from "./pages/Beryll/BeryllPage";
 import { ServerDetailPage } from "./pages/Beryll/pages/ServerDetailPage";
 import { BatchDetailPage } from "./pages/Beryll/pages/BatchDetailPage";
 import BeryllMonitoringPage from "./pages/Beryll/BeryllMonitoringPage";
+import ComponentRevisionsPage from "./pages/Beryll/ComponentRevisionsPage";
 
 import { DefectsPage } from "./pages/Defects/DefectsPage";
 import { DefectDetailPage } from "./pages/Defects/DefectDetailPage";
@@ -55777,6 +56985,7 @@ import {
   BERYLL_SERVER_ROUTE,
   BERYLL_BATCH_ROUTE,
   BERYLL_MONITORING_ROUTE,
+  BERYLL_REVISIONS_ROUTE,
   DEFECTS_ROUTE,
   DEFECT_DETAIL_ROUTE,
   ADMIN_DEFECT_CATEGORIES_ROUTE,
@@ -55815,8 +57024,8 @@ export const authRoutes = [
   { path: BERYLL_ROUTE, Component: BeryllPage },
   { path: BERYLL_SERVER_ROUTE, Component: ServerDetailPage },
   { path: BERYLL_BATCH_ROUTE, Component: BatchDetailPage },
-  
   { path: BERYLL_MONITORING_ROUTE, Component: BeryllMonitoringPage },
+  { path: BERYLL_REVISIONS_ROUTE, Component: ComponentRevisionsPage },
   { path: DEFECTS_ROUTE, Component: DefectsPage },
   { path: DEFECT_DETAIL_ROUTE, Component: DefectDetailPage },
   { path: PRODUCTION_ROUTE, Component: ProductionPage },
@@ -58180,12 +59389,6 @@ FILE: MES-Kryptonit-Client-main/src/utils/consts.ts
 
 
 
-
-
-
-
-
-
 export const ADMIN_ROUTE = '/admin';
 export const ADMIN_PCs_ROUTE = '/admin/pcs';
 export const ADMIN_DEFECTS_FC_CATEGORIES_ROUTE = '/admin/defects-FC-categories';
@@ -58254,6 +59457,8 @@ export const BERYLL_ROUTE = '/beryll';
 export const BERYLL_SERVER_ROUTE = '/beryll/server/:id';
 export const BERYLL_BATCH_ROUTE = '/beryll/batch/:id';
 export const BERYLL_MONITORING_ROUTE = '/beryll/monitoring';
+export const BERYLL_REVISIONS_ROUTE = '/beryll/revisions';
+
 
 
 
@@ -58308,7 +59513,6 @@ export const ANALYTICS_DASHBOARD_ROUTE = '/analytics/dashboard';
 
 
 export const PRODUCTION_ROUTE = '/production';
-
 ================================================================================
 FILE: MES-Kryptonit-Client-main/src/utils/constsModalType.ts
 ================================================================================
@@ -62999,11 +64203,6 @@ export default defineConfig({
 FILE: MES-Kryptonit-Server-master/config/config.js
 ================================================================================
 
-
-
-
-
-
 require('dotenv').config();
 
 module.exports = {
@@ -65227,6 +66426,710 @@ class AuditController {
 module.exports = new AuditController();
 
 ================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/ApprovalController.js
+================================================================================
+
+
+
+const ApprovalService = require("./services/ApprovalService");
+const { CHECKLIST_STAGES, APPROVAL_STATUSES } = require("../../models/BeryllServerApproval");
+
+class ApprovalController {
+  
+  
+  
+  
+
+  
+
+
+
+  async submitForVerification(req, res) {
+    try {
+      const { serverId, stageCode } = req.body;
+      const userId = req.user.id;
+
+      if (!serverId) {
+        return res.status(400).json({ message: "Укажите ID сервера" });
+      }
+
+      const approval = await ApprovalService.submitForVerification(
+        serverId, 
+        userId, 
+        stageCode || CHECKLIST_STAGES.ASSEMBLY
+      );
+
+      res.status(201).json(approval);
+    } catch (error) {
+      console.error("Ошибка отправки на верификацию:", error);
+      res.status(400).json({ message: error.message });
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+
+  async approveServer(req, res) {
+    try {
+      const { id } = req.params;
+      const { comment } = req.body;
+      const reviewerId = req.user.id;
+
+      const approval = await ApprovalService.approveServer(
+        parseInt(id), 
+        reviewerId, 
+        comment
+      );
+
+      res.json(approval);
+    } catch (error) {
+      console.error("Ошибка одобрения:", error);
+      res.status(400).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async rejectServer(req, res) {
+    try {
+      const { id } = req.params;
+      const { comment } = req.body;
+      const reviewerId = req.user.id;
+
+      const approval = await ApprovalService.rejectServer(
+        parseInt(id), 
+        reviewerId, 
+        comment
+      );
+
+      res.json(approval);
+    } catch (error) {
+      console.error("Ошибка отклонения:", error);
+      res.status(400).json({ message: error.message });
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+
+  async getVerificationQueue(req, res) {
+    try {
+      const { stageCode, page, limit, sortBy, sortOrder } = req.query;
+
+      const result = await ApprovalService.getVerificationQueue({
+        stageCode,
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 20,
+        sortBy: sortBy || "submittedAt",
+        sortOrder: sortOrder || "ASC"
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Ошибка получения очереди:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async getApprovalById(req, res) {
+    try {
+      const { id } = req.params;
+      const approval = await ApprovalService.getApprovalById(parseInt(id));
+
+      if (!approval) {
+        return res.status(404).json({ message: "Запись не найдена" });
+      }
+
+      res.json(approval);
+    } catch (error) {
+      console.error("Ошибка получения апрува:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async getVerificationDetails(req, res) {
+    try {
+      const { id } = req.params;
+      const details = await ApprovalService.getVerificationDetails(parseInt(id));
+
+      res.json(details);
+    } catch (error) {
+      console.error("Ошибка получения деталей:", error);
+      res.status(400).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async getServerVerificationStatus(req, res) {
+    try {
+      const { serverId } = req.params;
+      const status = await ApprovalService.getServerVerificationStatus(parseInt(serverId));
+
+      res.json(status);
+    } catch (error) {
+      console.error("Ошибка получения статуса:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async getServerApprovalHistory(req, res) {
+    try {
+      const { serverId } = req.params;
+      const history = await ApprovalService.getServerApprovalHistory(parseInt(serverId));
+
+      res.json(history);
+    } catch (error) {
+      console.error("Ошибка получения истории:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+
+
+
+  async checkStageCompletion(req, res) {
+    try {
+      const { serverId, stageCode } = req.params;
+      const result = await ApprovalService.checkStageCompletion(
+        parseInt(serverId), 
+        stageCode
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Ошибка проверки завершённости:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+
+  async getVerificationStats(req, res) {
+    try {
+      const stats = await ApprovalService.getVerificationStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Ошибка получения статистики:", error);
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+
+  async getConstants(req, res) {
+    res.json({
+      stages: CHECKLIST_STAGES,
+      statuses: APPROVAL_STATUSES,
+      stageLabels: {
+        [CHECKLIST_STAGES.ASSEMBLY]: 'Сборка',
+        [CHECKLIST_STAGES.VERIFICATION]: 'Верификация ОТК'
+      },
+      statusLabels: {
+        [APPROVAL_STATUSES.PENDING]: 'Ожидает проверки',
+        [APPROVAL_STATUSES.APPROVED]: 'Одобрено',
+        [APPROVAL_STATUSES.REJECTED]: 'Отклонено'
+      }
+    });
+  }
+}
+
+module.exports = new ApprovalController();
+================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/CatalogExtendedController.js
+================================================================================
+
+
+
+const { Op } = require("sequelize");
+const ApiError = require("../../error/ApiError");
+
+
+
+
+
+
+function getCatalogModel() {
+  const { ComponentCatalog } = require("../../models/index");
+  return ComponentCatalog;
+}
+
+
+class CatalogExtendedController {
+
+  
+  
+  
+  
+  async getCatalogGrouped(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { includeInactive } = req.query;
+
+      const where = {};
+      if (includeInactive !== "true") {
+        where.isActive = true;
+      }
+
+      const catalog = await ComponentCatalog.findAll({
+        where,
+        order: [
+          ["type", "ASC"],
+          ["manufacturer", "ASC"],
+          ["model", "ASC"],
+          ["revision", "ASC"]
+        ]
+      });
+
+      
+      const grouped = {};
+      for (const entry of catalog) {
+        const type = entry.type;
+        if (!grouped[type]) {
+          grouped[type] = [];
+        }
+        grouped[type].push(entry);
+      }
+
+      return res.json(grouped);
+    } catch (error) {
+      console.error("[CatalogExtended] getCatalogGrouped error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async getCatalogStats(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+
+      const allEntries = await ComponentCatalog.findAll({
+        attributes: ["id", "type", "manufacturer", "model", "revision", "isActive"]
+      });
+
+      const stats = {
+        total: allEntries.length,
+        active: allEntries.filter(e => e.isActive).length,
+        inactive: allEntries.filter(e => !e.isActive).length,
+        byType: {},
+        manufacturers: new Set(),
+        models: new Set()
+      };
+
+      for (const entry of allEntries) {
+        
+        if (!stats.byType[entry.type]) {
+          stats.byType[entry.type] = { total: 0, active: 0, inactive: 0 };
+        }
+        stats.byType[entry.type].total++;
+        if (entry.isActive) {
+          stats.byType[entry.type].active++;
+        } else {
+          stats.byType[entry.type].inactive++;
+        }
+
+        
+        if (entry.manufacturer) stats.manufacturers.add(entry.manufacturer);
+        if (entry.model) stats.models.add(entry.model);
+      }
+
+      return res.json({
+        total: stats.total,
+        active: stats.active,
+        inactive: stats.inactive,
+        typesCount: Object.keys(stats.byType).length,
+        manufacturersCount: stats.manufacturers.size,
+        modelsCount: stats.models.size,
+        byType: stats.byType
+      });
+    } catch (error) {
+      console.error("[CatalogExtended] getCatalogStats error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async getCatalogTypes(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { sequelize } = require("../../models/index");
+
+      const types = await ComponentCatalog.findAll({
+        attributes: [
+          "type",
+          [sequelize.fn("COUNT", sequelize.col("id")), "count"]
+        ],
+        where: { isActive: true },
+        group: ["type"],
+        order: [["type", "ASC"]],
+        raw: true
+      });
+
+      return res.json(types);
+    } catch (error) {
+      console.error("[CatalogExtended] getCatalogTypes error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async searchCatalog(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { q, type, includeInactive } = req.query;
+
+      if (!q && !type) {
+        return next(ApiError.badRequest("Укажите параметр поиска: q (текст) или type"));
+      }
+
+      const where = {};
+
+      
+      if (includeInactive !== "true") {
+        where.isActive = true;
+      }
+
+      
+      if (type) {
+        where.type = type;
+      }
+
+      
+      if (q) {
+        const searchTerm = `%${q}%`;
+        where[Op.or] = [
+          { manufacturer: { [Op.iLike]: searchTerm } },
+          { model: { [Op.iLike]: searchTerm } },
+          { revision: { [Op.iLike]: searchTerm } },
+          { partNumber: { [Op.iLike]: searchTerm } },
+          { notes: { [Op.iLike]: searchTerm } }
+        ];
+      }
+
+      const results = await ComponentCatalog.findAll({
+        where,
+        order: [["type", "ASC"], ["manufacturer", "ASC"], ["model", "ASC"]],
+        limit: 200
+      });
+
+      return res.json(results);
+    } catch (error) {
+      console.error("[CatalogExtended] searchCatalog error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async deleteCatalogEntry(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { id } = req.params;
+
+      const catalog = await ComponentCatalog.findByPk(id);
+      if (!catalog) {
+        return next(ApiError.notFound("Запись каталога не найдена"));
+      }
+
+      if (!catalog.isActive) {
+        return res.json({
+          success: true,
+          message: "Запись уже деактивирована",
+          catalog
+        });
+      }
+
+      
+      try {
+        const { ComponentInventory } = require("../../models/index");
+        const usageCount = await ComponentInventory.count({
+          where: {
+            catalogId: id,
+            status: { [Op.notIn]: ["SCRAPPED", "RETURNED"] }
+          }
+        });
+
+        if (usageCount > 0) {
+          
+          console.warn(
+            `[CatalogExtended] Деактивация записи #${id} ` +
+            `(${catalog.manufacturer || ""} ${catalog.model}): ` +
+            `используется в ${usageCount} компонентах инвентаря`
+          );
+        }
+      } catch (inventoryError) {
+        
+        console.warn("[CatalogExtended] Не удалось проверить инвентарь:", inventoryError.message);
+      }
+
+      await catalog.update({ isActive: false });
+
+      console.log(
+        `[CatalogExtended] Запись #${id} деактивирована: ` +
+        `${catalog.type} ${catalog.manufacturer || ""} ${catalog.model} rev.${catalog.revision || "-"}`
+      );
+
+      return res.json({
+        success: true,
+        message: `Запись "${catalog.manufacturer || ""} ${catalog.model}" деактивирована`,
+        catalog
+      });
+    } catch (error) {
+      console.error("[CatalogExtended] deleteCatalogEntry error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async restoreCatalogEntry(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { id } = req.params;
+
+      const catalog = await ComponentCatalog.findByPk(id);
+      if (!catalog) {
+        return next(ApiError.notFound("Запись каталога не найдена"));
+      }
+
+      if (catalog.isActive) {
+        return res.json({
+          success: true,
+          message: "Запись уже активна",
+          catalog
+        });
+      }
+
+      await catalog.update({ isActive: true });
+
+      console.log(
+        `[CatalogExtended] Запись #${id} восстановлена: ` +
+        `${catalog.type} ${catalog.manufacturer || ""} ${catalog.model}`
+      );
+
+      return res.json({
+        success: true,
+        message: `Запись "${catalog.manufacturer || ""} ${catalog.model}" восстановлена`,
+        catalog
+      });
+    } catch (error) {
+      console.error("[CatalogExtended] restoreCatalogEntry error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  
+  async batchCreateCatalog(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { entries } = req.body;
+
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return next(ApiError.badRequest("Массив entries обязателен и не должен быть пустым"));
+      }
+
+      if (entries.length > 100) {
+        return next(ApiError.badRequest("Максимум 100 записей за один запрос"));
+      }
+
+      const results = {
+        created: [],
+        updated: [],
+        errors: []
+      };
+
+      for (const entry of entries) {
+        try {
+          const { type, manufacturer, model, revision, partNumber, specifications, notes } = entry;
+
+          if (!type || !model) {
+            results.errors.push({
+              entry,
+              error: "Поля type и model обязательны"
+            });
+            continue;
+          }
+
+          
+          const existing = await ComponentCatalog.findOne({
+            where: {
+              type,
+              manufacturer: manufacturer || null,
+              model
+            }
+          });
+
+          if (existing) {
+            
+            const updateData = {};
+            if (revision !== undefined && revision !== existing.revision) updateData.revision = revision;
+            if (partNumber !== undefined && partNumber !== existing.partNumber) updateData.partNumber = partNumber;
+            if (specifications) updateData.specifications = { ...existing.specifications, ...specifications };
+            if (notes !== undefined) updateData.notes = notes;
+            if (!existing.isActive) updateData.isActive = true;
+
+            if (Object.keys(updateData).length > 0) {
+              await existing.update(updateData);
+              results.updated.push(existing.toJSON());
+            }
+          } else {
+            
+            const newEntry = await ComponentCatalog.create({
+              type,
+              manufacturer: manufacturer || null,
+              model,
+              revision: revision || null,
+              partNumber: partNumber || null,
+              specifications: specifications || {},
+              notes: notes || null,
+              isActive: true
+            });
+            results.created.push(newEntry.toJSON());
+          }
+        } catch (entryError) {
+          results.errors.push({
+            entry,
+            error: entryError.message
+          });
+        }
+      }
+
+      console.log(
+        `[CatalogExtended] batchCreate: ` +
+        `${results.created.length} создано, ${results.updated.length} обновлено, ` +
+        `${results.errors.length} ошибок`
+      );
+
+      return res.json({
+        success: true,
+        created: results.created.length,
+        updated: results.updated.length,
+        errors: results.errors.length,
+        details: results
+      });
+    } catch (error) {
+      console.error("[CatalogExtended] batchCreateCatalog error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+
+
+  
+  
+  
+  
+  async exportCatalog(req, res, next) {
+    try {
+      const ComponentCatalog = getCatalogModel();
+      const { includeInactive, type } = req.query;
+
+      const where = {};
+      if (includeInactive !== "true") {
+        where.isActive = true;
+      }
+      if (type) {
+        where.type = type;
+      }
+
+      const catalog = await ComponentCatalog.findAll({
+        where,
+        order: [["type", "ASC"], ["manufacturer", "ASC"], ["model", "ASC"]],
+        raw: true
+      });
+
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        count: catalog.length,
+        entries: catalog.map(entry => ({
+          type: entry.type,
+          manufacturer: entry.manufacturer,
+          model: entry.model,
+          revision: entry.revision,
+          partNumber: entry.partNumber,
+          specifications: entry.specifications,
+          notes: entry.notes,
+          isActive: entry.isActive
+        }))
+      };
+
+      
+      const filename = `catalog_export_${new Date().toISOString().slice(0, 10)}.json`;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+      return res.json(exportData);
+    } catch (error) {
+      console.error("[CatalogExtended] exportCatalog error:", error);
+      return next(ApiError.internal(error.message));
+    }
+  }
+}
+
+
+module.exports = new CatalogExtendedController();
+================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/ComponentsExtendedController.js
 ================================================================================
 
@@ -65638,7 +67541,19 @@ async function updateComponent(req, res, next) {
     if (status !== undefined && COMPONENT_STATUSES.includes(status)) {
       component.status = status;
     }
-    if (metadata !== undefined) component.metadata = metadata;
+    
+    
+    
+    if (metadata !== undefined) {
+      if (metadata === null) {
+        component.metadata = null;
+      } else {
+        component.metadata = {
+          ...(component.metadata || {}),
+          ...metadata
+        };
+      }
+    }
     if (notes !== undefined) component.notes = notes || null;
 
     await component.save({ transaction });
@@ -66208,9 +68123,7 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/config/beryll.config.js
 
 const path = require("path");
 
-
 const UPLOAD_DIR = path.join(__dirname, "..", "..", "uploads", "beryll");
-
 
 const DHCP_CONFIG = {
   host: "10.11.0.10",
@@ -66421,39 +68334,11 @@ module.exports = new BatchController();
 FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/ChecklistController.js
 ================================================================================
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const ChecklistService = require("../services/ChecklistService");
 const ApiError = require("../../../error/ApiError");
 
 class ChecklistController {
   
-  
-  
-  
-  
-  
-
-
-
 
   async getChecklistTemplates(req, res, next) {
     try {
@@ -66473,9 +68358,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
 
   async createChecklistTemplate(req, res, next) {
     try {
@@ -66490,9 +68372,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
 
   async updateChecklistTemplate(req, res, next) {
     try {
@@ -66508,10 +68387,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
-
 
   async deleteChecklistTemplate(req, res, next) {
     try {
@@ -66531,9 +68406,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
 
   async restoreChecklistTemplate(req, res, next) {
     try {
@@ -66549,10 +68421,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
-
 
   async reorderChecklistTemplates(req, res, next) {
     try {
@@ -66570,13 +68438,6 @@ class ChecklistController {
     }
   }
   
-  
-  
-  
-  
-  
-
-
 
   async getServerChecklist(req, res, next) {
     try {
@@ -66589,12 +68450,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
-
-
-
 
   async toggleChecklistItem(req, res, next) {
     try {
@@ -66623,34 +68478,26 @@ class ChecklistController {
     }
   }
   
-  
-  
-  
-  
-  
-
-
-
 
   async uploadChecklistFile(req, res, next) {
     try {
       const { serverId, checklistId } = req.params;
       const userId = req.user?.id;
 
-      
+
       if (!req.files || !req.files.file) {
         return next(ApiError.badRequest("Файл не загружен"));
       }
 
       const uploadedFile = req.files.file;
       
-      
+
       const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
       if (!allowedTypes.includes(uploadedFile.mimetype)) {
         return next(ApiError.badRequest("Недопустимый тип файла. Разрешены: JPG, PNG, GIF, WEBP, PDF"));
       }
       
-      
+
       if (uploadedFile.size > 5 * 1024 * 1024) {
         return next(ApiError.badRequest("Максимальный размер файла 5 МБ"));
       }
@@ -66672,9 +68519,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
 
   async getServerFiles(req, res, next) {
     try {
@@ -66687,9 +68531,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
 
   async downloadFile(req, res, next) {
     try {
@@ -66700,13 +68541,13 @@ class ChecklistController {
         return next(ApiError.notFound("Файл не найден"));
       }
 
-      
+
       const disposition = req.query.download === 'true' ? 'attachment' : 'inline';
       
       res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
       res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.originalName)}"`);
       
-      
+
       return res.sendFile(file.path);
     } catch (e) {
       console.error("downloadFile error:", e);
@@ -66717,10 +68558,6 @@ class ChecklistController {
     }
   }
   
-  
-
-
-
 
   async deleteChecklistFile(req, res, next) {
     try {
@@ -66745,25 +68582,11 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/ClusterControll
 ================================================================================
 
 
-
-
-
-
-
-
-
 const ClusterService = require("../services/ClusterService");
 const ApiError = require("../../../error/ApiError");
 
 class ClusterController {
   
-  
-  
-  
-  
-  
-
-
   async getAllShipments(req, res, next) {
     try {
       const { status, search, city } = req.query;
@@ -66775,8 +68598,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getShipmentById(req, res, next) {
     try {
@@ -66793,9 +68614,6 @@ class ClusterController {
       next(ApiError.internal(error.message));
     }
   }
-  
-  
-
 
   async createShipment(req, res, next) {
     try {
@@ -66808,9 +68626,7 @@ class ClusterController {
     }
   }
   
-  
-
-
+ 
   async updateShipment(req, res, next) {
     try {
       const { id } = req.params;
@@ -66823,8 +68639,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async deleteShipment(req, res, next) {
     try {
@@ -66838,8 +68652,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getShipmentHistory(req, res, next) {
     try {
@@ -66853,12 +68665,6 @@ class ClusterController {
     }
   }
   
-  
-  
-  
-  
-  
-
 
   async getAllClusters(req, res, next) {
     try {
@@ -66871,8 +68677,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getClusterById(req, res, next) {
     try {
@@ -66890,8 +68694,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async createCluster(req, res, next) {
     try {
@@ -66903,9 +68705,6 @@ class ClusterController {
       next(ApiError.badRequest(error.message));
     }
   }
-  
-  
-
 
   async updateCluster(req, res, next) {
     try {
@@ -66919,8 +68718,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async deleteCluster(req, res, next) {
     try {
@@ -66934,8 +68731,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getClusterHistory(req, res, next) {
     try {
@@ -66949,12 +68744,6 @@ class ClusterController {
     }
   }
   
-  
-  
-  
-  
-  
-
 
   async addServerToCluster(req, res, next) {
     try {
@@ -66974,8 +68763,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async addServersToCluster(req, res, next) {
     try {
@@ -66995,8 +68782,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async removeServerFromCluster(req, res, next) {
     try {
@@ -67010,9 +68795,6 @@ class ClusterController {
       next(ApiError.badRequest(error.message));
     }
   }
-  
-  
-
 
   async updateClusterServer(req, res, next) {
     try {
@@ -67026,8 +68808,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getUnassignedServers(req, res, next) {
     try {
@@ -67040,8 +68820,6 @@ class ClusterController {
     }
   }
   
-  
-
 
   async getServerClusters(req, res, next) {
     try {
@@ -67062,18 +68840,12 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/controllers/ComponentInvent
 ================================================================================
 
 
-
-
-
 const ApiError = require("../../../error/ApiError");
 const ComponentInventoryService = require("../services/ComponentInventoryService");
 
 class ComponentInventoryController {
     
-    
-    
-    
-    
+
     async getCatalog(req, res, next) {
         try {
             const { type } = req.query;
@@ -67115,9 +68887,7 @@ class ComponentInventoryController {
         }
     }
     
-    
-    
-    
+
     
     async getAll(req, res, next) {
         try {
@@ -67210,10 +68980,7 @@ class ComponentInventoryController {
             next(ApiError.internal(error.message));
         }
     }
-    
-    
-    
-    
+
     
     async reserve(req, res, next) {
         try {
@@ -67351,10 +69118,7 @@ class ComponentInventoryController {
             next(ApiError.badRequest(error.message));
         }
     }
-    
-    
-    
-    
+
     
     async getHistory(req, res, next) {
         try {
@@ -67366,9 +69130,7 @@ class ComponentInventoryController {
         }
     }
     
-    
-    
-    
+
     
     async getStats(req, res, next) {
         try {
@@ -71426,6 +73188,571 @@ module.exports = {
 };
 
 ================================================================================
+FILE: MES-Kryptonit-Server-master/controllers/beryll/services/ApprovalService.js
+================================================================================
+
+
+const { Op } = require("sequelize");
+const sequelize = require("../../../db");
+
+
+const {
+  BeryllServer,
+  BeryllServerChecklist,
+  BeryllChecklistTemplate,
+  BeryllChecklistFile,
+  BeryllHistory,
+  HISTORY_ACTIONS,
+  CHECKLIST_GROUPS
+} = require("../../../models/definitions/BeryllExtended");
+
+const {
+  BeryllServerApproval,
+  CHECKLIST_STAGES,
+  APPROVAL_STATUSES
+} = require("../../../models/BeryllServerApproval");
+
+const User = require("../../../models/User");
+
+class ApprovalService {
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+  async submitForVerification(serverId, userId, stageCode = CHECKLIST_STAGES.ASSEMBLY) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      
+      const server = await BeryllServer.findByPk(serverId);
+      if (!server) {
+        throw new Error("Сервер не найден");
+      }
+
+      
+      const existingPending = await BeryllServerApproval.findOne({
+        where: {
+          serverId,
+          stageCode,
+          status: APPROVAL_STATUSES.PENDING
+        },
+        transaction
+      });
+
+      if (existingPending) {
+        throw new Error("Сервер уже ожидает проверки на этой стадии");
+      }
+
+      
+      const completionCheck = await this.checkStageCompletion(serverId, stageCode, transaction);
+      if (!completionCheck.isComplete) {
+        throw new Error(`Не все обязательные пункты чеклиста выполнены. Осталось: ${completionCheck.remaining.join(", ")}`);
+      }
+
+      
+      const checklistSnapshot = await this.getChecklistSnapshot(serverId, stageCode, transaction);
+
+      
+      const approval = await BeryllServerApproval.create({
+        serverId,
+        stageCode,
+        status: APPROVAL_STATUSES.PENDING,
+        submittedById: userId,
+        submittedAt: new Date(),
+        metadata: {
+          checklistSnapshot,
+          serverData: {
+            serialNumber: server.serialNumber,
+            apkSerialNumber: server.apkSerialNumber,
+            hostname: server.hostname,
+            ipAddress: server.ipAddress,
+            status: server.status
+          }
+        }
+      }, { transaction });
+
+      
+      await BeryllHistory.create({
+        serverId,
+        userId,
+        action: HISTORY_ACTIONS.STATUS_CHANGE,
+        fromStatus: server.status,
+        toStatus: server.status,
+        comment: `Сервер отправлен на верификацию (стадия: ${stageCode})`,
+        metadata: { approvalId: approval.id, stageCode }
+      }, { transaction });
+
+      await transaction.commit();
+
+      
+      return await this.getApprovalById(approval.id);
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+  async checkStageCompletion(serverId, stageCode, transaction = null) {
+    
+    const templates = await BeryllChecklistTemplate.findAll({
+      where: {
+        stageCode,
+        isActive: true,
+        isRequired: true
+      },
+      transaction
+    });
+
+    if (templates.length === 0) {
+      return { isComplete: true, remaining: [], total: 0, completed: 0 };
+    }
+
+    
+    const serverChecklists = await BeryllServerChecklist.findAll({
+      where: {
+        serverId,
+        checklistTemplateId: { [Op.in]: templates.map(t => t.id) }
+      },
+      include: [{
+        model: BeryllChecklistTemplate,
+        as: "template"
+      }],
+      transaction
+    });
+
+    const completedIds = new Set(
+      serverChecklists
+        .filter(sc => sc.completed)
+        .map(sc => sc.checklistTemplateId)
+    );
+
+    const remaining = templates
+      .filter(t => !completedIds.has(t.id))
+      .map(t => t.title);
+
+    return {
+      isComplete: remaining.length === 0,
+      remaining,
+      total: templates.length,
+      completed: completedIds.size
+    };
+  }
+
+  
+
+
+  async getChecklistSnapshot(serverId, stageCode, transaction = null) {
+    const checklists = await BeryllServerChecklist.findAll({
+      where: { serverId },
+      include: [
+        {
+          model: BeryllChecklistTemplate,
+          as: "template",
+          where: { stageCode },
+          required: true
+        },
+        {
+          model: BeryllChecklistFile,
+          as: "files"
+        },
+        {
+          model: User,
+          as: "completedBy",
+          attributes: ["id", "login", "name", "surname"]
+        }
+      ],
+      transaction
+    });
+
+    return checklists.map(cl => ({
+      templateId: cl.checklistTemplateId,
+      title: cl.template?.title,
+      groupCode: cl.template?.groupCode,
+      completed: cl.completed,
+      completedAt: cl.completedAt,
+      completedBy: cl.completedBy ? {
+        id: cl.completedBy.id,
+        name: `${cl.completedBy.name || ''} ${cl.completedBy.surname || ''}`.trim() || cl.completedBy.login
+      } : null,
+      notes: cl.notes,
+      filesCount: cl.files?.length || 0
+    }));
+  }
+
+  
+  
+  
+
+  
+
+
+  async approveServer(approvalId, reviewerId, comment = null) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const approval = await BeryllServerApproval.findByPk(approvalId, { transaction });
+      
+      if (!approval) {
+        throw new Error("Запись верификации не найдена");
+      }
+
+      if (approval.status !== APPROVAL_STATUSES.PENDING) {
+        throw new Error("Эта запись уже обработана");
+      }
+
+      
+      approval.status = APPROVAL_STATUSES.APPROVED;
+      approval.reviewedById = reviewerId;
+      approval.reviewedAt = new Date();
+      approval.comment = comment;
+      await approval.save({ transaction });
+
+      
+      await BeryllHistory.create({
+        serverId: approval.serverId,
+        userId: reviewerId,
+        action: HISTORY_ACTIONS.STATUS_CHANGE,
+        comment: `Верификация одобрена${comment ? `: ${comment}` : ''}`,
+        metadata: { approvalId, stageCode: approval.stageCode }
+      }, { transaction });
+
+      await transaction.commit();
+
+      return await this.getApprovalById(approvalId);
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  
+
+
+  async rejectServer(approvalId, reviewerId, comment) {
+    if (!comment?.trim()) {
+      throw new Error("Укажите причину отклонения");
+    }
+
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const approval = await BeryllServerApproval.findByPk(approvalId, { transaction });
+      
+      if (!approval) {
+        throw new Error("Запись верификации не найдена");
+      }
+
+      if (approval.status !== APPROVAL_STATUSES.PENDING) {
+        throw new Error("Эта запись уже обработана");
+      }
+
+      
+      approval.status = APPROVAL_STATUSES.REJECTED;
+      approval.reviewedById = reviewerId;
+      approval.reviewedAt = new Date();
+      approval.comment = comment;
+      await approval.save({ transaction });
+
+      
+      await BeryllHistory.create({
+        serverId: approval.serverId,
+        userId: reviewerId,
+        action: HISTORY_ACTIONS.STATUS_CHANGE,
+        comment: `Верификация отклонена: ${comment}`,
+        metadata: { approvalId, stageCode: approval.stageCode }
+      }, { transaction });
+
+      await transaction.commit();
+
+      return await this.getApprovalById(approvalId);
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  
+  
+  
+
+  
+
+
+  async getApprovalById(approvalId) {
+    return await BeryllServerApproval.findByPk(approvalId, {
+      include: [
+        {
+          model: BeryllServer,
+          as: "server",
+          attributes: ["id", "serialNumber", "apkSerialNumber", "hostname", "ipAddress", "status"]
+        },
+        {
+          model: User,
+          as: "submittedBy",
+          attributes: ["id", "login", "name", "surname"]
+        },
+        {
+          model: User,
+          as: "reviewedBy",
+          attributes: ["id", "login", "name", "surname"]
+        }
+      ]
+    });
+  }
+
+  
+
+
+  async getVerificationQueue(options = {}) {
+    const {
+      stageCode = null,
+      page = 1,
+      limit = 20,
+      sortBy = "submittedAt",
+      sortOrder = "ASC"
+    } = options;
+
+    const where = {
+      status: APPROVAL_STATUSES.PENDING
+    };
+
+    if (stageCode) {
+      where.stageCode = stageCode;
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { rows, count } = await BeryllServerApproval.findAndCountAll({
+      where,
+      include: [
+        {
+          model: BeryllServer,
+          as: "server",
+          attributes: ["id", "serialNumber", "apkSerialNumber", "hostname", "ipAddress", "status", "batchId"],
+          include: [
+            {
+              model: BeryllServerChecklist,
+              as: "checklists",
+              include: [
+                { model: BeryllChecklistFile, as: "files" }
+              ]
+            }
+          ]
+        },
+        {
+          model: User,
+          as: "submittedBy",
+          attributes: ["id", "login", "name", "surname"]
+        }
+      ],
+      order: [[sortBy, sortOrder]],
+      limit,
+      offset
+    });
+
+    return {
+      items: rows,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit)
+    };
+  }
+
+  
+
+
+  async getServerApprovalHistory(serverId) {
+    return await BeryllServerApproval.findAll({
+      where: { serverId },
+      include: [
+        {
+          model: User,
+          as: "submittedBy",
+          attributes: ["id", "login", "name", "surname"]
+        },
+        {
+          model: User,
+          as: "reviewedBy",
+          attributes: ["id", "login", "name", "surname"]
+        }
+      ],
+      order: [["createdAt", "DESC"]]
+    });
+  }
+
+  
+
+
+  async getServerVerificationStatus(serverId) {
+    
+    const stages = Object.values(CHECKLIST_STAGES);
+    const result = {};
+
+    for (const stage of stages) {
+      const latestApproval = await BeryllServerApproval.findOne({
+        where: { serverId, stageCode: stage },
+        order: [["createdAt", "DESC"]],
+        include: [
+          { model: User, as: "submittedBy", attributes: ["id", "login", "name", "surname"] },
+          { model: User, as: "reviewedBy", attributes: ["id", "login", "name", "surname"] }
+        ]
+      });
+
+      const completion = await this.checkStageCompletion(serverId, stage);
+
+      result[stage] = {
+        stageCode: stage,
+        latestApproval: latestApproval ? {
+          id: latestApproval.id,
+          status: latestApproval.status,
+          submittedBy: latestApproval.submittedBy,
+          submittedAt: latestApproval.submittedAt,
+          reviewedBy: latestApproval.reviewedBy,
+          reviewedAt: latestApproval.reviewedAt,
+          comment: latestApproval.comment
+        } : null,
+        completion,
+        canSubmit: completion.isComplete && (!latestApproval || latestApproval.status !== APPROVAL_STATUSES.PENDING)
+      };
+    }
+
+    return result;
+  }
+
+  
+
+
+  async getVerificationDetails(approvalId) {
+    const approval = await this.getApprovalById(approvalId);
+    
+    if (!approval) {
+      throw new Error("Запись верификации не найдена");
+    }
+
+    
+    const checklists = await BeryllServerChecklist.findAll({
+      where: { serverId: approval.serverId },
+      include: [
+        {
+          model: BeryllChecklistTemplate,
+          as: "template",
+          where: { stageCode: approval.stageCode },
+          required: true
+        },
+        {
+          model: BeryllChecklistFile,
+          as: "files",
+          include: [
+            { model: User, as: "uploadedBy", attributes: ["id", "login", "name", "surname"] }
+          ]
+        },
+        {
+          model: User,
+          as: "completedBy",
+          attributes: ["id", "login", "name", "surname"]
+        }
+      ],
+      order: [[{ model: BeryllChecklistTemplate, as: "template" }, "sortOrder", "ASC"]]
+    });
+
+    
+    const groupedChecklists = {};
+    for (const cl of checklists) {
+      const groupCode = cl.template?.groupCode || "OTHER";
+      if (!groupedChecklists[groupCode]) {
+        groupedChecklists[groupCode] = [];
+      }
+      groupedChecklists[groupCode].push(cl);
+    }
+
+    return {
+      approval,
+      checklists: groupedChecklists,
+      server: approval.server,
+      metadata: approval.metadata
+    };
+  }
+
+  
+  
+  
+
+  
+
+
+  async getVerificationStats() {
+    const pendingCount = await BeryllServerApproval.count({
+      where: { status: APPROVAL_STATUSES.PENDING }
+    });
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const approvedToday = await BeryllServerApproval.count({
+      where: {
+        status: APPROVAL_STATUSES.APPROVED,
+        reviewedAt: { [Op.gte]: todayStart }
+      }
+    });
+
+    const rejectedToday = await BeryllServerApproval.count({
+      where: {
+        status: APPROVAL_STATUSES.REJECTED,
+        reviewedAt: { [Op.gte]: todayStart }
+      }
+    });
+
+    
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const recentApprovals = await BeryllServerApproval.findAll({
+      where: {
+        status: { [Op.in]: [APPROVAL_STATUSES.APPROVED, APPROVAL_STATUSES.REJECTED] },
+        reviewedAt: { [Op.gte]: weekAgo }
+      },
+      attributes: ["submittedAt", "reviewedAt"]
+    });
+
+    let avgMinutes = 0;
+    if (recentApprovals.length > 0) {
+      const totalMinutes = recentApprovals.reduce((sum, a) => {
+        const diff = new Date(a.reviewedAt) - new Date(a.submittedAt);
+        return sum + diff / 1000 / 60;
+      }, 0);
+      avgMinutes = Math.round(totalMinutes / recentApprovals.length);
+    }
+
+    return {
+      pending: pendingCount,
+      approvedToday,
+      rejectedToday,
+      avgVerificationMinutes: avgMinutes
+    };
+  }
+}
+
+module.exports = new ApprovalService();
+================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/services/ArchiveService.js
 ================================================================================
 
@@ -73752,6 +76079,11 @@ FILE: MES-Kryptonit-Server-master/controllers/beryll/services/DefectExportServic
 
 
 
+
+
+
+
+
 const ExcelJS = require("exceljs");
 const { Op } = require("sequelize");
 
@@ -73943,12 +76275,15 @@ const DefectExportService = {
         }
         
         if (search) {
+            
             where[Op.or] = [
                 { yadroTicketNumber: { [Op.iLike]: `%${search}%` } },
                 { problemDescription: { [Op.iLike]: `%${search}%` } },
-                { notes: { [Op.iLike]: `%${search}%` } }
+                { notes: { [Op.iLike]: `%${search}%` } },
+                { serverSerial: { [Op.iLike]: `%${search}%` } }
             ];
         }
+        
         
         
         const records = await BeryllDefectRecord.findAll({
@@ -73977,13 +76312,8 @@ const DefectExportService = {
                     as: "resolvedBy", 
                     attributes: ["id", "name", "surname"],
                     required: false 
-                },
-                { 
-                    model: BeryllServer, 
-                    as: "substituteServer", 
-                    attributes: ["id", "apkSerialNumber", "hostname"],
-                    required: false 
                 }
+                
             ],
             order: [["detectedAt", "DESC"]]
         });
@@ -74034,10 +76364,13 @@ const DefectExportService = {
             const steps = buildStepsHistory(record);
             const responsible = getResponsiblePerson(record);
             
+            
+            const serverSerialValue = record.serverSerial || record.server?.apkSerialNumber || "";
+            
             const row = sheet.addRow({
                 num: rowNum++,
                 yadroTicket: record.yadroTicketNumber || "",
-                serverSerial: record.server?.apkSerialNumber || "",
+                serverSerial: serverSerialValue,  
                 hasSPISI: record.hasSPISI ? "Да" : "Нет",
                 cluster: record.clusterCode || "",
                 problem: record.problemDescription || "",
@@ -74051,8 +76384,7 @@ const DefectExportService = {
                 notes: record.notes || "",
                 repeated: record.isRepeatedDefect ? 
                     `Да: ${record.repeatedDefectReason || "причина не указана"}` : "",
-                substitute: record.substituteServer?.apkSerialNumber || 
-                    record.substituteServerSerial || "",
+                substitute: record.substituteServerSerial || "",  
                 sentToYadro: record.sentToYadroAt ? new Date(record.sentToYadroAt) : "",
                 returnedFromYadro: record.returnedFromYadroAt ? new Date(record.returnedFromYadroAt) : "",
                 status: STATUS_LABELS[record.status] || record.status,
@@ -79548,23 +81880,6 @@ module.exports = new StatsService();
 FILE: MES-Kryptonit-Server-master/controllers/beryll/services/UnifiedPassportsExportService.js
 ================================================================================
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const ExcelJS = require("exceljs");
 const { Op } = require("sequelize");
 const { 
@@ -79576,10 +81891,6 @@ const {
   User,
   UserAlias
 } = require("../../../models/index");
-
-
-
-
 
 const EXPORT_CONFIG = {
   
@@ -79611,92 +81922,27 @@ const EXPORT_CONFIG = {
 
 
 const COLUMN_STRUCTURE = {
-  
-  BASE: [
-    { key: "rowNumber", header: "№", width: 5 },
-    { key: "apkSerialNumber", header: "Серийный № сервера", width: 18 },
-    { key: "inspectionDate", header: "Дата проведения входного контроля", width: 20 },
-    { key: "employees1", header: "Фамилии сотрудников", width: 20 },
-    { key: "employees2", header: "", width: 20 }
-  ],
-  
-  
-  HDD: Array.from({ length: 12 }, (_, i) => ([
-    { key: `hdd${i + 1}_yadro`, header: i === 0 ? "S/N ядро" : "", subHeader: `HDD ${i + 1}` },
-    { key: `hdd${i + 1}_manuf`, header: i === 0 ? "S/N производитель" : "" }
-  ])).flat(),
-  
-  
-  BACKPLANE_HDD: [
-    { key: "backplaneHdd", header: "Backplane HDD", width: 18 }
-  ],
-  
-  
-  MOTHERBOARD: [
-    { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 30 },
-    { key: "motherboardType", header: "", width: 8 }
-  ],
-  
-  
-  COOLERS: [
-    { key: "coolers", header: "Кулеры CPU", width: 12 }
-  ],
-  
-  
-  PSU: [
-    { key: "psu1_yadro", header: "Блоки питания", subHeader: "S/N ядро", width: 18 },
-    { key: "psu1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "psu2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "psu2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  
-  SSD_BOOT: [
-    { key: "ssdBoot1_yadro", header: "SSD (sn)", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdBoot1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "ssdBoot2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdBoot2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  
-  SSD_DATA: [
-    { key: "ssdData1_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdData1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "ssdData2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdData2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  
-  BMC: [
-    { key: "bmc", header: "bmc (ревизия и sn)", width: 18 }
-  ],
-  
-  
-  BACKPLANE_SSD: [
-    { key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 22 }
-  ],
-  
-  
-  RAM: Array.from({ length: 12 }, (_, i) => ([
-    { key: `ram${i + 1}_yadro`, header: i === 0 ? "Планки памяти" : "", subHeader: i === 0 ? "S/N ядро" : "" },
-    { key: `ram${i + 1}_manuf`, header: "", subHeader: i === 0 ? "S/N производитель" : "" }
-  ])).flat(),
-  
-  
-  RAID: [
-    { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 20 },
-    { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 20 }
-  ],
-  
-  
-  NIC: [
-    { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 22 },
-    { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 22 }
-  ]
+  BASE: ["rowNumber", "apkSerialNumber", "inspectionDate", "employees1", "employees2"],
+  HDD: "12x(hdd_yadro, hdd_manuf) + hdd_revision",
+  BACKPLANE_HDD: ["backplaneHdd"],
+  MOTHERBOARD: ["mb_yadro", "mb_manuf", "mb_revision"],
+  COOLERS: ["coolers"],
+  CPU: ["cpu_yadro", "cpu_manuf", "cpu_revision"],
+  PSU: "2x(psu_yadro, psu_manuf) + psu_revision",
+  SSD_BOOT: "2x(ssdBoot_yadro, ssdBoot_manuf) + ssd_boot_revision",
+  SSD_DATA: "2x(ssdData_yadro, ssdData_manuf) + ssd_data_revision",
+  BMC: ["bmc_yadro", "bmc_manuf", "bmc_revision"],
+  BACKPLANE_SSD: ["backplaneSsd"],
+  RAM: "12x(ram_yadro, ram_manuf) + ram_revision",
+  RAID: ["raid_yadro", "raid_manuf", "raid_revision"],
+  NIC: ["nic_yadro", "nic_manuf", "nic_revision"]
 };
 
 class UnifiedPassportsExportService {
   
+  
+
+
 
 
 
@@ -79743,16 +81989,15 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   async getServersWithComponents(filters) {
     const where = {};
     
-    
     if (filters.serverIds && filters.serverIds.length > 0) {
       where.id = { [Op.in]: filters.serverIds };
     }
-    
     
     if (filters.batchId) {
       if (filters.batchId === "null") {
@@ -79762,16 +82007,13 @@ class UnifiedPassportsExportService {
       }
     }
     
-    
     if (filters.status) {
       where.status = filters.status;
     }
     
-    
     if (!filters.includeArchived) {
       where.archivedAt = null;
     }
-    
     
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
@@ -79782,7 +82024,6 @@ class UnifiedPassportsExportService {
         where.createdAt[Op.lte] = new Date(filters.dateTo);
       }
     }
-    
     
     if (filters.search) {
       where[Op.or] = [
@@ -79836,7 +82077,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   async prepareExportData(servers) {
     const rows = [];
@@ -79872,6 +82114,9 @@ class UnifiedPassportsExportService {
         coolers: this.getCoolerType(grouped.FAN || []),
         
         
+        ...this.mapCpuComponents(grouped.CPU || []),
+        
+        
         ...this.mapPsuComponents(grouped.PSU || []),
         
         
@@ -79881,7 +82126,7 @@ class UnifiedPassportsExportService {
         ...this.mapSsdDataComponents(grouped.SSD || [], grouped.NVME || []),
         
         
-        bmc: this.mapBmc(grouped.BMC || []),
+        ...this.mapBmcComponents(grouped.BMC || []),
         
         
         backplaneSsd: this.getBackplaneSsd(grouped),
@@ -79908,9 +82153,14 @@ class UnifiedPassportsExportService {
         ...this.mapHddSerialManuf(grouped.HDD || []),
         
         backplaneHdd: "",
-        motherboard: "",
-        motherboardType: "",
+        
+        
+        ...this.mapMotherboardSerialManuf(grouped.MOTHERBOARD || []),
+        
         coolers: "",
+        
+        
+        ...this.mapCpuSerialManuf(grouped.CPU || []),
         
         
         ...this.mapPsuSerialManuf(grouped.PSU || []),
@@ -79919,7 +82169,9 @@ class UnifiedPassportsExportService {
         ...this.mapSsdBootSerialManuf(grouped.SSD || [], grouped.NVME || []),
         ...this.mapSsdDataSerialManuf(grouped.SSD || [], grouped.NVME || []),
         
-        bmc: "",
+        
+        ...this.mapBmcSerialManuf(grouped.BMC || []),
+        
         backplaneSsd: "",
         
         
@@ -79937,6 +82189,24 @@ class UnifiedPassportsExportService {
     }
 
     return rows;
+  }
+
+  
+  
+  
+
+  
+
+
+
+
+  _extractRevisions(components) {
+    const revisions = new Set();
+    for (const comp of components) {
+      const rev = comp?.metadata?.revision || '';
+      if (rev) revisions.add(rev);
+    }
+    return [...revisions].join(', ') || '';
   }
 
   
@@ -80004,7 +82274,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   mapHddComponents(hdds) {
     const result = {};
@@ -80015,11 +82286,11 @@ class UnifiedPassportsExportService {
       result[`hdd${i + 1}_manuf`] = "";  
     }
     
+    
+    result.hdd_revision = this._extractRevisions(hdds);
+    
     return result;
   }
-
-  
-
 
   mapHddSerialManuf(hdds) {
     const result = {};
@@ -80029,6 +82300,8 @@ class UnifiedPassportsExportService {
       result[`hdd${i + 1}_yadro`] = "";  
       result[`hdd${i + 1}_manuf`] = hdd?.serialNumber || "";
     }
+    
+    result.hdd_revision = "";
     
     return result;
   }
@@ -80052,21 +82325,28 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   mapMotherboard(motherboards) {
     const mb = motherboards[0];
     if (!mb) {
-      return { motherboard: "", motherboardType: "" };
+      return { mb_yadro: "", mb_manuf: "", mb_revision: "" };
     }
     
-    const serial = mb.serialNumberYadro || mb.serialNumber || "";
-    const revision = mb.metadata?.revision || mb.firmwareVersion || "";
-    const type = mb.metadata?.type || "";
-    
     return {
-      motherboard: `${mb.model || ""} ${serial}`.trim(),
-      motherboardType: `${revision}${type ? ` ${type}` : ""}`
+      mb_yadro: mb.serialNumberYadro || "",
+      mb_manuf: "",  
+      mb_revision: mb.metadata?.revision || mb.firmwareVersion || ""
+    };
+  }
+
+  mapMotherboardSerialManuf(motherboards) {
+    const mb = motherboards[0];
+    return {
+      mb_yadro: "",
+      mb_manuf: mb?.serialNumber || "",
+      mb_revision: ""
     };
   }
 
@@ -80081,22 +82361,50 @@ class UnifiedPassportsExportService {
   }
 
   
+  
+  
 
+  mapCpuComponents(cpus) {
+    if (cpus.length === 0) {
+      return { cpu_yadro: "", cpu_manuf: "", cpu_revision: "" };
+    }
+    
+    
+    const cpu = cpus[0];
+    
+    return {
+      cpu_yadro: cpu.serialNumberYadro || "",
+      cpu_manuf: "",  
+      cpu_revision: this._extractRevisions(cpus)
+    };
+  }
+
+  mapCpuSerialManuf(cpus) {
+    const cpu = cpus[0];
+    return {
+      cpu_yadro: "",
+      cpu_manuf: cpu?.serialNumber || "",
+      cpu_revision: ""
+    };
+  }
+
+  
+  
+  
 
   mapPsuComponents(psus) {
     const result = {};
     
     for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
       const psu = psus[i];
-      result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || psu?.model || "";
+      result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || "";
       result[`psu${i + 1}_manuf`] = "";  
     }
     
+    result.psu_revision = this._extractRevisions(psus);
+    
     return result;
   }
-
-  
-
 
   mapPsuSerialManuf(psus) {
     const result = {};
@@ -80107,11 +82415,14 @@ class UnifiedPassportsExportService {
       result[`psu${i + 1}_manuf`] = psu?.serialNumber || "";
     }
     
+    result.psu_revision = "";
+    
     return result;
   }
 
   
-
+  
+  
 
   mapSsdBootComponents(ssds, nvmes) {
     
@@ -80125,15 +82436,13 @@ class UnifiedPassportsExportService {
     const finalBootSsds = bootSsds.length > 0 ? bootSsds : ssds.slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
     
     return {
-      ssdBoot1_yadro: finalBootSsds[0]?.serialNumberYadro || finalBootSsds[0]?.model || "",
+      ssdBoot1_yadro: finalBootSsds[0]?.serialNumberYadro || "",
       ssdBoot1_manuf: "",
-      ssdBoot2_yadro: finalBootSsds[1]?.serialNumberYadro || finalBootSsds[1]?.model || "",
-      ssdBoot2_manuf: ""
+      ssdBoot2_yadro: finalBootSsds[1]?.serialNumberYadro || "",
+      ssdBoot2_manuf: "",
+      ssd_boot_revision: this._extractRevisions(finalBootSsds)
     };
   }
-
-  
-
 
   mapSsdBootSerialManuf(ssds, nvmes) {
     const bootSsds = ssds.filter(s => 
@@ -80148,12 +82457,14 @@ class UnifiedPassportsExportService {
       ssdBoot1_yadro: "",
       ssdBoot1_manuf: finalBootSsds[0]?.serialNumber || "",
       ssdBoot2_yadro: "",
-      ssdBoot2_manuf: finalBootSsds[1]?.serialNumber || ""
+      ssdBoot2_manuf: finalBootSsds[1]?.serialNumber || "",
+      ssd_boot_revision: ""
     };
   }
 
   
-
+  
+  
 
   mapSsdDataComponents(ssds, nvmes) {
     
@@ -80167,15 +82478,13 @@ class UnifiedPassportsExportService {
     ].slice(0, EXPORT_CONFIG.SSD_DATA_COUNT);
     
     return {
-      ssdData1_yadro: dataSsds[0]?.serialNumberYadro || dataSsds[0]?.model || "",
+      ssdData1_yadro: dataSsds[0]?.serialNumberYadro || "",
       ssdData1_manuf: "",
-      ssdData2_yadro: dataSsds[1]?.serialNumberYadro || dataSsds[1]?.model || "",
-      ssdData2_manuf: ""
+      ssdData2_yadro: dataSsds[1]?.serialNumberYadro || "",
+      ssdData2_manuf: "",
+      ssd_data_revision: this._extractRevisions(dataSsds)
     };
   }
-
-  
-
 
   mapSsdDataSerialManuf(ssds, nvmes) {
     const dataSsds = [
@@ -80190,21 +82499,35 @@ class UnifiedPassportsExportService {
       ssdData1_yadro: "",
       ssdData1_manuf: dataSsds[0]?.serialNumber || "",
       ssdData2_yadro: "",
-      ssdData2_manuf: dataSsds[1]?.serialNumber || ""
+      ssdData2_manuf: dataSsds[1]?.serialNumber || "",
+      ssd_data_revision: ""
     };
   }
 
   
+  
+  
 
-
-  mapBmc(bmcs) {
+  mapBmcComponents(bmcs) {
     const bmc = bmcs[0];
-    if (!bmc) return "";
+    if (!bmc) {
+      return { bmc_yadro: "", bmc_manuf: "", bmc_revision: "" };
+    }
     
-    const revision = bmc.metadata?.revision || bmc.firmwareVersion || "";
-    const serial = bmc.serialNumberYadro || bmc.serialNumber || "";
-    
-    return `${revision ? `${revision} ` : ""}${serial}`.trim();
+    return {
+      bmc_yadro: bmc.serialNumberYadro || "",
+      bmc_manuf: "",  
+      bmc_revision: bmc.metadata?.revision || bmc.firmwareVersion || ""
+    };
+  }
+
+  mapBmcSerialManuf(bmcs) {
+    const bmc = bmcs[0];
+    return {
+      bmc_yadro: "",
+      bmc_manuf: bmc?.serialNumber || "",
+      bmc_revision: ""
+    };
   }
 
   
@@ -80219,7 +82542,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   mapRamComponents(rams) {
     const result = {};
@@ -80230,11 +82554,10 @@ class UnifiedPassportsExportService {
       result[`ram${i + 1}_manuf`] = "";  
     }
     
+    result.ram_revision = this._extractRevisions(rams);
+    
     return result;
   }
-
-  
-
 
   mapRamSerialManuf(rams) {
     const result = {};
@@ -80245,60 +82568,60 @@ class UnifiedPassportsExportService {
       result[`ram${i + 1}_manuf`] = ram?.serialNumber || "";
     }
     
+    result.ram_revision = "";
+    
     return result;
   }
 
   
-
+  
+  
 
   mapRaidController(raids) {
     const raid = raids[0];
     if (!raid) {
-      return { raid_yadro: "", raid_manuf: "" };
+      return { raid_yadro: "", raid_manuf: "", raid_revision: "" };
     }
     
-    const type = raid.metadata?.type || raid.model || "";
     return {
-      raid_yadro: `${type} ${raid.serialNumberYadro || ""}`.trim(),
-      raid_manuf: ""
+      raid_yadro: raid.serialNumberYadro || "",
+      raid_manuf: "",  
+      raid_revision: raid.metadata?.revision || raid.firmwareVersion || ""
     };
   }
-
-  
-
 
   mapRaidSerialManuf(raids) {
     const raid = raids[0];
     return {
       raid_yadro: "",
-      raid_manuf: raid?.serialNumber || ""
+      raid_manuf: raid?.serialNumber || "",
+      raid_revision: ""
     };
   }
 
   
-
+  
+  
 
   mapNicCard(nics) {
     const nic = nics[0];
     if (!nic) {
-      return { nic_yadro: "", nic_manuf: "" };
+      return { nic_yadro: "", nic_manuf: "", nic_revision: "" };
     }
     
-    const revision = nic.metadata?.revision || nic.firmwareVersion || "";
     return {
-      nic_yadro: `${revision ? `${revision} ` : ""}${nic.serialNumberYadro || ""}`.trim(),
-      nic_manuf: ""
+      nic_yadro: nic.serialNumberYadro || "",
+      nic_manuf: "",  
+      nic_revision: nic.metadata?.revision || nic.firmwareVersion || ""
     };
   }
-
-  
-
 
   mapNicSerialManuf(nics) {
     const nic = nics[0];
     return {
       nic_yadro: "",
-      nic_manuf: nic?.serialNumber || ""
+      nic_manuf: nic?.serialNumber || "",
+      nic_revision: ""
     };
   }
 
@@ -80315,7 +82638,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   async createExcelFile(exportData, options = {}) {
     const workbook = new ExcelJS.Workbook();
@@ -80412,7 +82736,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   buildColumnDefinitions() {
     const columns = [];
@@ -80433,18 +82758,27 @@ class UnifiedPassportsExportService {
         { key: `hdd${i}_manuf`, header: "", subHeader: "S/N производитель", width: 12, group: "hdd" }
       );
     }
+    columns.push({ key: "hdd_revision", header: "", subHeader: "Ревизия", width: 12, group: "hdd" });
     
     
     columns.push({ key: "backplaneHdd", header: "Backplane HDD", width: 16, group: "backplane_hdd" });
     
     
     columns.push(
-      { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 28, group: "mb" },
-      { key: "motherboardType", header: "", width: 8, group: "mb" }
+      { key: "mb_yadro", header: "Материнская плата", subHeader: "S/N ядро", width: 20, group: "mb" },
+      { key: "mb_manuf", header: "", subHeader: "S/N производитель", width: 20, group: "mb" },
+      { key: "mb_revision", header: "", subHeader: "Ревизия", width: 12, group: "mb" }
     );
     
     
     columns.push({ key: "coolers", header: "Кулеры CPU", width: 10, group: "coolers" });
+    
+    
+    columns.push(
+      { key: "cpu_yadro", header: "CPU", subHeader: "S/N ядро", width: 18, group: "cpu" },
+      { key: "cpu_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "cpu" },
+      { key: "cpu_revision", header: "", subHeader: "Ревизия", width: 12, group: "cpu" }
+    );
     
     
     for (let i = 1; i <= 2; i++) {
@@ -80453,14 +82787,16 @@ class UnifiedPassportsExportService {
         { key: `psu${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "psu" }
       );
     }
+    columns.push({ key: "psu_revision", header: "", subHeader: "Ревизия", width: 12, group: "psu" });
     
     
     for (let i = 1; i <= 2; i++) {
       columns.push(
-        { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD (sn)" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
+        { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD Boot" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
         { key: `ssdBoot${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_boot" }
       );
     }
+    columns.push({ key: "ssd_boot_revision", header: "", subHeader: "Ревизия", width: 12, group: "ssd_boot" });
     
     
     for (let i = 1; i <= 2; i++) {
@@ -80469,9 +82805,14 @@ class UnifiedPassportsExportService {
         { key: `ssdData${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_data" }
       );
     }
+    columns.push({ key: "ssd_data_revision", header: "", subHeader: "Ревизия", width: 12, group: "ssd_data" });
     
     
-    columns.push({ key: "bmc", header: "bmc (ревизия и sn)", width: 16, group: "bmc" });
+    columns.push(
+      { key: "bmc_yadro", header: "BMC", subHeader: "S/N ядро", width: 16, group: "bmc" },
+      { key: "bmc_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "bmc" },
+      { key: "bmc_revision", header: "", subHeader: "Ревизия", width: 12, group: "bmc" }
+    );
     
     
     columns.push({ key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 20, group: "backplane_ssd" });
@@ -80483,24 +82824,28 @@ class UnifiedPassportsExportService {
         { key: `ram${i}_manuf`, header: "", subHeader: "S/N производитель", width: 14, group: "ram" }
       );
     }
+    columns.push({ key: "ram_revision", header: "", subHeader: "Ревизия", width: 12, group: "ram" });
     
     
     columns.push(
       { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 18, group: "raid" },
-      { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "raid" }
+      { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "raid" },
+      { key: "raid_revision", header: "", subHeader: "Ревизия", width: 12, group: "raid" }
     );
     
     
     columns.push(
       { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 20, group: "nic" },
-      { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "nic" }
+      { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "nic" },
+      { key: "nic_revision", header: "", subHeader: "Ревизия", width: 12, group: "nic" }
     );
     
     return columns;
   }
 
   
-
+  
+  
 
   addGroupHeaders(sheet, columns, style) {
     const headerRow = sheet.getRow(1);
@@ -80514,9 +82859,6 @@ class UnifiedPassportsExportService {
     headerRow.height = 35;
   }
 
-  
-
-
   addSubHeaders(sheet, columns, style) {
     const subHeaderRow = sheet.getRow(2);
     
@@ -80528,9 +82870,6 @@ class UnifiedPassportsExportService {
     
     subHeaderRow.height = 25;
   }
-
-  
-
 
   applyHeaderMerges(sheet, columns) {
     const groups = {};
@@ -80556,7 +82895,7 @@ class UnifiedPassportsExportService {
     }
     
     
-    const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram"];
+    const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram", "mb", "cpu", "bmc", "raid", "nic"];
     for (const groupName of multiColumnGroups) {
       const groupRanges = [];
       let rangeStart = null;
@@ -80578,7 +82917,6 @@ class UnifiedPassportsExportService {
       for (const range of groupRanges) {
         if (range.end - range.start > 1) {
           try {
-            
             const headerCol = columns.findIndex((c, i) => 
               i >= range.start - 1 && i < range.end && c.header && c.group === groupName
             );
@@ -80597,7 +82935,8 @@ class UnifiedPassportsExportService {
   }
 
   
-
+  
+  
 
   async getExportStats(options = {}) {
     const servers = await this.getServersWithComponents(options);
@@ -80660,7 +82999,6 @@ class UnifiedPassportsExportService {
 }
 
 module.exports = new UnifiedPassportsExportService();
-
 ================================================================================
 FILE: MES-Kryptonit-Server-master/controllers/beryll/utils/dhcpParser.js
 ================================================================================
@@ -95222,6 +97560,8 @@ const ClusterController = require("../controllers/beryll/controllers/ClusterCont
 const DefectRecordController = require("../controllers/beryll/controllers/DefectRecordController");
 const YadroController = require("../controllers/beryll/controllers/YadroController");
 const DefectExportController = require("../controllers/beryll/controllers/DefectExportController");
+const CatalogExtendedController = require("../controllers/beryll/CatalogExtendedController");
+const ComponentInventoryController = require("../controllers/beryll/controllers/ComponentInventoryController");
 const {
   addComponent,
   addComponentsBatch,
@@ -95338,6 +97678,28 @@ router.delete("/clusters/:clusterId/servers/:serverId", ...protect, checkAbility
 router.put("/cluster-servers/:id", ...protect, checkAbility("beryll.work"), ClusterController.updateClusterServer);
 router.get("/servers/unassigned", ...protect, checkAbility("beryll.view"), ClusterController.getUnassignedServers);
 router.get("/servers/:serverId/clusters", ...protect, checkAbility("beryll.view"), ClusterController.getServerClusters);
+
+
+
+
+
+
+
+router.get("/catalog/grouped",       ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogGrouped);
+router.get("/catalog/stats",         ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogStats);
+router.get("/catalog/types",         ...protect, checkAbility("beryll.view"),   CatalogExtendedController.getCatalogTypes);
+router.get("/catalog/search",        ...protect, checkAbility("beryll.view"),   CatalogExtendedController.searchCatalog);
+router.get("/catalog/export",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.exportCatalog);
+router.post("/catalog/batch",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.batchCreateCatalog);
+
+
+router.get("/catalog",               ...protect, checkAbility("beryll.view"),   ComponentInventoryController.getCatalog);
+router.post("/catalog",              ...protect, checkAbility("beryll.manage"), ComponentInventoryController.createCatalogEntry);
+router.put("/catalog/:id",           ...protect, checkAbility("beryll.manage"), ComponentInventoryController.updateCatalogEntry);
+
+
+router.delete("/catalog/:id",        ...protect, checkAbility("beryll.manage"), CatalogExtendedController.deleteCatalogEntry);
+router.post("/catalog/:id/restore",  ...protect, checkAbility("beryll.manage"), CatalogExtendedController.restoreCatalogEntry);
 
 
 
@@ -99017,6 +101379,722 @@ module.exports = {
   }
 };
 
+================================================================================
+FILE: MES-Kryptonit-Server-master/seeders/20260201-vegman-component-revisions.js
+================================================================================
+
+"use strict";
+
+
+
+
+
+
+module.exports = {
+  up: async (queryInterface, Sequelize) => {
+    const now = new Date();
+
+    
+    const existing = await queryInterface.sequelize.query(
+      `SELECT COUNT(*) as cnt FROM component_catalog WHERE notes LIKE '%VegmanS220v8%'`,
+      { type: Sequelize.QueryTypes.SELECT }
+    );
+
+    if (existing[0]?.cnt > 0) {
+      console.log("⚠️  Ревизии VegmanS220v8 уже существуют, пропускаем...");
+      return;
+    }
+
+    const catalogData = [
+      
+      
+      
+      {
+        type: "MOTHERBOARD",
+        manufacturer: "Yadro",
+        model: "MBDX86780001E",
+        revision: "1E-",
+        partNumber: "MBDX86780001E",
+        specifications: JSON.stringify({
+          socket: "LGA4677",
+          chipset: "Intel C741",
+          formFactor: "E-ATX",
+          serverModel: "Vegman S220"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Мат. плата ревизия 1E-",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "MOTHERBOARD",
+        manufacturer: "Yadro",
+        model: "MBDX86780001E1",
+        revision: "1E1-",
+        partNumber: "MBDX86780001E1",
+        specifications: JSON.stringify({
+          socket: "LGA4677",
+          chipset: "Intel C741",
+          formFactor: "E-ATX",
+          serverModel: "Vegman R220"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Мат. плата ревизия 1E1-",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "MOTHERBOARD",
+        manufacturer: "Yadro",
+        model: "MBDX86780001D",
+        revision: "1D",
+        partNumber: "MBDX86780001D",
+        specifications: JSON.stringify({
+          socket: "LGA4677",
+          chipset: "Intel C741",
+          formFactor: "E-ATX",
+          serverModel: "Сервер Х2-262",
+          variants: ["1E+", "1D+", "1D-"]
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Мат. плата ревизия 1D (типы: 1E+, 1D+, 1D-)",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.20",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.20",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.21",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.21",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.AV",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.AV",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.22",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.22",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.B3",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.B3",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.B6",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.B6",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "NIC",
+        manufacturer: "Mellanox",
+        model: "CX4121A",
+        revision: "Rev.B7",
+        partNumber: "P225P",
+        specifications: JSON.stringify({ interface: "25GbE", ports: 2 }),
+        isActive: true,
+        notes: "VegmanS220v8 — Сетевая карта P225P Rev.B7",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "RAID",
+        manufacturer: "Broadcom",
+        model: "Тип 1",
+        revision: null,
+        partNumber: null,
+        specifications: JSON.stringify({ raidType: "Тип 1" }),
+        isActive: true,
+        notes: "VegmanS220v8 — RAID-контроллер Тип 1 (Broadcom)",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAID",
+        manufacturer: null,
+        model: "Тип 2",
+        revision: null,
+        partNumber: null,
+        specifications: JSON.stringify({ raidType: "Тип 2" }),
+        isActive: true,
+        notes: "VegmanS220v8 — RAID-контроллер Тип 2",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "FAN",
+        manufacturer: null,
+        model: "Тип 1",
+        revision: null,
+        partNumber: null,
+        specifications: JSON.stringify({ coolerType: "Тип 1" }),
+        isActive: true,
+        notes: "VegmanS220v8 — Кулеры CPU Тип 1",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "FAN",
+        manufacturer: null,
+        model: "Тип 2",
+        revision: null,
+        partNumber: null,
+        specifications: JSON.stringify({ coolerType: "Тип 2" }),
+        isActive: true,
+        notes: "VegmanS220v8 — Кулеры CPU Тип 2",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "BACKPLANE",
+        manufacturer: "Yadro",
+        model: "BPLSAS780002C",
+        revision: null,
+        partNumber: "BPLSAS780002C",
+        specifications: JSON.stringify({
+          slots: 12,
+          interface: "SAS",
+          backplanePresent: true
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Backplane 12 дисков (Backplane: +)",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "BACKPLANE",
+        manufacturer: "Yadro",
+        model: "BPLSAS780001A1",
+        revision: null,
+        partNumber: "BPLSAS780001A1",
+        specifications: JSON.stringify({
+          slots: 12,
+          interface: "SAS",
+          backplanePresent: false
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Backplane 12 дисков (Backplane: -)",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "BMC",
+        manufacturer: "Yadro",
+        model: "IOBBMC740001A1",
+        revision: null,
+        partNumber: "IOBBMC740001A1",
+        specifications: JSON.stringify({ bmcType: "A1" }),
+        isActive: true,
+        notes: "VegmanS220v8 — BMC IOBBMC740001A1",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "BMC",
+        manufacturer: "Yadro",
+        model: "IOBBMC740001C",
+        revision: null,
+        partNumber: "IOBBMC740001C",
+        specifications: JSON.stringify({ bmcType: "C" }),
+        isActive: true,
+        notes: "VegmanS220v8 — BMC IOBBMC740001C",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "SSD",
+        manufacturer: "Intel",
+        model: "SSDSC2KB960G8",
+        revision: null,
+        partNumber: "SSDSC2KB960G8",
+        specifications: JSON.stringify({
+          capacity: "960GB",
+          interface: "SATA",
+          formFactor: "2.5\""
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Intel SSDSC2KB960G8",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "SSD",
+        manufacturer: "Samsung",
+        model: "MZ-QL27T60",
+        revision: null,
+        partNumber: "MZ-QL27T60",
+        specifications: JSON.stringify({
+          capacity: "7.68TB",
+          interface: "NVMe",
+          formFactor: "U.2"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Samsung MZ-QL27T60",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "SSD",
+        manufacturer: "Micron",
+        model: "MTFDHAL6T4TDR-1AT1ZABYY",
+        revision: null,
+        partNumber: "MTFDHAL6T4TDR-1AT1ZABYY",
+        specifications: JSON.stringify({
+          capacity: "6.4TB",
+          interface: "NVMe"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Micron MTFDHAL6T4TDR-1AT1ZABYY",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "SSD",
+        manufacturer: "Micron",
+        model: "MTFDKCB7T6TDZ",
+        revision: null,
+        partNumber: "MTFDKCB7T6TDZ",
+        specifications: JSON.stringify({
+          capacity: "7.68TB",
+          interface: "NVMe"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Micron MTFDKCB7T6TDZ",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "SSD",
+        manufacturer: "Samsung",
+        model: "MZ-7KH9600",
+        revision: null,
+        partNumber: "MZ-7KH9600",
+        specifications: JSON.stringify({
+          capacity: "960GB",
+          interface: "SATA",
+          formFactor: "2.5\""
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Samsung MZ-7KH9600",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "SSD",
+        manufacturer: "Intel",
+        model: "SSDSC2KB960GZ",
+        revision: null,
+        partNumber: "SSDSC2KB960GZ",
+        specifications: JSON.stringify({
+          capacity: "960GB",
+          interface: "SATA",
+          formFactor: "2.5\""
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — SSD Intel SSDSC2KB960GZ",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "HDD",
+        manufacturer: "Seagate",
+        model: "STL015",
+        revision: null,
+        partNumber: "STL015",
+        specifications: JSON.stringify({
+          interface: "SAS",
+          formFactor: "3.5\""
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — HDD Seagate STL015",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "HDD",
+        manufacturer: "Seagate",
+        model: "STL009",
+        revision: null,
+        partNumber: "STL009",
+        specifications: JSON.stringify({
+          interface: "SAS",
+          formFactor: "3.5\""
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — HDD Seagate STL009",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "PSU",
+        manufacturer: "Aspower",
+        model: "U1A-D11200-DRB",
+        revision: null,
+        partNumber: "U1A-D11200-DRB",
+        specifications: JSON.stringify({
+          wattage: "1200W",
+          efficiency: "80+ Platinum"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — БП Aspower U1A-D11200-DRB",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "PSU",
+        manufacturer: "AcBel",
+        model: "R1CA2122A",
+        revision: null,
+        partNumber: "R1CA2122A",
+        specifications: JSON.stringify({
+          wattage: "1200W"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — БП AcBel R1CA2122A",
+        createdAt: now,
+        updatedAt: now
+      },
+
+      
+      
+      
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2245",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2245",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2249",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2249",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2248",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2248",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2320",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2320",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2250",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2250",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2312",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2312",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2251",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2251",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2306",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2306",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2308",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2308",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2305",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2305",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWEC0",
+        revision: "2310",
+        partNumber: "M393A8G40AB2-CWEC0",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2310",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        type: "RAM",
+        manufacturer: "Samsung",
+        model: "KR M393A8G40AB2-CWE",
+        revision: "2250",
+        partNumber: "M393A8G40AB2-CWE",
+        specifications: JSON.stringify({
+          capacity: "64GB",
+          type: "DDR4",
+          speed: "3200 MT/s",
+          formFactor: "RDIMM"
+        }),
+        isActive: true,
+        notes: "VegmanS220v8 — Планка памяти Samsung 64GB DDR4 rev.2250 (CWE)",
+        createdAt: now,
+        updatedAt: now
+      }
+    ];
+
+    
+    for (const entry of catalogData) {
+      try {
+        const exists = await queryInterface.sequelize.query(
+          `SELECT id FROM component_catalog 
+           WHERE type = :type 
+           AND (manufacturer = :manufacturer OR (manufacturer IS NULL AND :manufacturer IS NULL))
+           AND model = :model`,
+          {
+            replacements: {
+              type: entry.type,
+              manufacturer: entry.manufacturer,
+              model: entry.model
+            },
+            type: Sequelize.QueryTypes.SELECT
+          }
+        );
+
+        if (exists.length === 0) {
+          await queryInterface.bulkInsert("component_catalog", [entry]);
+          console.log(`  ✅ ${entry.type}: ${entry.manufacturer || ''} ${entry.model} (rev: ${entry.revision || '-'})`);
+        } else {
+          
+          await queryInterface.sequelize.query(
+            `UPDATE component_catalog SET revision = :revision, notes = :notes, "updatedAt" = NOW()
+             WHERE id = :id`,
+            {
+              replacements: {
+                revision: entry.revision,
+                notes: entry.notes,
+                id: exists[0].id
+              }
+            }
+          );
+          console.log(`  🔄 ${entry.type}: ${entry.manufacturer || ''} ${entry.model} — обновлено`);
+        }
+      } catch (err) {
+        console.error(`  ❌ ${entry.type}: ${entry.model} — ${err.message}`);
+      }
+    }
+
+    console.log(`\n✅ Seeded VegmanS220v8 component revisions (${catalogData.length} entries)`);
+  },
+
+  down: async (queryInterface, Sequelize) => {
+    await queryInterface.bulkDelete("component_catalog", {
+      notes: { [Sequelize.Op.like]: "%VegmanS220v8%" }
+    });
+    console.log("✅ Removed VegmanS220v8 component revisions");
+  }
+};
 ================================================================================
 FILE: MES-Kryptonit-Server-master/seeders/beryllSeeder.js
 ================================================================================

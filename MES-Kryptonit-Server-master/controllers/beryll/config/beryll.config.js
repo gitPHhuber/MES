@@ -1,9 +1,7 @@
 const path = require("path");
 
-// Директория для файлов
 const UPLOAD_DIR = path.join(__dirname, "..", "..", "uploads", "beryll");
 
-// Конфигурация DHCP сервера
 const DHCP_CONFIG = {
   host: "10.11.0.10",
   username: "root",

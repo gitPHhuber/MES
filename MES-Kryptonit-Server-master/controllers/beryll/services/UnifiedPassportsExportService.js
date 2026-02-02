@@ -1,20 +1,3 @@
-/**
- * ================================================================================
- * UnifiedPassportsExportService.js
- * ================================================================================
- * 
- * Сервис для выгрузки и объединения паспортов изделий (серверов) в единую таблицу
- * Формат соответствует шаблону "Состав серверов.xlsx"
- * 
- * Функционал:
- * - Экспорт всех серверов с компонентами в единую таблицу
- * - Поддержка фильтров (партия, даты, статусы)
- * - Группировка компонентов по типам (HDD, SSD, RAM и т.д.)
- * - Экспорт в Excel с форматированием
- * 
- * ================================================================================
- */
-
 const ExcelJS = require("exceljs");
 const { Op } = require("sequelize");
 const { 
@@ -27,19 +10,15 @@ const {
   UserAlias
 } = require("../../../models/index");
 
-/**
- * Конфигурация структуры выходной таблицы
- * Соответствует формату "Состав серверов.xlsx"
- */
 const EXPORT_CONFIG = {
-  // Количество компонентов каждого типа
+  
   HDD_COUNT: 12,
-  SSD_BOOT_COUNT: 2,    // SSD загрузочные (Intel)
-  SSD_DATA_COUNT: 2,    // SSD данных (Samsung)
+  SSD_BOOT_COUNT: 2,    
+  SSD_DATA_COUNT: 2,    
   RAM_COUNT: 12,
   PSU_COUNT: 2,
   
-  // Типы компонентов для маппинга
+  
   COMPONENT_TYPES: {
     HDD: "HDD",
     SSD: "SSD",
@@ -57,105 +36,40 @@ const EXPORT_CONFIG = {
   }
 };
 
-/**
- * Структура столбцов для экспорта
- */
+
+// Структура колонок экспорта (справочник, не используется напрямую - см. buildColumnDefinitions)
+// Каждый компонент имеет: S/N ядро, S/N производитель, Ревизия
 const COLUMN_STRUCTURE = {
-  // Базовая информация о сервере
-  BASE: [
-    { key: "rowNumber", header: "№", width: 5 },
-    { key: "apkSerialNumber", header: "Серийный № сервера", width: 18 },
-    { key: "inspectionDate", header: "Дата проведения входного контроля", width: 20 },
-    { key: "employees1", header: "Фамилии сотрудников", width: 20 },
-    { key: "employees2", header: "", width: 20 }
-  ],
-  
-  // HDD диски (12 штук, по 2 колонки каждый)
-  HDD: Array.from({ length: 12 }, (_, i) => ([
-    { key: `hdd${i + 1}_yadro`, header: i === 0 ? "S/N ядро" : "", subHeader: `HDD ${i + 1}` },
-    { key: `hdd${i + 1}_manuf`, header: i === 0 ? "S/N производитель" : "" }
-  ])).flat(),
-  
-  // Backplane HDD
-  BACKPLANE_HDD: [
-    { key: "backplaneHdd", header: "Backplane HDD", width: 18 }
-  ],
-  
-  // Материнская плата
-  MOTHERBOARD: [
-    { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 30 },
-    { key: "motherboardType", header: "", width: 8 }
-  ],
-  
-  // Кулеры CPU
-  COOLERS: [
-    { key: "coolers", header: "Кулеры CPU", width: 12 }
-  ],
-  
-  // Блоки питания (2 штуки)
-  PSU: [
-    { key: "psu1_yadro", header: "Блоки питания", subHeader: "S/N ядро", width: 18 },
-    { key: "psu1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "psu2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "psu2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  // SSD загрузочные (Intel)
-  SSD_BOOT: [
-    { key: "ssdBoot1_yadro", header: "SSD (sn)", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdBoot1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "ssdBoot2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdBoot2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  // SSD данных (Samsung NVMe)
-  SSD_DATA: [
-    { key: "ssdData1_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdData1_manuf", header: "", subHeader: "S/N производитель", width: 18 },
-    { key: "ssdData2_yadro", header: "", subHeader: "S/N ядро", width: 18 },
-    { key: "ssdData2_manuf", header: "", subHeader: "S/N производитель", width: 18 }
-  ],
-  
-  // BMC
-  BMC: [
-    { key: "bmc", header: "bmc (ревизия и sn)", width: 18 }
-  ],
-  
-  // Backplane SSD
-  BACKPLANE_SSD: [
-    { key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 22 }
-  ],
-  
-  // RAM планки (12 штук)
-  RAM: Array.from({ length: 12 }, (_, i) => ([
-    { key: `ram${i + 1}_yadro`, header: i === 0 ? "Планки памяти" : "", subHeader: i === 0 ? "S/N ядро" : "" },
-    { key: `ram${i + 1}_manuf`, header: "", subHeader: i === 0 ? "S/N производитель" : "" }
-  ])).flat(),
-  
-  // RAID контроллер
-  RAID: [
-    { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 20 },
-    { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 20 }
-  ],
-  
-  // Сетевая карта
-  NIC: [
-    { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 22 },
-    { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 22 }
-  ]
+  BASE: ["rowNumber", "apkSerialNumber", "inspectionDate", "employees1", "employees2"],
+  HDD: "12x(hdd_yadro, hdd_manuf) + hdd_revision",
+  BACKPLANE_HDD: ["backplaneHdd"],
+  MOTHERBOARD: ["mb_yadro", "mb_manuf", "mb_revision"],
+  COOLERS: ["coolers"],
+  CPU: ["cpu_yadro", "cpu_manuf", "cpu_revision"],
+  PSU: "2x(psu_yadro, psu_manuf) + psu_revision",
+  SSD_BOOT: "2x(ssdBoot_yadro, ssdBoot_manuf) + ssd_boot_revision",
+  SSD_DATA: "2x(ssdData_yadro, ssdData_manuf) + ssd_data_revision",
+  BMC: ["bmc_yadro", "bmc_manuf", "bmc_revision"],
+  BACKPLANE_SSD: ["backplaneSsd"],
+  RAM: "12x(ram_yadro, ram_manuf) + ram_revision",
+  RAID: ["raid_yadro", "raid_manuf", "raid_revision"],
+  NIC: ["nic_yadro", "nic_manuf", "nic_revision"]
 };
 
 class UnifiedPassportsExportService {
+  
   /**
-   * Основной метод экспорта
-   * @param {Object} options - Параметры экспорта
-   * @param {number[]} options.serverIds - ID серверов для экспорта (опционально)
-   * @param {number} options.batchId - ID партии для фильтрации
-   * @param {string} options.status - Статус серверов для фильтрации
-   * @param {Date} options.dateFrom - Дата начала периода
-   * @param {Date} options.dateTo - Дата окончания периода
-   * @param {string} options.search - Поисковый запрос
-   * @returns {Promise<Buffer>} Excel файл в виде буфера
+   * Главный метод экспорта
+   * 
+   * @param {Object} options - фильтры экспорта
+   * @param {number[]} options.serverIds - ID серверов
+   * @param {number} options.batchId - ID партии
+   * @param {string} options.status - статус серверов
+   * @param {string} options.dateFrom - дата от
+   * @param {string} options.dateTo - дата до
+   * @param {string} options.search - поисковый запрос
+   * @param {boolean} options.includeArchived - включать архивные
+   * @returns {Buffer} - Excel файл
    */
   async exportUnifiedPassports(options = {}) {
     const { 
@@ -168,7 +82,7 @@ class UnifiedPassportsExportService {
       includeArchived = false 
     } = options;
 
-    // Получаем серверы с компонентами
+    // 1. Получаем серверы с компонентами
     const servers = await this.getServersWithComponents({
       serverIds,
       batchId,
@@ -183,27 +97,26 @@ class UnifiedPassportsExportService {
       throw new Error("Не найдено серверов для экспорта");
     }
 
-    // Формируем данные для Excel
+    // 2. Подготавливаем данные для экспорта
     const exportData = await this.prepareExportData(servers);
 
-    // Создаём Excel файл
+    // 3. Создаём Excel файл
     const buffer = await this.createExcelFile(exportData, options);
 
     return buffer;
   }
 
-  /**
-   * Получение серверов с компонентами
-   */
+  // =====================================================================
+  // ПОЛУЧЕНИЕ ДАННЫХ
+  // =====================================================================
+
   async getServersWithComponents(filters) {
     const where = {};
     
-    // Фильтр по ID серверов
     if (filters.serverIds && filters.serverIds.length > 0) {
       where.id = { [Op.in]: filters.serverIds };
     }
     
-    // Фильтр по партии
     if (filters.batchId) {
       if (filters.batchId === "null") {
         where.batchId = null;
@@ -212,17 +125,14 @@ class UnifiedPassportsExportService {
       }
     }
     
-    // Фильтр по статусу
     if (filters.status) {
       where.status = filters.status;
     }
     
-    // Фильтр по архивным
     if (!filters.includeArchived) {
       where.archivedAt = null;
     }
     
-    // Фильтр по датам
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) {
@@ -233,7 +143,6 @@ class UnifiedPassportsExportService {
       }
     }
     
-    // Поисковый запрос
     if (filters.search) {
       where[Op.or] = [
         { apkSerialNumber: { [Op.iLike]: `%${filters.search}%` } },
@@ -285,9 +194,10 @@ class UnifiedPassportsExportService {
     return servers;
   }
 
-  /**
-   * Подготовка данных для экспорта
-   */
+  // =====================================================================
+  // ПОДГОТОВКА ДАННЫХ ДЛЯ ЭКСПОРТА
+  // =====================================================================
+
   async prepareExportData(servers) {
     const rows = [];
     let rowNumber = 1;
@@ -298,10 +208,10 @@ class UnifiedPassportsExportService {
       // Группируем компоненты по типам
       const grouped = this.groupComponentsByType(components);
       
-      // Получаем сотрудников, работавших с сервером
+      // Получаем сотрудников
       const employees = await this.getServerEmployees(server);
       
-      // Формируем основную строку данных
+      // Основная строка (S/N ядро + ревизия)
       const mainRow = {
         rowNumber,
         apkSerialNumber: server.apkSerialNumber || server.serialNumber || "",
@@ -309,44 +219,47 @@ class UnifiedPassportsExportService {
         employees1: employees[0] || "",
         employees2: employees[1] || "",
         
-        // HDD диски
+        // HDD (12 шт) + ревизия
         ...this.mapHddComponents(grouped.HDD || []),
         
         // Backplane HDD
         backplaneHdd: this.getBackplaneHdd(grouped),
         
-        // Материнская плата
+        // Материнская плата (S/N ядро, S/N произв., ревизия)
         ...this.mapMotherboard(grouped.MOTHERBOARD || []),
         
         // Кулеры
         coolers: this.getCoolerType(grouped.FAN || []),
         
-        // Блоки питания
+        // CPU (S/N ядро, S/N произв., ревизия)
+        ...this.mapCpuComponents(grouped.CPU || []),
+        
+        // Блоки питания (2 шт) + ревизия
         ...this.mapPsuComponents(grouped.PSU || []),
         
-        // SSD загрузочные (Intel)
+        // SSD Boot (2 шт) + ревизия
         ...this.mapSsdBootComponents(grouped.SSD || [], grouped.NVME || []),
         
-        // SSD данных (Samsung NVMe)
+        // SSD Data/NVMe (2 шт) + ревизия
         ...this.mapSsdDataComponents(grouped.SSD || [], grouped.NVME || []),
         
-        // BMC
-        bmc: this.mapBmc(grouped.BMC || []),
+        // BMC (S/N ядро, S/N произв., ревизия)
+        ...this.mapBmcComponents(grouped.BMC || []),
         
         // Backplane SSD
         backplaneSsd: this.getBackplaneSsd(grouped),
         
-        // RAM планки
+        // Планки памяти (12 шт) + ревизия
         ...this.mapRamComponents(grouped.RAM || []),
         
-        // RAID контроллер
+        // RAID-контроллер (S/N ядро, S/N произв., ревизия)
         ...this.mapRaidController(grouped.RAID || []),
         
-        // Сетевая карта
+        // Сетевая карта (S/N ядро, S/N произв., ревизия)
         ...this.mapNicCard(grouped.NIC || [])
       };
       
-      // Формируем дополнительную строку с серийными номерами производителя
+      // Вторая строка (S/N производитель)
       const serialRow = {
         rowNumber: null,
         apkSerialNumber: "",
@@ -354,31 +267,38 @@ class UnifiedPassportsExportService {
         employees1: "",
         employees2: "",
         
-        // HDD серийники производителя
+        // HDD серийные номера производителей
         ...this.mapHddSerialManuf(grouped.HDD || []),
         
         backplaneHdd: "",
-        motherboard: "",
-        motherboardType: "",
+        
+        // Мат. плата серийный произв.
+        ...this.mapMotherboardSerialManuf(grouped.MOTHERBOARD || []),
+        
         coolers: "",
         
-        // PSU серийники производителя
+        // CPU серийный произв.
+        ...this.mapCpuSerialManuf(grouped.CPU || []),
+        
+        // БП серийные произв.
         ...this.mapPsuSerialManuf(grouped.PSU || []),
         
-        // SSD серийники производителя
+        // SSD серийные произв.
         ...this.mapSsdBootSerialManuf(grouped.SSD || [], grouped.NVME || []),
         ...this.mapSsdDataSerialManuf(grouped.SSD || [], grouped.NVME || []),
         
-        bmc: "",
+        // BMC серийный произв.
+        ...this.mapBmcSerialManuf(grouped.BMC || []),
+        
         backplaneSsd: "",
         
-        // RAM серийники производителя
+        // RAM серийные произв.
         ...this.mapRamSerialManuf(grouped.RAM || []),
         
-        // RAID серийник производителя
+        // RAID серийный произв.
         ...this.mapRaidSerialManuf(grouped.RAID || []),
         
-        // NIC серийник производителя
+        // NIC серийный произв.
         ...this.mapNicSerialManuf(grouped.NIC || [])
       };
       
@@ -389,8 +309,26 @@ class UnifiedPassportsExportService {
     return rows;
   }
 
+  // =====================================================================
+  // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+  // =====================================================================
+
   /**
-   * Группировка компонентов по типам
+   * Извлечь уникальные ревизии из массива компонентов
+   * @param {Array} components - массив компонентов
+   * @returns {string} - ревизии через запятую
+   */
+  _extractRevisions(components) {
+    const revisions = new Set();
+    for (const comp of components) {
+      const rev = comp?.metadata?.revision || '';
+      if (rev) revisions.add(rev);
+    }
+    return [...revisions].join(', ') || '';
+  }
+
+  /**
+   * Группировка компонентов по типу с сортировкой по слоту
    */
   groupComponentsByType(components) {
     const grouped = {};
@@ -403,7 +341,7 @@ class UnifiedPassportsExportService {
       grouped[type].push(comp);
     }
     
-    // Сортируем каждую группу по слоту
+    // Сортируем по слотам внутри каждой группы
     for (const type in grouped) {
       grouped[type].sort((a, b) => {
         const slotA = this.extractSlotNumber(a.slot);
@@ -416,7 +354,7 @@ class UnifiedPassportsExportService {
   }
 
   /**
-   * Извлечение номера слота
+   * Извлечь номер слота из строки
    */
   extractSlotNumber(slot) {
     if (!slot) return 999;
@@ -425,12 +363,12 @@ class UnifiedPassportsExportService {
   }
 
   /**
-   * Получение сотрудников, работавших с сервером
+   * Получить сотрудников, выполнявших проверку/сборку сервера
    */
   async getServerEmployees(server) {
     const employees = [];
     
-    // Из чеклистов
+    // Из чек-листов
     if (server.checklists && server.checklists.length > 0) {
       for (const checklist of server.checklists) {
         if (checklist.completedBy) {
@@ -453,38 +391,41 @@ class UnifiedPassportsExportService {
     return employees.slice(0, 2);
   }
 
-  /**
-   * Маппинг HDD компонентов
-   */
+  // =====================================================================
+  // HDD (12 шт): S/N ядро, S/N произв. + 1 колонка ревизии на группу
+  // =====================================================================
+
   mapHddComponents(hdds) {
     const result = {};
     
     for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
       const hdd = hdds[i];
       result[`hdd${i + 1}_yadro`] = hdd?.serialNumberYadro || hdd?.serialNumber || "";
-      result[`hdd${i + 1}_manuf`] = "";  // Заполняется в serialRow
+      result[`hdd${i + 1}_manuf`] = "";  // заполнится в serial row
     }
+    
+    // Ревизия — одна на всю группу HDD
+    result.hdd_revision = this._extractRevisions(hdds);
     
     return result;
   }
 
-  /**
-   * Маппинг серийных номеров производителя HDD
-   */
   mapHddSerialManuf(hdds) {
     const result = {};
     
     for (let i = 0; i < EXPORT_CONFIG.HDD_COUNT; i++) {
       const hdd = hdds[i];
-      result[`hdd${i + 1}_yadro`] = "";  // Ядро в основной строке
+      result[`hdd${i + 1}_yadro`] = "";  // пусто во второй строке
       result[`hdd${i + 1}_manuf`] = hdd?.serialNumber || "";
     }
+    
+    result.hdd_revision = "";
     
     return result;
   }
 
   /**
-   * Получение Backplane HDD
+   * Backplane HDD
    */
   getBackplaneHdd(grouped) {
     const backplane = grouped.BACKPLANE_HDD || grouped.BACKPLANE || [];
@@ -492,7 +433,7 @@ class UnifiedPassportsExportService {
       return backplane[0].serialNumberYadro || backplane[0].serialNumber || backplane[0].model || "";
     }
     
-    // Проверяем в metadata материнской платы
+    // Fallback: из metadata материнской платы
     const motherboard = grouped.MOTHERBOARD?.[0];
     if (motherboard?.metadata?.backplaneHdd) {
       return motherboard.metadata.backplaneHdd;
@@ -501,27 +442,34 @@ class UnifiedPassportsExportService {
     return "";
   }
 
-  /**
-   * Маппинг материнской платы
-   */
+  // =====================================================================
+  // Материнская плата: S/N ядро, S/N произв., ревизия (отдельные колонки)
+  // =====================================================================
+
   mapMotherboard(motherboards) {
     const mb = motherboards[0];
     if (!mb) {
-      return { motherboard: "", motherboardType: "" };
+      return { mb_yadro: "", mb_manuf: "", mb_revision: "" };
     }
     
-    const serial = mb.serialNumberYadro || mb.serialNumber || "";
-    const revision = mb.metadata?.revision || mb.firmwareVersion || "";
-    const type = mb.metadata?.type || "";
-    
     return {
-      motherboard: `${mb.model || ""} ${serial}`.trim(),
-      motherboardType: `${revision}${type ? ` ${type}` : ""}`
+      mb_yadro: mb.serialNumberYadro || "",
+      mb_manuf: "",  // заполнится в serial row
+      mb_revision: mb.metadata?.revision || mb.firmwareVersion || ""
+    };
+  }
+
+  mapMotherboardSerialManuf(motherboards) {
+    const mb = motherboards[0];
+    return {
+      mb_yadro: "",
+      mb_manuf: mb?.serialNumber || "",
+      mb_revision: ""
     };
   }
 
   /**
-   * Получение типа кулеров
+   * Кулеры CPU — тип
    */
   getCoolerType(fans) {
     if (fans.length === 0) return "";
@@ -530,24 +478,52 @@ class UnifiedPassportsExportService {
     return fan.metadata?.type || fan.model || "Тип 1";
   }
 
-  /**
-   * Маппинг блоков питания
-   */
+  // =====================================================================
+  // CPU: S/N ядро, S/N произв., ревизия (отдельные колонки)
+  // =====================================================================
+
+  mapCpuComponents(cpus) {
+    if (cpus.length === 0) {
+      return { cpu_yadro: "", cpu_manuf: "", cpu_revision: "" };
+    }
+    
+    // Берём первый CPU для серийных номеров
+    const cpu = cpus[0];
+    
+    return {
+      cpu_yadro: cpu.serialNumberYadro || "",
+      cpu_manuf: "",  // заполнится в serial row
+      cpu_revision: this._extractRevisions(cpus)
+    };
+  }
+
+  mapCpuSerialManuf(cpus) {
+    const cpu = cpus[0];
+    return {
+      cpu_yadro: "",
+      cpu_manuf: cpu?.serialNumber || "",
+      cpu_revision: ""
+    };
+  }
+
+  // =====================================================================
+  // Блоки питания (2 шт): S/N ядро, S/N произв. + 1 колонка ревизии
+  // =====================================================================
+
   mapPsuComponents(psus) {
     const result = {};
     
     for (let i = 0; i < EXPORT_CONFIG.PSU_COUNT; i++) {
       const psu = psus[i];
-      result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || psu?.model || "";
-      result[`psu${i + 1}_manuf`] = "";  // Заполняется в serialRow
+      result[`psu${i + 1}_yadro`] = psu?.serialNumberYadro || "";
+      result[`psu${i + 1}_manuf`] = "";  // заполнится в serial row
     }
+    
+    result.psu_revision = this._extractRevisions(psus);
     
     return result;
   }
 
-  /**
-   * Маппинг серийных номеров производителя PSU
-   */
   mapPsuSerialManuf(psus) {
     const result = {};
     
@@ -557,34 +533,35 @@ class UnifiedPassportsExportService {
       result[`psu${i + 1}_manuf`] = psu?.serialNumber || "";
     }
     
+    result.psu_revision = "";
+    
     return result;
   }
 
-  /**
-   * Маппинг загрузочных SSD (Intel)
-   */
+  // =====================================================================
+  // SSD Boot (2 шт): S/N ядро, S/N произв. + 1 колонка ревизии
+  // =====================================================================
+
   mapSsdBootComponents(ssds, nvmes) {
-    // Фильтруем Intel SSD для загрузки
+    // Фильтруем boot SSD (Intel или с пометкой boot)
     const bootSsds = ssds.filter(s => 
       s.manufacturer?.toLowerCase()?.includes("intel") ||
       s.model?.toLowerCase()?.includes("intel") ||
       s.slot?.toLowerCase()?.includes("boot")
     ).slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
     
-    // Если не нашли Intel, берём первые SSD
+    // Fallback: берём первые SSD если boot не найдены
     const finalBootSsds = bootSsds.length > 0 ? bootSsds : ssds.slice(0, EXPORT_CONFIG.SSD_BOOT_COUNT);
     
     return {
-      ssdBoot1_yadro: finalBootSsds[0]?.serialNumberYadro || finalBootSsds[0]?.model || "",
+      ssdBoot1_yadro: finalBootSsds[0]?.serialNumberYadro || "",
       ssdBoot1_manuf: "",
-      ssdBoot2_yadro: finalBootSsds[1]?.serialNumberYadro || finalBootSsds[1]?.model || "",
-      ssdBoot2_manuf: ""
+      ssdBoot2_yadro: finalBootSsds[1]?.serialNumberYadro || "",
+      ssdBoot2_manuf: "",
+      ssd_boot_revision: this._extractRevisions(finalBootSsds)
     };
   }
 
-  /**
-   * Маппинг серийных номеров производителя загрузочных SSD
-   */
   mapSsdBootSerialManuf(ssds, nvmes) {
     const bootSsds = ssds.filter(s => 
       s.manufacturer?.toLowerCase()?.includes("intel") ||
@@ -598,15 +575,17 @@ class UnifiedPassportsExportService {
       ssdBoot1_yadro: "",
       ssdBoot1_manuf: finalBootSsds[0]?.serialNumber || "",
       ssdBoot2_yadro: "",
-      ssdBoot2_manuf: finalBootSsds[1]?.serialNumber || ""
+      ssdBoot2_manuf: finalBootSsds[1]?.serialNumber || "",
+      ssd_boot_revision: ""
     };
   }
 
-  /**
-   * Маппинг SSD данных (Samsung NVMe)
-   */
+  // =====================================================================
+  // SSD Data/NVMe (2 шт): S/N ядро, S/N произв. + 1 колонка ревизии
+  // =====================================================================
+
   mapSsdDataComponents(ssds, nvmes) {
-    // Объединяем NVMe и Samsung SSD
+    // Приоритет: NVMe, затем Samsung SSD
     const dataSsds = [
       ...nvmes,
       ...ssds.filter(s => 
@@ -617,16 +596,14 @@ class UnifiedPassportsExportService {
     ].slice(0, EXPORT_CONFIG.SSD_DATA_COUNT);
     
     return {
-      ssdData1_yadro: dataSsds[0]?.serialNumberYadro || dataSsds[0]?.model || "",
+      ssdData1_yadro: dataSsds[0]?.serialNumberYadro || "",
       ssdData1_manuf: "",
-      ssdData2_yadro: dataSsds[1]?.serialNumberYadro || dataSsds[1]?.model || "",
-      ssdData2_manuf: ""
+      ssdData2_yadro: dataSsds[1]?.serialNumberYadro || "",
+      ssdData2_manuf: "",
+      ssd_data_revision: this._extractRevisions(dataSsds)
     };
   }
 
-  /**
-   * Маппинг серийных номеров производителя SSD данных
-   */
   mapSsdDataSerialManuf(ssds, nvmes) {
     const dataSsds = [
       ...nvmes,
@@ -640,25 +617,39 @@ class UnifiedPassportsExportService {
       ssdData1_yadro: "",
       ssdData1_manuf: dataSsds[0]?.serialNumber || "",
       ssdData2_yadro: "",
-      ssdData2_manuf: dataSsds[1]?.serialNumber || ""
+      ssdData2_manuf: dataSsds[1]?.serialNumber || "",
+      ssd_data_revision: ""
+    };
+  }
+
+  // =====================================================================
+  // BMC: S/N ядро, S/N произв., ревизия (отдельные колонки)
+  // =====================================================================
+
+  mapBmcComponents(bmcs) {
+    const bmc = bmcs[0];
+    if (!bmc) {
+      return { bmc_yadro: "", bmc_manuf: "", bmc_revision: "" };
+    }
+    
+    return {
+      bmc_yadro: bmc.serialNumberYadro || "",
+      bmc_manuf: "",  // заполнится в serial row
+      bmc_revision: bmc.metadata?.revision || bmc.firmwareVersion || ""
+    };
+  }
+
+  mapBmcSerialManuf(bmcs) {
+    const bmc = bmcs[0];
+    return {
+      bmc_yadro: "",
+      bmc_manuf: bmc?.serialNumber || "",
+      bmc_revision: ""
     };
   }
 
   /**
-   * Маппинг BMC
-   */
-  mapBmc(bmcs) {
-    const bmc = bmcs[0];
-    if (!bmc) return "";
-    
-    const revision = bmc.metadata?.revision || bmc.firmwareVersion || "";
-    const serial = bmc.serialNumberYadro || bmc.serialNumber || "";
-    
-    return `${revision ? `${revision} ` : ""}${serial}`.trim();
-  }
-
-  /**
-   * Получение Backplane SSD
+   * Backplane SSD
    */
   getBackplaneSsd(grouped) {
     const backplane = grouped.BACKPLANE_SSD || [];
@@ -668,24 +659,24 @@ class UnifiedPassportsExportService {
     return "";
   }
 
-  /**
-   * Маппинг RAM компонентов
-   */
+  // =====================================================================
+  // Планки памяти (12 шт): S/N ядро, S/N произв. + 1 колонка ревизии
+  // =====================================================================
+
   mapRamComponents(rams) {
     const result = {};
     
     for (let i = 0; i < EXPORT_CONFIG.RAM_COUNT; i++) {
       const ram = rams[i];
       result[`ram${i + 1}_yadro`] = ram?.serialNumberYadro || "";
-      result[`ram${i + 1}_manuf`] = "";  // Заполняется в serialRow
+      result[`ram${i + 1}_manuf`] = "";  // заполнится в serial row
     }
+    
+    result.ram_revision = this._extractRevisions(rams);
     
     return result;
   }
 
-  /**
-   * Маппинг серийных номеров производителя RAM
-   */
   mapRamSerialManuf(rams) {
     const result = {};
     
@@ -695,65 +686,65 @@ class UnifiedPassportsExportService {
       result[`ram${i + 1}_manuf`] = ram?.serialNumber || "";
     }
     
+    result.ram_revision = "";
+    
     return result;
   }
 
-  /**
-   * Маппинг RAID контроллера
-   */
+  // =====================================================================
+  // RAID-контроллер: S/N ядро, S/N произв., ревизия (отдельные колонки)
+  // =====================================================================
+
   mapRaidController(raids) {
     const raid = raids[0];
     if (!raid) {
-      return { raid_yadro: "", raid_manuf: "" };
+      return { raid_yadro: "", raid_manuf: "", raid_revision: "" };
     }
     
-    const type = raid.metadata?.type || raid.model || "";
     return {
-      raid_yadro: `${type} ${raid.serialNumberYadro || ""}`.trim(),
-      raid_manuf: ""
+      raid_yadro: raid.serialNumberYadro || "",
+      raid_manuf: "",  // заполнится в serial row
+      raid_revision: raid.metadata?.revision || raid.firmwareVersion || ""
     };
   }
 
-  /**
-   * Маппинг серийного номера производителя RAID
-   */
   mapRaidSerialManuf(raids) {
     const raid = raids[0];
     return {
       raid_yadro: "",
-      raid_manuf: raid?.serialNumber || ""
+      raid_manuf: raid?.serialNumber || "",
+      raid_revision: ""
     };
   }
 
-  /**
-   * Маппинг сетевой карты
-   */
+  // =====================================================================
+  // Сетевая карта: S/N ядро, S/N произв., ревизия (отдельные колонки)
+  // =====================================================================
+
   mapNicCard(nics) {
     const nic = nics[0];
     if (!nic) {
-      return { nic_yadro: "", nic_manuf: "" };
+      return { nic_yadro: "", nic_manuf: "", nic_revision: "" };
     }
     
-    const revision = nic.metadata?.revision || nic.firmwareVersion || "";
     return {
-      nic_yadro: `${revision ? `${revision} ` : ""}${nic.serialNumberYadro || ""}`.trim(),
-      nic_manuf: ""
+      nic_yadro: nic.serialNumberYadro || "",
+      nic_manuf: "",  // заполнится в serial row
+      nic_revision: nic.metadata?.revision || nic.firmwareVersion || ""
     };
   }
 
-  /**
-   * Маппинг серийного номера производителя NIC
-   */
   mapNicSerialManuf(nics) {
     const nic = nics[0];
     return {
       nic_yadro: "",
-      nic_manuf: nic?.serialNumber || ""
+      nic_manuf: nic?.serialNumber || "",
+      nic_revision: ""
     };
   }
 
   /**
-   * Форматирование даты
+   * Форматирование даты в ДД ММ ГГ
    */
   formatDate(date) {
     if (!date) return "";
@@ -764,9 +755,10 @@ class UnifiedPassportsExportService {
     return `${day} ${month} ${year}`;
   }
 
-  /**
-   * Создание Excel файла
-   */
+  // =====================================================================
+  // СОЗДАНИЕ EXCEL ФАЙЛА
+  // =====================================================================
+
   async createExcelFile(exportData, options = {}) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "MES Kryptonit";
@@ -776,7 +768,7 @@ class UnifiedPassportsExportService {
       views: [{ state: "frozen", ySplit: 2, xSplit: 3 }]
     });
 
-    // Настройка стилей
+    // Стили
     const headerStyle = {
       font: { bold: true, size: 10 },
       alignment: { horizontal: "center", vertical: "middle", wrapText: true },
@@ -812,7 +804,7 @@ class UnifiedPassportsExportService {
       }
     };
 
-    // Создаём заголовки
+    // Определяем колонки
     const columns = this.buildColumnDefinitions();
     sheet.columns = columns.map(col => ({
       header: "",
@@ -820,16 +812,16 @@ class UnifiedPassportsExportService {
       width: col.width || 12
     }));
 
-    // Строка 1: Основные заголовки групп
+    // Заголовки групп (строка 1)
     this.addGroupHeaders(sheet, columns, headerStyle);
 
-    // Строка 2: Подзаголовки (S/N ядро, S/N производитель)
+    // Подзаголовки (строка 2)
     this.addSubHeaders(sheet, columns, subHeaderStyle);
 
-    // Добавляем данные
+    // Данные
     let currentRow = 3;
     for (const rowData of exportData) {
-      // Основная строка с данными
+      // Основная строка (S/N ядро)
       const mainRowValues = columns.map(col => rowData.main[col.key] || "");
       const mainRow = sheet.getRow(currentRow);
       mainRow.values = mainRowValues;
@@ -838,7 +830,7 @@ class UnifiedPassportsExportService {
       });
       currentRow++;
 
-      // Строка с серийными номерами производителя
+      // Вторая строка (S/N производитель)
       const serialRowValues = columns.map(col => rowData.serial[col.key] || "");
       const serialRow = sheet.getRow(currentRow);
       serialRow.values = serialRowValues;
@@ -849,25 +841,26 @@ class UnifiedPassportsExportService {
       currentRow++;
     }
 
-    // Применяем объединение ячеек для заголовков
+    // Объединяем заголовки групп
     this.applyHeaderMerges(sheet, columns);
 
-    // Автоподбор высоты строк
+    // Высота строк заголовков
     sheet.getRow(1).height = 30;
     sheet.getRow(2).height = 25;
 
-    // Генерируем буфер
+    // Генерируем buffer
     const buffer = await workbook.xlsx.writeBuffer();
     return buffer;
   }
 
-  /**
-   * Построение определений столбцов
-   */
+  // =====================================================================
+  // ОПРЕДЕЛЕНИЕ КОЛОНОК
+  // =====================================================================
+
   buildColumnDefinitions() {
     const columns = [];
     
-    // Базовые столбцы
+    // === БАЗОВЫЕ КОЛОНКИ ===
     columns.push(
       { key: "rowNumber", header: "№", width: 5, group: "base" },
       { key: "apkSerialNumber", header: "Серийный № сервера", width: 18, group: "base" },
@@ -876,82 +869,102 @@ class UnifiedPassportsExportService {
       { key: "employees2", header: "", width: 18, group: "base" }
     );
     
-    // HDD диски (12 штук)
+    // === HDD диски (12 шт) + ревизия ===
     for (let i = 1; i <= 12; i++) {
       columns.push(
         { key: `hdd${i}_yadro`, header: i === 1 ? "HDD диски" : "", subHeader: "S/N ядро", width: 15, group: "hdd" },
         { key: `hdd${i}_manuf`, header: "", subHeader: "S/N производитель", width: 12, group: "hdd" }
       );
     }
+    columns.push({ key: "hdd_revision", header: "", subHeader: "Ревизия", width: 12, group: "hdd" });
     
-    // Backplane HDD
+    // === Backplane HDD ===
     columns.push({ key: "backplaneHdd", header: "Backplane HDD", width: 16, group: "backplane_hdd" });
     
-    // Материнская плата
+    // === Материнская плата (S/N ядро, S/N произв., ревизия) ===
     columns.push(
-      { key: "motherboard", header: "Материнская плата внешние отличия (рев.,тип,sn)", width: 28, group: "mb" },
-      { key: "motherboardType", header: "", width: 8, group: "mb" }
+      { key: "mb_yadro", header: "Материнская плата", subHeader: "S/N ядро", width: 20, group: "mb" },
+      { key: "mb_manuf", header: "", subHeader: "S/N производитель", width: 20, group: "mb" },
+      { key: "mb_revision", header: "", subHeader: "Ревизия", width: 12, group: "mb" }
     );
     
-    // Кулеры
+    // === Кулеры CPU ===
     columns.push({ key: "coolers", header: "Кулеры CPU", width: 10, group: "coolers" });
     
-    // Блоки питания (2 штуки)
+    // === CPU (S/N ядро, S/N произв., ревизия) ===
+    columns.push(
+      { key: "cpu_yadro", header: "CPU", subHeader: "S/N ядро", width: 18, group: "cpu" },
+      { key: "cpu_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "cpu" },
+      { key: "cpu_revision", header: "", subHeader: "Ревизия", width: 12, group: "cpu" }
+    );
+    
+    // === Блоки питания (2 шт) + ревизия ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
         { key: `psu${i}_yadro`, header: i === 1 ? "Блоки питания" : "", subHeader: "S/N ядро", width: 18, group: "psu" },
         { key: `psu${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "psu" }
       );
     }
+    columns.push({ key: "psu_revision", header: "", subHeader: "Ревизия", width: 12, group: "psu" });
     
-    // SSD загрузочные (2 штуки)
+    // === SSD Boot (2 шт) + ревизия ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
-        { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD (sn)" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
+        { key: `ssdBoot${i}_yadro`, header: i === 1 ? "SSD Boot" : "", subHeader: "S/N ядро", width: 18, group: "ssd_boot" },
         { key: `ssdBoot${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_boot" }
       );
     }
+    columns.push({ key: "ssd_boot_revision", header: "", subHeader: "Ревизия", width: 12, group: "ssd_boot" });
     
-    // SSD данных (2 штуки)
+    // === SSD Data/NVMe (2 шт) + ревизия ===
     for (let i = 1; i <= 2; i++) {
       columns.push(
         { key: `ssdData${i}_yadro`, header: i === 1 ? "SSD NVMe" : "", subHeader: "S/N ядро", width: 18, group: "ssd_data" },
         { key: `ssdData${i}_manuf`, header: "", subHeader: "S/N производитель", width: 16, group: "ssd_data" }
       );
     }
+    columns.push({ key: "ssd_data_revision", header: "", subHeader: "Ревизия", width: 12, group: "ssd_data" });
     
-    // BMC
-    columns.push({ key: "bmc", header: "bmc (ревизия и sn)", width: 16, group: "bmc" });
+    // === BMC (S/N ядро, S/N произв., ревизия) ===
+    columns.push(
+      { key: "bmc_yadro", header: "BMC", subHeader: "S/N ядро", width: 16, group: "bmc" },
+      { key: "bmc_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "bmc" },
+      { key: "bmc_revision", header: "", subHeader: "Ревизия", width: 12, group: "bmc" }
+    );
     
-    // Backplane SSD
+    // === Backplane SSD ===
     columns.push({ key: "backplaneSsd", header: "Backplane SSD (S/N, разъем)", width: 20, group: "backplane_ssd" });
     
-    // RAM планки (12 штук)
+    // === Планки памяти (12 шт) + ревизия ===
     for (let i = 1; i <= 12; i++) {
       columns.push(
         { key: `ram${i}_yadro`, header: i === 1 ? "Планки памяти" : "", subHeader: "S/N ядро", width: 16, group: "ram" },
         { key: `ram${i}_manuf`, header: "", subHeader: "S/N производитель", width: 14, group: "ram" }
       );
     }
+    columns.push({ key: "ram_revision", header: "", subHeader: "Ревизия", width: 12, group: "ram" });
     
-    // RAID контроллер
+    // === RAID-контроллер (S/N ядро, S/N произв., ревизия) ===
     columns.push(
       { key: "raid_yadro", header: "Raid-контроллер (ревизия и sn)", subHeader: "S/N ядро", width: 18, group: "raid" },
-      { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "raid" }
+      { key: "raid_manuf", header: "", subHeader: "S/N производитель", width: 16, group: "raid" },
+      { key: "raid_revision", header: "", subHeader: "Ревизия", width: 12, group: "raid" }
     );
     
-    // Сетевая карта
+    // === Сетевая карта (S/N ядро, S/N произв., ревизия) ===
     columns.push(
       { key: "nic_yadro", header: "Сетевая карта P225P (ревизия и sn)", subHeader: "S/N ядро", width: 20, group: "nic" },
-      { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "nic" }
+      { key: "nic_manuf", header: "", subHeader: "S/N производитель", width: 18, group: "nic" },
+      { key: "nic_revision", header: "", subHeader: "Ревизия", width: 12, group: "nic" }
     );
     
     return columns;
   }
 
-  /**
-   * Добавление заголовков групп
-   */
+  // =====================================================================
+  // ЗАГОЛОВКИ И ОБЪЕДИНЕНИЕ
+  // =====================================================================
+
   addGroupHeaders(sheet, columns, style) {
     const headerRow = sheet.getRow(1);
     
@@ -964,9 +977,6 @@ class UnifiedPassportsExportService {
     headerRow.height = 35;
   }
 
-  /**
-   * Добавление подзаголовков
-   */
   addSubHeaders(sheet, columns, style) {
     const subHeaderRow = sheet.getRow(2);
     
@@ -979,15 +989,12 @@ class UnifiedPassportsExportService {
     subHeaderRow.height = 25;
   }
 
-  /**
-   * Применение объединения ячеек для заголовков
-   */
   applyHeaderMerges(sheet, columns) {
     const groups = {};
     let startIdx = null;
     let currentGroup = null;
     
-    // Находим группы для объединения
+    // Определяем диапазоны групп
     columns.forEach((col, idx) => {
       if (col.group !== currentGroup) {
         if (currentGroup && startIdx !== null) {
@@ -1005,8 +1012,8 @@ class UnifiedPassportsExportService {
       groups[currentGroup].push({ start: startIdx, end: columns.length + 1 });
     }
     
-    // Объединяем заголовки групп компонентов
-    const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram"];
+    // Объединяем заголовки для многоколоночных групп
+    const multiColumnGroups = ["hdd", "psu", "ssd_boot", "ssd_data", "ram", "mb", "cpu", "bmc", "raid", "nic"];
     for (const groupName of multiColumnGroups) {
       const groupRanges = [];
       let rangeStart = null;
@@ -1024,11 +1031,10 @@ class UnifiedPassportsExportService {
         groupRanges.push({ start: rangeStart, end: columns.length });
       }
       
-      // Объединяем ячейки заголовков групп
+      // Merge
       for (const range of groupRanges) {
         if (range.end - range.start > 1) {
           try {
-            // Находим первую ячейку с заголовком
             const headerCol = columns.findIndex((c, i) => 
               i >= range.start - 1 && i < range.end && c.header && c.group === groupName
             );
@@ -1039,16 +1045,17 @@ class UnifiedPassportsExportService {
               cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
             }
           } catch (e) {
-            // Пропускаем ошибки объединения
+            // Merge conflict — skip silently
           }
         }
       }
     }
   }
 
-  /**
-   * Экспорт статистики
-   */
+  // =====================================================================
+  // СТАТИСТИКА ЭКСПОРТА
+  // =====================================================================
+
   async getExportStats(options = {}) {
     const servers = await this.getServersWithComponents(options);
     
@@ -1065,21 +1072,21 @@ class UnifiedPassportsExportService {
       const components = server.components || [];
       stats.totalComponents += components.length;
       
-      // По типам компонентов
+      // По типу
       for (const comp of components) {
         const type = comp.componentType || "OTHER";
         stats.byComponentType[type] = (stats.byComponentType[type] || 0) + 1;
       }
       
-      // По партиям
+      // По партии
       const batchName = server.batch?.name || "Без партии";
       stats.byBatch[batchName] = (stats.byBatch[batchName] || 0) + 1;
       
-      // По статусам
+      // По статусу
       const status = server.status || "UNKNOWN";
       stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
       
-      // Проверка на отсутствующие компоненты
+      // Недостающие компоненты
       const grouped = this.groupComponentsByType(components);
       const missing = [];
       

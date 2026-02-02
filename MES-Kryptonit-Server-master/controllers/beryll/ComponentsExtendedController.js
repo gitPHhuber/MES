@@ -406,7 +406,19 @@ async function updateComponent(req, res, next) {
     if (status !== undefined && COMPONENT_STATUSES.includes(status)) {
       component.status = status;
     }
-    if (metadata !== undefined) component.metadata = metadata;
+    // [PATCH 2.1] — Merge metadata вместо полной замены
+    // Позволяет фронту отправлять { revision: 'Rev.A' } без затирания
+    // существующих полей metadata (rank, memoryType, replacesComponentId и т.д.)
+    if (metadata !== undefined) {
+      if (metadata === null) {
+        component.metadata = null;
+      } else {
+        component.metadata = {
+          ...(component.metadata || {}),
+          ...metadata
+        };
+      }
+    }
     if (notes !== undefined) component.notes = notes || null;
 
     await component.save({ transaction });

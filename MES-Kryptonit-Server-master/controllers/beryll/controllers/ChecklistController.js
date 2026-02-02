@@ -1,37 +1,9 @@
-/**
- * ChecklistController.js - Контроллер для работы с чек-листами
- * 
- * Эндпоинты:
- * - GET    /api/beryll/checklists/templates              - получить шаблоны
- * - POST   /api/beryll/checklists/templates              - создать шаблон
- * - PUT    /api/beryll/checklists/templates/reorder      - изменить порядок (ВАЖНО: перед /:id)
- * - PUT    /api/beryll/checklists/templates/:id          - обновить шаблон
- * - DELETE /api/beryll/checklists/templates/:id          - удалить шаблон
- * - POST   /api/beryll/checklists/templates/:id/restore  - восстановить
- * - GET    /api/beryll/servers/:serverId/checklist       - чек-лист сервера
- * - PUT    /api/beryll/servers/:serverId/checklist/:checklistId - toggle
- * - POST   /api/beryll/servers/:serverId/checklist/:checklistId/file - загрузить файл
- * - GET    /api/beryll/servers/:serverId/files           - все файлы сервера
- * - GET    /api/beryll/files/:fileId                     - скачать файл
- * - DELETE /api/beryll/checklists/files/:fileId          - удалить файл
- * 
- * Путь: controllers/beryll/controllers/ChecklistController.js
- */
-
 const ChecklistService = require("../services/ChecklistService");
 const ApiError = require("../../../error/ApiError");
 
 class ChecklistController {
   
-  // ============================================
-  // ШАБЛОНЫ ЧЕК-ЛИСТОВ
-  // ============================================
-  
-  /**
-   * GET /api/beryll/checklists/templates
-   * Получить шаблоны чек-листов
-   * @query includeInactive - включить неактивные (удалённые)
-   */
+
   async getChecklistTemplates(req, res, next) {
     try {
       const { includeInactive } = req.query;
@@ -50,10 +22,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * POST /api/beryll/checklists/templates
-   * Создать шаблон чек-листа
-   */
+
   async createChecklistTemplate(req, res, next) {
     try {
       const template = await ChecklistService.createChecklistTemplate(req.body);
@@ -67,10 +36,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * PUT /api/beryll/checklists/templates/:id
-   * Обновить шаблон чек-листа
-   */
+
   async updateChecklistTemplate(req, res, next) {
     try {
       const { id } = req.params;
@@ -85,11 +51,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/checklists/templates/:id
-   * Удалить (деактивировать) шаблон чек-листа
-   * @query hardDelete - полное удаление (если не используется)
-   */
+
   async deleteChecklistTemplate(req, res, next) {
     try {
       const { id } = req.params;
@@ -108,10 +70,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * POST /api/beryll/checklists/templates/:id/restore
-   * Восстановить деактивированный шаблон
-   */
+
   async restoreChecklistTemplate(req, res, next) {
     try {
       const { id } = req.params;
@@ -126,11 +85,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * PUT /api/beryll/checklists/templates/reorder
-   * Изменить порядок шаблонов (Drag & Drop)
-   * @body orderedIds - массив ID в новом порядке
-   */
+
   async reorderChecklistTemplates(req, res, next) {
     try {
       const { orderedIds } = req.body;
@@ -147,14 +102,7 @@ class ChecklistController {
     }
   }
   
-  // ============================================
-  // ЧЕК-ЛИСТ СЕРВЕРА
-  // ============================================
-  
-  /**
-   * GET /api/beryll/servers/:serverId/checklist
-   * Получить чек-лист сервера с файлами
-   */
+
   async getServerChecklist(req, res, next) {
     try {
       const { serverId } = req.params;
@@ -166,13 +114,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * PUT /api/beryll/servers/:serverId/checklist/:checklistId
-   * Переключить статус пункта чек-листа
-   * @body completed - выполнен или нет
-   * @body notes - примечание (опционально)
-   * @throws Ошибка если requiresFile=true и нет файлов
-   */
+
   async toggleChecklistItem(req, res, next) {
     try {
       const { serverId, checklistId } = req.params;
@@ -200,34 +142,26 @@ class ChecklistController {
     }
   }
   
-  // ============================================
-  // ФАЙЛЫ ДОКАЗАТЕЛЬСТВ
-  // ============================================
-  
-  /**
-   * POST /api/beryll/servers/:serverId/checklist/:checklistId/file
-   * Загрузить файл (доказательство) к пункту чек-листа
-   * Использует express-fileupload (НЕ multer!)
-   */
+
   async uploadChecklistFile(req, res, next) {
     try {
       const { serverId, checklistId } = req.params;
       const userId = req.user?.id;
 
-      // express-fileupload использует req.files (объект), а не req.file (multer)
+
       if (!req.files || !req.files.file) {
         return next(ApiError.badRequest("Файл не загружен"));
       }
 
       const uploadedFile = req.files.file;
       
-      // Валидация типа
+
       const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
       if (!allowedTypes.includes(uploadedFile.mimetype)) {
         return next(ApiError.badRequest("Недопустимый тип файла. Разрешены: JPG, PNG, GIF, WEBP, PDF"));
       }
       
-      // Валидация размера (5 MB)
+
       if (uploadedFile.size > 5 * 1024 * 1024) {
         return next(ApiError.badRequest("Максимальный размер файла 5 МБ"));
       }
@@ -235,7 +169,7 @@ class ChecklistController {
       const file = await ChecklistService.uploadChecklistFile(
         serverId,
         checklistId,
-        uploadedFile,  // express-fileupload объект: { name, data, size, mimetype, mv() }
+        uploadedFile,  
         userId
       );
       
@@ -249,10 +183,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * GET /api/beryll/servers/:serverId/files
-   * Получить все файлы сервера
-   */
+
   async getServerFiles(req, res, next) {
     try {
       const { serverId } = req.params;
@@ -264,10 +195,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * GET /api/beryll/files/:fileId
-   * Скачать/просмотреть файл
-   */
+
   async downloadFile(req, res, next) {
     try {
       const { fileId } = req.params;
@@ -277,13 +205,13 @@ class ChecklistController {
         return next(ApiError.notFound("Файл не найден"));
       }
 
-      // Устанавливаем заголовки для отображения в браузере (inline) или скачивания
+
       const disposition = req.query.download === 'true' ? 'attachment' : 'inline';
       
       res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
       res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.originalName)}"`);
       
-      // Отправляем файл
+
       return res.sendFile(file.path);
     } catch (e) {
       console.error("downloadFile error:", e);
@@ -294,11 +222,7 @@ class ChecklistController {
     }
   }
   
-  /**
-   * DELETE /api/beryll/checklists/files/:fileId
-   * Удалить файл доказательства
-   * Если это последний файл для этапа с requiresFile=true, отметка выполнения снимается
-   */
+
   async deleteChecklistFile(req, res, next) {
     try {
       const { fileId } = req.params;
